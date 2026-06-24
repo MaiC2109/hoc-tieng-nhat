@@ -1,0 +1,2421 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>日本語 — Vocabulary Studio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&family=Inter:wght@300;400;500;600;700&family=Noto+Serif+JP:wght@400;700&display=swap" rel="stylesheet" />
+
+<style>
+/* ─────────────────────────────────────────────
+   DESIGN TOKENS
+   Palette: deep ink navy + warm rice paper + 
+   vermillion accent + muted sage
+───────────────────────────────────────────── */
+:root {
+  --ink:        #1a1f2e;
+  --ink-soft:   #2d3348;
+  --ink-mute:   #6b7280;
+  --paper:      #f7f5f0;
+  --paper-warm: #edeae3;
+  --paper-card: #ffffff;
+  --vermillion: #c0392b;
+  --verm-light: #e8534a;
+  --verm-glow:  rgba(192, 57, 43, 0.12);
+  --sage:       #5a7a6a;
+  --sage-light: #e8f0ec;
+  --gold:       #b8860b;
+  --gold-light: #fdf3d7;
+  --border:     rgba(26, 31, 46, 0.1);
+  --border-md:  rgba(26, 31, 46, 0.16);
+  --shadow-sm:  0 1px 4px rgba(26,31,46,0.08);
+  --shadow-md:  0 4px 16px rgba(26,31,46,0.10);
+  --shadow-lg:  0 12px 40px rgba(26,31,46,0.14);
+  --radius-sm:  6px;
+  --radius-md:  12px;
+  --radius-lg:  18px;
+  --font-sans:  'Inter', sans-serif;
+  --font-ja:    'Noto Sans JP', sans-serif;
+  --font-ja-serif: 'Noto Serif JP', serif;
+  --transition: 200ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.word-table tbody tr.playing {
+  background: var(--verm-glow);
+  outline: 1px solid rgba(192,57,43,0.25);
+}
+
+.word-table tbody tr.playing .cell-kana,
+.word-table tbody tr.playing .cell-kanji {
+  color: var(--vermillion);
+}
+
+.btn-playing {
+  background: var(--sage) !important;
+  color: #fff !important;
+}
+
+/* ─── RESET & BASE ─── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { font-size: 16px; scroll-behavior: smooth; }
+
+body {
+  font-family: var(--font-sans);
+  background: var(--paper);
+  color: var(--ink);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ─────────────────────────────────────────────
+   TIER 1 — TOP NAVIGATION (Main Menu)
+───────────────────────────────────────────── */
+.app-header {
+  background: var(--ink);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  gap: 0;
+  height: 56px;
+  padding: 0 24px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.25);
+}
+
+.app-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-right: 32px;
+  flex-shrink: 0;
+}
+
+.logo-mark {
+  width: 32px;
+  height: 32px;
+  background: var(--vermillion);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-ja-serif);
+  font-size: 16px;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: -1px;
+  flex-shrink: 0;
+}
+
+.logo-text {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: #fff;
+  line-height: 1.2;
+}
+
+.logo-sub {
+  font-size: 10px;
+  color: rgba(255,255,255,0.45);
+  font-weight: 400;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  display: block;
+  margin-top: 1px;
+}
+
+.main-nav {
+  display: flex;
+  align-items: stretch;
+  height: 100%;
+  gap: 2px;
+  flex: 1;
+}
+
+.main-nav-btn {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 18px;
+  border: none;
+  background: transparent;
+  color: rgba(255,255,255,0.55);
+  font-family: var(--font-sans);
+  font-size: 13.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: color var(--transition), background var(--transition);
+  border-radius: 0;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
+.main-nav-btn:hover:not(:disabled) {
+  color: rgba(255,255,255,0.85);
+  background: rgba(255,255,255,0.06);
+}
+
+.main-nav-btn.active {
+  color: #fff;
+  background: rgba(255,255,255,0.08);
+}
+
+.main-nav-btn.active::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 16px;
+  right: 16px;
+  height: 2px;
+  background: var(--vermillion);
+  border-radius: 2px 2px 0 0;
+}
+
+.main-nav-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.main-nav-btn .nav-icon {
+  font-size: 15px;
+  line-height: 1;
+}
+
+.badge-soon {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  background: rgba(255,255,255,0.14);
+  color: rgba(255,255,255,0.45);
+  padding: 2px 5px;
+  border-radius: 3px;
+}
+
+.header-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.progress-summary {
+  font-size: 12px;
+  color: rgba(255,255,255,0.45);
+  letter-spacing: 0.02em;
+}
+
+.progress-summary strong {
+  color: rgba(255,255,255,0.8);
+  font-weight: 600;
+}
+
+/* ─────────────────────────────────────────────
+   APP BODY LAYOUT
+───────────────────────────────────────────── */
+.app-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100vh - 56px);
+}
+
+/* ─────────────────────────────────────────────
+   SECTION PANELS (Vocab / Grammar / Kanji)
+───────────────────────────────────────────── */
+.section-panel { display: none; flex: 1; flex-direction: column; }
+.section-panel.active { display: flex; }
+
+/* ─────────────────────────────────────────────
+   TIER 2 — UNIT TABS
+───────────────────────────────────────────── */
+.unit-tabs-bar {
+  background: var(--paper-card);
+  border-bottom: 1px solid var(--border);
+  padding: 0 24px;
+  display: flex;
+  align-items: flex-end;
+  gap: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+  flex-shrink: 0;
+}
+
+.unit-tabs-bar::-webkit-scrollbar { display: none; }
+
+.unit-tab {
+  position: relative;
+  padding: 14px 20px 12px;
+  border: none;
+  background: transparent;
+  font-family: var(--font-sans);
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--ink-mute);
+  cursor: pointer;
+  transition: color var(--transition);
+  white-space: nowrap;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.unit-tab:hover:not(.active) { color: var(--ink); }
+
+.unit-tab.active {
+  color: var(--vermillion);
+  border-bottom-color: var(--vermillion);
+}
+
+.unit-tab .unit-word-count {
+  font-size: 11px;
+  color: var(--ink-mute);
+  background: var(--paper);
+  border-radius: 20px;
+  padding: 1px 7px;
+  font-weight: 500;
+}
+
+.unit-tab.active .unit-word-count {
+  background: var(--verm-glow);
+  color: var(--vermillion);
+}
+
+/* ─────────────────────────────────────────────
+   UNIT CONTENT AREA
+───────────────────────────────────────────── */
+.unit-content-wrap {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.unit-panel { display: none; flex: 1; flex-direction: column; }
+.unit-panel.active { display: flex; }
+
+/* ─────────────────────────────────────────────
+   TIER 3 — PART ACCORDION
+───────────────────────────────────────────── */
+.parts-container {
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 1100px;
+  width: 100%;
+  align-self: center;
+  flex: 1;
+}
+
+.accordion-item {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--paper-card);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow var(--transition);
+}
+
+.accordion-item.open { box-shadow: var(--shadow-md); }
+
+.accordion-header {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 18px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  transition: background var(--transition);
+}
+
+.accordion-header:hover { background: var(--paper); }
+.accordion-item.open .accordion-header { background: var(--paper); border-bottom: 1px solid var(--border); }
+
+.accordion-chevron {
+  width: 20px;
+  height: 20px;
+  color: var(--ink-mute);
+  flex-shrink: 0;
+  transition: transform var(--transition);
+}
+
+.accordion-item.open .accordion-chevron { transform: rotate(90deg); }
+
+.accordion-part-label {
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-mute);
+  flex-shrink: 0;
+}
+
+.accordion-part-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink);
+  flex: 1;
+}
+
+.accordion-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.progress-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 4px 10px;
+  border-radius: 20px;
+  background: var(--sage-light);
+  color: var(--sage);
+}
+
+.progress-badge.complete {
+  background: var(--sage-light);
+  color: var(--sage);
+}
+
+.progress-badge.in-progress {
+  background: var(--gold-light);
+  color: var(--gold);
+}
+
+.progress-badge.not-started {
+  background: var(--paper);
+  color: var(--ink-mute);
+  border: 1px solid var(--border);
+}
+
+.progress-bar-mini {
+  width: 60px;
+  height: 5px;
+  background: var(--paper-warm);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.progress-bar-mini-fill {
+  height: 100%;
+  background: var(--sage);
+  border-radius: 3px;
+  transition: width 0.4s ease;
+}
+
+.progress-bar-mini-fill.partial { background: var(--gold); }
+
+/* ─────────────────────────────────────────────
+   ACCORDION BODY
+───────────────────────────────────────────── */
+.accordion-body {
+  display: none;
+  padding: 0;
+}
+
+.accordion-item.open .accordion-body { display: block; }
+
+/* ─────────────────────────────────────────────
+   TIER 4 — WORKSPACE SUB-TABS
+───────────────────────────────────────────── */
+.workspace {
+  padding: 16px 18px 18px;
+}
+
+.sub-tabs-bar {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  background: var(--paper);
+  border-radius: var(--radius-md);
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.sub-tab {
+  flex: 1;
+  min-width: max-content;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border: none;
+  background: transparent;
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--ink-mute);
+  cursor: pointer;
+  border-radius: 9px;
+  transition: all var(--transition);
+  white-space: nowrap;
+}
+
+.sub-tab:hover:not(.active) {
+  color: var(--ink);
+  background: rgba(255,255,255,0.7);
+}
+
+.sub-tab.active {
+  background: var(--paper-card);
+  color: var(--ink);
+  font-weight: 600;
+  box-shadow: var(--shadow-sm);
+}
+
+.sub-tab .tab-icon { font-size: 14px; }
+
+.sub-tab-panels { position: relative; }
+.sub-panel { display: none; }
+.sub-panel.active { display: block; }
+
+/* ─────────────────────────────────────────────
+   SUB PANEL 1: STUDY & LISTEN
+───────────────────────────────────────────── */
+.study-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.study-toolbar-left { display: flex; gap: 8px; align-items: center; }
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition);
+  white-space: nowrap;
+}
+
+.btn-primary {
+  background: var(--vermillion);
+  color: #fff;
+}
+.btn-primary:hover { background: var(--verm-light); }
+
+.btn-outline {
+  background: transparent;
+  border: 1px solid var(--border-md);
+  color: var(--ink);
+}
+.btn-outline:hover { background: var(--paper-warm); }
+
+.btn-ghost {
+  background: transparent;
+  color: var(--ink-mute);
+  padding: 6px 10px;
+}
+.btn-ghost:hover { background: var(--paper); color: var(--ink); }
+
+.btn-icon {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  justify-content: center;
+  background: var(--paper);
+  border: 1px solid var(--border);
+  color: var(--ink-mute);
+  border-radius: var(--radius-sm);
+  font-size: 15px;
+}
+.btn-icon:hover { background: var(--vermillion); color: #fff; border-color: var(--vermillion); }
+
+.view-toggle {
+  display: flex;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: var(--paper-card);
+}
+
+.view-toggle-btn {
+  padding: 6px 11px;
+  border: none;
+  background: transparent;
+  font-size: 14px;
+  color: var(--ink-mute);
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.view-toggle-btn.active {
+  background: var(--ink);
+  color: #fff;
+}
+
+/* Study word table */
+.word-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.word-table th {
+  text-align: left;
+  padding: 9px 14px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+  border-bottom: 1px solid var(--border);
+  background: var(--paper);
+}
+
+.word-table td {
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+
+.word-table tbody tr:hover { background: var(--paper); }
+.word-table tbody tr:last-child td { border-bottom: none; }
+
+.word-table .cell-num {
+  font-size: 12px;
+  color: var(--ink-mute);
+  font-weight: 500;
+  width: 40px;
+}
+
+.word-table .cell-kana {
+  font-family: var(--font-ja);
+  font-size: 16px;
+  font-weight: 400;
+  color: var(--ink);
+}
+
+.word-table .cell-kanji {
+  font-family: var(--font-ja-serif);
+  font-size: 18px;
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.word-table .cell-meaning {
+  color: var(--ink-soft);
+  font-size: 14px;
+}
+
+.word-table .cell-action { width: 48px; text-align: center; }
+
+/* ─────────────────────────────────────────────
+   SUB PANEL 2: FLASHCARD
+───────────────────────────────────────────── */
+.flashcard-area {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 10px 0 20px;
+  gap: 20px;
+}
+
+.flashcard-counter {
+  font-size: 13px;
+  color: var(--ink-mute);
+  font-weight: 500;
+}
+
+.flashcard-counter span {
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.flashcard-scene {
+  width: 100%;
+  max-width: 440px;
+  height: 260px;
+  perspective: 1200px;
+  cursor: pointer;
+}
+
+.flashcard-inner {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  transform-style: preserve-3d;
+  transition: transform 0.55s cubic-bezier(0.4, 0.2, 0.2, 1);
+}
+
+.flashcard-scene:hover .flashcard-inner,
+.flashcard-scene.flipped .flashcard-inner {
+  transform: rotateY(180deg);
+}
+
+.card-face {
+  position: absolute;
+  inset: 0;
+  backface-visibility: hidden;
+  border-radius: var(--radius-lg);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  box-shadow: var(--shadow-md);
+  padding: 30px;
+}
+
+.card-front {
+  background: var(--ink);
+  background-image: radial-gradient(ellipse at 70% 20%, rgba(192,57,43,0.18) 0%, transparent 60%);
+  color: #fff;
+}
+
+.card-back {
+  background: var(--paper-card);
+  transform: rotateY(180deg);
+  border: 1px solid var(--border);
+}
+
+.card-front .card-hint {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.35);
+  margin-bottom: 4px;
+}
+
+.card-front .card-kana {
+  font-family: var(--font-ja);
+  font-size: 42px;
+  font-weight: 300;
+  color: #fff;
+  line-height: 1.2;
+}
+
+.card-front .card-kanji {
+  font-family: var(--font-ja-serif);
+  font-size: 22px;
+  font-weight: 700;
+  color: rgba(255,255,255,0.55);
+}
+
+.card-back .card-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+}
+
+.card-back .card-meaning {
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--ink);
+  text-align: center;
+}
+
+.card-back .card-kana-small {
+  font-family: var(--font-ja);
+  font-size: 16px;
+  color: var(--ink-mute);
+}
+
+.card-back .card-listen-btn {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: var(--verm-glow);
+  border: 1px solid rgba(192,57,43,0.2);
+  color: var(--vermillion);
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition);
+  margin-top: 4px;
+}
+
+.card-back .card-listen-btn:hover {
+  background: var(--vermillion);
+  color: #fff;
+  border-color: var(--vermillion);
+}
+
+.flip-hint {
+  font-size: 11.5px;
+  color: var(--ink-mute);
+  text-align: center;
+}
+
+.flashcard-nav {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.nav-arrow {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  border: 1px solid var(--border-md);
+  background: var(--paper-card);
+  color: var(--ink);
+  font-size: 18px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition);
+  box-shadow: var(--shadow-sm);
+}
+
+.nav-arrow:hover { background: var(--ink); color: #fff; border-color: var(--ink); }
+
+.flashcard-progress-bar {
+  width: 180px;
+  height: 4px;
+  background: var(--paper-warm);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.flashcard-progress-fill {
+  height: 100%;
+  background: var(--vermillion);
+  border-radius: 2px;
+  width: 20%;
+  transition: width 0.3s ease;
+}
+
+/* ─────────────────────────────────────────────
+   SUB PANEL 3: QUIZ
+───────────────────────────────────────────── */
+.quiz-area { display: flex; flex-direction: column; gap: 18px; }
+
+.quiz-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.quiz-progress-track {
+  flex: 1;
+  height: 6px;
+  background: var(--paper-warm);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.quiz-progress-fill {
+  height: 100%;
+  background: var(--vermillion);
+  border-radius: 3px;
+  width: 40%;
+  transition: width 0.3s ease;
+}
+
+.quiz-score {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--sage);
+  background: var(--sage-light);
+  padding: 4px 11px;
+  border-radius: 20px;
+  flex-shrink: 0;
+}
+
+.quiz-card {
+  background: var(--paper-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 26px 24px;
+  box-shadow: var(--shadow-sm);
+}
+
+.quiz-question-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.quiz-q-number {
+  background: var(--vermillion);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 3px;
+}
+
+.quiz-word-display {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 22px;
+}
+
+.quiz-word-kana {
+  font-family: var(--font-ja);
+  font-size: 36px;
+  font-weight: 400;
+  color: var(--ink);
+}
+
+.quiz-word-kanji {
+  font-family: var(--font-ja-serif);
+  font-size: 20px;
+  color: var(--ink-mute);
+  font-weight: 700;
+}
+
+.quiz-listen-btn {
+  margin-left: auto;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--verm-glow);
+  border: 1px solid rgba(192,57,43,0.2);
+  color: var(--vermillion);
+  font-size: 17px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition);
+  flex-shrink: 0;
+}
+
+.quiz-listen-btn:hover { background: var(--vermillion); color: #fff; border-color: var(--vermillion); }
+
+.quiz-choices {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.choice-btn {
+  padding: 13px 16px;
+  border: 1.5px solid var(--border-md);
+  border-radius: var(--radius-sm);
+  background: var(--paper-card);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--ink);
+  cursor: pointer;
+  transition: all var(--transition);
+  text-align: left;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.choice-btn:hover:not(:disabled) {
+  border-color: var(--vermillion);
+  background: var(--verm-glow);
+  color: var(--vermillion);
+}
+
+.choice-btn.correct {
+  border-color: var(--sage);
+  background: var(--sage-light);
+  color: var(--sage);
+}
+
+.choice-btn.wrong {
+  border-color: var(--vermillion);
+  background: var(--verm-glow);
+  color: var(--vermillion);
+}
+
+.choice-label {
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  background: var(--paper);
+  border: 1px solid var(--border);
+  font-size: 11px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: var(--ink-mute);
+}
+
+/* Review Screen (shown after quiz completes) */
+.quiz-review-screen {
+  display: none;
+  background: var(--paper-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 32px 24px;
+  text-align: center;
+  box-shadow: var(--shadow-md);
+}
+
+.review-emoji { font-size: 48px; margin-bottom: 12px; }
+.review-title { font-size: 22px; font-weight: 700; color: var(--ink); margin-bottom: 6px; }
+.review-sub { font-size: 14px; color: var(--ink-mute); margin-bottom: 24px; }
+
+.review-stats {
+  display: flex;
+  justify-content: center;
+  gap: 24px;
+  margin-bottom: 24px;
+}
+
+.review-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.review-stat-val {
+  font-size: 28px;
+  font-weight: 700;
+}
+
+.review-stat-val.green { color: var(--sage); }
+.review-stat-val.red { color: var(--vermillion); }
+
+.review-stat-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--ink-mute);
+  font-weight: 600;
+}
+
+/* ─────────────────────────────────────────────
+   SUB PANEL 4: STROKE ORDER
+───────────────────────────────────────────── */
+.stroke-area { display: flex; flex-direction: column; gap: 16px; }
+
+.stroke-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.stroke-word-selector {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.stroke-word-chip {
+  padding: 6px 13px;
+  border: 1.5px solid var(--border-md);
+  border-radius: 20px;
+  font-family: var(--font-ja-serif);
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--ink);
+  cursor: pointer;
+  background: var(--paper-card);
+  transition: all var(--transition);
+}
+
+.stroke-word-chip.active, .stroke-word-chip:hover {
+  border-color: var(--vermillion);
+  background: var(--verm-glow);
+  color: var(--vermillion);
+}
+
+.stroke-canvas-area {
+  background: var(--paper-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  min-height: 200px;
+}
+
+.stroke-kanji-display {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.stroke-char-box {
+  width: 140px;
+  height: 140px;
+  border: 1.5px solid var(--border-md);
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-ja-serif);
+  font-size: 72px;
+  color: var(--ink);
+  background: #fff;
+  position: relative;
+  cursor: pointer;
+}
+
+.stroke-char-box::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(var(--border) 1px, transparent 1px),
+    linear-gradient(90deg, var(--border) 1px, transparent 1px);
+  background-size: 50% 50%;
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.stroke-char-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink-mute);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  text-align: center;
+}
+
+.stroke-placeholder-msg {
+  font-size: 13px;
+  color: var(--ink-mute);
+  text-align: center;
+  padding: 16px;
+}
+
+.stroke-controls {
+  display: flex;
+  gap: 8px;
+}
+
+/* ─────────────────────────────────────────────
+   SUB PANEL 5: WORD LIST
+───────────────────────────────────────────── */
+.wordlist-area {}
+
+.wordlist-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+  gap: 10px;
+}
+
+.wordlist-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.wordlist-table th {
+  text-align: left;
+  padding: 8px 14px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+  border-bottom: 2px solid var(--border-md);
+}
+
+.wordlist-table td {
+  padding: 10px 14px;
+  border-bottom: 1px dashed var(--border);
+  vertical-align: middle;
+}
+
+.wordlist-table tbody tr:last-child td { border-bottom: none; }
+
+.wordlist-table .cell-check {
+  width: 32px;
+}
+
+.check-box {
+  width: 18px;
+  height: 18px;
+  border: 1.5px solid var(--border-md);
+  border-radius: 4px;
+  cursor: pointer;
+  display: block;
+  transition: all var(--transition);
+  flex-shrink: 0;
+  appearance: none;
+  -webkit-appearance: none;
+  background: #fff;
+  position: relative;
+}
+
+.check-box:checked {
+  background: var(--sage);
+  border-color: var(--sage);
+}
+
+.check-box:checked::after {
+  content: '✓';
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  color: #fff;
+  font-weight: 700;
+  display: grid;
+  place-items: center;
+}
+
+.wl-kana { font-family: var(--font-ja); font-size: 16px; }
+.wl-kanji { font-family: var(--font-ja-serif); font-size: 17px; font-weight: 700; }
+.wl-meaning { color: var(--ink-soft); }
+.wl-notes { color: var(--ink-mute); font-size: 13px; font-style: italic; }
+
+/* ─────────────────────────────────────────────
+   PLACEHOLDER (Grammar / Kanji panels)
+───────────────────────────────────────────── */
+.placeholder-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 60px 24px;
+  color: var(--ink-mute);
+}
+
+.placeholder-panel .placeholder-icon {
+  font-size: 48px;
+  opacity: 0.3;
+}
+
+.placeholder-panel h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+
+.placeholder-panel p {
+  font-size: 14px;
+  text-align: center;
+  max-width: 320px;
+}
+
+/* ─────────────────────────────────────────────
+   EMPTY STATE
+───────────────────────────────────────────── */
+.empty-state {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--ink-mute);
+  font-size: 14px;
+}
+
+/* ─────────────────────────────────────────────
+   SCROLLBAR (subtle)
+───────────────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border-md); border-radius: 3px; }
+
+/* ─────────────────────────────────────────────
+   RESPONSIVE
+───────────────────────────────────────────── */
+@media (max-width: 640px) {
+  .app-header { padding: 0 14px; }
+  .parts-container { padding: 12px 14px; gap: 8px; }
+  .quiz-choices { grid-template-columns: 1fr; }
+  .sub-tab { padding: 7px 10px; font-size: 12px; }
+  .workspace { padding: 12px 12px 14px; }
+  .unit-tabs-bar { padding: 0 14px; }
+  .logo-text { display: none; }
+  .main-nav-btn { padding: 0 12px; font-size: 13px; }
+}
+
+@media print {
+  .app-header,
+  .unit-tabs-bar,
+  .accordion-header,
+  .sub-tabs-bar,
+  .study-toolbar,
+  .wordlist-toolbar { display: none !important; }
+  .accordion-body { display: block !important; }
+  .sub-panel { display: block !important; }
+  .wordlist-table { border: 1px solid #ccc; }
+}
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════
+     TIER 1 — MAIN NAVIGATION
+═══════════════════════════════════════ -->
+<header class="app-header">
+  <div class="app-logo">
+    <div class="logo-mark">語</div>
+    <div class="logo-text">
+      日本語 Vocab
+      <span class="logo-sub">Learning Studio</span>
+    </div>
+  </div>
+
+  <nav class="main-nav">
+    <button class="main-nav-btn active" onclick="switchMainSection('vocab')">
+      <span class="nav-icon">📖</span> Vocab
+    </button>
+    <button class="main-nav-btn" disabled>
+      <span class="nav-icon">✍️</span> Grammar
+      <span class="badge-soon">Soon</span>
+    </button>
+    <button class="main-nav-btn" disabled>
+      <span class="nav-icon">漢</span> Kanji
+      <span class="badge-soon">Soon</span>
+    </button>
+  </nav>
+
+  <div class="header-right">
+    <span class="progress-summary" id="global-progress">Loading…</span>
+  </div>
+</header>
+
+<!-- ═══════════════════════════════════════
+     APP BODY
+═══════════════════════════════════════ -->
+<div class="app-body">
+
+  <!-- VOCAB SECTION -->
+  <div class="section-panel active" id="section-vocab">
+
+    <!-- TIER 2 — UNIT TABS -->
+    <div class="unit-tabs-bar" id="unit-tabs-bar">
+      <!-- Dynamically rendered by JS -->
+    </div>
+
+    <!-- UNIT CONTENT -->
+    <div class="unit-content-wrap" id="unit-content-wrap">
+      <!-- Dynamically rendered by JS -->
+    </div>
+
+  </div><!-- /section-vocab -->
+
+  <!-- GRAMMAR PLACEHOLDER -->
+  <div class="section-panel" id="section-grammar">
+    <div class="placeholder-panel">
+      <div class="placeholder-icon">✍️</div>
+      <h3>Grammar Module</h3>
+      <p>Grammar lessons and exercises will appear here in a future update.</p>
+    </div>
+  </div>
+
+  <!-- KANJI PLACEHOLDER -->
+  <div class="section-panel" id="section-kanji">
+    <div class="placeholder-panel">
+      <div class="placeholder-icon">漢</div>
+      <h3>Kanji Module</h3>
+      <p>Dedicated kanji study with stroke order and radical breakdowns coming soon.</p>
+    </div>
+  </div>
+
+</div><!-- /app-body -->
+
+<!-- ─────────────────────────────────────────────
+     EXTERNAL LIBRARIES
+───────────────────────────────────────────── -->
+<!-- AnimCJK for stroke order (CDN) -->
+<script src="https://cdn.jsdelivr.net/npm/animcjk@latest/AnimCJK.js"></script>
+
+<!-- Vocabulary data (must sit beside this HTML file) -->
+<script src="data.js"></script>
+
+<!-- ─────────────────────────────────────────────
+     CORE NAVIGATION JAVASCRIPT
+───────────────────────────────────────────── -->
+<script>
+/* ══════════════════════════════════════════════
+   NAVIGATION STATE
+══════════════════════════════════════════════ */
+const state = {
+  activeUnit: null,
+  activeAccordion: {},   // unitKey → partKey
+  activeSubTab: {},      // unitKey-partKey → tabId
+};
+
+/* ══════════════════════════════════════════════
+   TIER 1 — Main Section Switch
+══════════════════════════════════════════════ */
+function switchMainSection(sectionId) {
+  document.querySelectorAll('.section-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.main-nav-btn').forEach(b => b.classList.remove('active'));
+
+  const panel = document.getElementById('section-' + sectionId);
+  if (panel) panel.classList.add('active');
+
+  document.querySelectorAll('.main-nav-btn').forEach(b => {
+    if (b.textContent.toLowerCase().includes(sectionId)) b.classList.add('active');
+  });
+}
+
+/* ══════════════════════════════════════════════
+   DATA HELPERS
+══════════════════════════════════════════════ */
+function getUnits() {
+  if (typeof vocabularyData === 'undefined') return [];
+  const units = [...new Set(vocabularyData.map(w => w.unit))];
+  return units.sort((a, b) => naturalSort(a, b));
+}
+
+function getPartsForUnit(unitName) {
+  if (typeof vocabularyData === 'undefined') return [];
+  const parts = [...new Set(
+    vocabularyData.filter(w => w.unit === unitName).map(w => w.part)
+  )];
+  return parts.sort((a, b) => naturalSort(a, b));
+}
+
+function getWordsForPart(unitName, partName) {
+  if (typeof vocabularyData === 'undefined') return [];
+  return vocabularyData.filter(w => w.unit === unitName && w.part === partName);
+}
+
+function naturalSort(a, b) {
+  return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
+}
+
+function unitKey(unit) { return unit.replace(/\s+/g, '-').toLowerCase(); }
+function partKey(part) { return part.replace(/\s+/g, '-').toLowerCase(); }
+function workspaceKey(unit, part) { return unitKey(unit) + '__' + partKey(part); }
+
+/* ══════════════════════════════════════════════
+   RENDER — TIER 2: UNIT TABS
+══════════════════════════════════════════════ */
+function renderUnitTabs() {
+  const units = getUnits();
+  const bar = document.getElementById('unit-tabs-bar');
+  const wrap = document.getElementById('unit-content-wrap');
+
+  if (!units.length) {
+    bar.innerHTML = '<div style="padding:14px 18px;font-size:13px;color:var(--ink-mute)">No vocabulary data found. Make sure data.js is loaded.</div>';
+    return;
+  }
+
+  bar.innerHTML = '';
+  wrap.innerHTML = '';
+
+  units.forEach((unit, idx) => {
+    const wordCount = vocabularyData.filter(w => w.unit === unit).length;
+    const uKey = unitKey(unit);
+
+    // Tab button
+    const tab = document.createElement('button');
+    tab.className = 'unit-tab' + (idx === 0 ? ' active' : '');
+    tab.dataset.unit = uKey;
+    tab.innerHTML = `${unit}<span class="unit-word-count">${wordCount}</span>`;
+    tab.addEventListener('click', () => switchUnit(uKey));
+    bar.appendChild(tab);
+
+    // Unit panel
+    const panel = document.createElement('div');
+    panel.className = 'unit-panel' + (idx === 0 ? ' active' : '');
+    panel.id = 'unit-panel-' + uKey;
+    panel.innerHTML = renderPartsHTML(unit);
+    wrap.appendChild(panel);
+  });
+
+  if (units.length) state.activeUnit = unitKey(units[0]);
+  updateGlobalProgress();
+}
+
+/* ══════════════════════════════════════════════
+   TIER 2 SWITCH
+══════════════════════════════════════════════ */
+function switchUnit(uKey) {
+  state.activeUnit = uKey;
+  document.querySelectorAll('.unit-tab').forEach(t => {
+    t.classList.toggle('active', t.dataset.unit === uKey);
+  });
+  document.querySelectorAll('.unit-panel').forEach(p => {
+    p.classList.toggle('active', p.id === 'unit-panel-' + uKey);
+  });
+}
+
+/* ══════════════════════════════════════════════
+   RENDER — TIER 3: PARTS ACCORDION HTML
+══════════════════════════════════════════════ */
+function renderPartsHTML(unitName) {
+  const parts = getPartsForUnit(unitName);
+  if (!parts.length) return '<div class="empty-state">No parts found for this unit.</div>';
+
+  const uKey = unitKey(unitName);
+
+  return `<div class="parts-container">${parts.map((part, idx) => {
+    const words = getWordsForPart(unitName, part);
+    const pKey = partKey(part);
+    const wKey = workspaceKey(unitName, part);
+    const done = getProgress(wKey);
+    const total = words.length;
+    const pct = total ? Math.round((done / total) * 100) : 0;
+    const badgeClass = done === 0 ? 'not-started' : (done >= total ? 'complete' : 'in-progress');
+    const fillClass = done >= total ? '' : 'partial';
+
+    return `
+    <div class="accordion-item" id="acc-${uKey}-${pKey}">
+      <button class="accordion-header" onclick="toggleAccordion('${uKey}','${pKey}')">
+        <svg class="accordion-chevron" viewBox="0 0 20 20" fill="currentColor">
+          <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <span class="accordion-part-label">${part}</span>
+        <span class="accordion-part-name">${part} — ${unitName}</span>
+        <div class="accordion-meta">
+          <div class="progress-bar-mini"><div class="progress-bar-mini-fill ${fillClass}" style="width:${pct}%"></div></div>
+          <span class="progress-badge ${badgeClass}">${done}/${total} words</span>
+        </div>
+      </button>
+      <div class="accordion-body">
+        <div class="workspace">
+          ${renderWorkspaceHTML(unitName, part, words)}
+        </div>
+      </div>
+    </div>`;
+  }).join('')}</div>`;
+}
+
+/* ══════════════════════════════════════════════
+   TIER 3 ACCORDION TOGGLE
+══════════════════════════════════════════════ */
+function toggleAccordion(uKey, pKey) {
+  const item = document.getElementById(`acc-${uKey}-${pKey}`);
+  if (!item) return;
+  const isOpen = item.classList.contains('open');
+
+  // Collapse all in this unit
+  document.querySelectorAll(`[id^="acc-${uKey}-"]`).forEach(el => el.classList.remove('open'));
+
+  if (!isOpen) {
+    item.classList.add('open');
+    state.activeAccordion[uKey] = pKey;
+  } else {
+    delete state.activeAccordion[uKey];
+  }
+}
+
+/* ══════════════════════════════════════════════
+   RENDER — TIER 4: WORKSPACE HTML
+══════════════════════════════════════════════ */
+function renderWorkspaceHTML(unitName, partName, words) {
+  const wKey = workspaceKey(unitName, partName);
+  const tabs = [
+    { id: 'study',     icon: '🔊', label: 'Study & Listen' },
+    { id: 'flashcard', icon: '🃏', label: 'Flashcard' },
+    { id: 'quiz',      icon: '✏️', label: 'Quiz' },
+    { id: 'stroke',    icon: '✒️', label: 'Stroke Order' },
+    { id: 'wordlist',  icon: '📋', label: 'Word List' },
+  ];
+
+  const tabsHTML = tabs.map((t, i) => `
+    <button class="sub-tab${i === 0 ? ' active' : ''}"
+            id="subtab-${wKey}-${t.id}"
+            onclick="switchSubTab('${wKey}','${t.id}')">
+      <span class="tab-icon">${t.icon}</span>${t.label}
+    </button>`).join('');
+
+  const panelsHTML = tabs.map((t, i) => `
+    <div class="sub-panel${i === 0 ? ' active' : ''}" id="subpanel-${wKey}-${t.id}">
+      ${renderSubPanelContent(t.id, unitName, partName, words, wKey)}
+    </div>`).join('');
+
+  return `
+    <div class="sub-tabs-bar">${tabsHTML}</div>
+    <div class="sub-tab-panels">${panelsHTML}</div>`;
+}
+
+/* ══════════════════════════════════════════════
+   TIER 4 SUB-TAB SWITCH
+══════════════════════════════════════════════ */
+function switchSubTab(wKey, tabId) {
+  state.activeSubTab[wKey] = tabId;
+  document.querySelectorAll(`[id^="subtab-${wKey}-"]`).forEach(b => {
+    b.classList.toggle('active', b.id === `subtab-${wKey}-${tabId}`);
+  });
+  document.querySelectorAll(`[id^="subpanel-${wKey}-"]`).forEach(p => {
+    p.classList.toggle('active', p.id === `subpanel-${wKey}-${tabId}`);
+  });
+}
+
+/* ══════════════════════════════════════════════
+   RENDER — SUB-PANEL CONTENT
+══════════════════════════════════════════════ */
+function renderSubPanelContent(tabId, unitName, partName, words, wKey) {
+  switch (tabId) {
+    case 'study':     return renderStudyPanel(words, wKey);
+    case 'flashcard': return renderFlashcardPanel(words, wKey);
+    case 'quiz':      return renderQuizPanel(words, wKey);
+    case 'stroke':    return renderStrokePanel(words, wKey);
+    case 'wordlist':  return renderWordListPanel(words, wKey);
+    default: return '';
+  }
+}
+
+/* ── Study & Listen ── */
+function renderStudyPanel(words, wKey) {
+  if (!words.length) return '<div class="empty-state">No words in this part.</div>';
+  const rows = words.map((w, i) => `
+    <tr>
+      <td class="cell-num">${i + 1}</td>
+      <td class="cell-kana">${w.word}</td>
+      <td class="cell-kanji">${w.kanji || '—'}</td>
+      <td class="cell-meaning">${w.meaning}</td>
+      <td class="cell-action">
+        <button class="btn-icon btn" onclick="speakWord('${escAttr(w.word)}')" title="Listen">🔊</button>
+      </td>
+    </tr>`).join('');
+
+  return `
+    <div class="study-toolbar">
+      <div class="study-toolbar-left">
+        <button class="btn btn-primary" id="autoplay-btn-${wKey}" onclick="autoPlayAll('${wKey}')">▶ Auto Play All</button>
+        <button class="btn btn-outline" onclick="stopAutoPlay()">⏹ Stop</button>
+      </div>
+      <div class="view-toggle">
+        <button class="view-toggle-btn active" title="Table view">☰</button>
+        <button class="view-toggle-btn" title="Card view">⊞</button>
+      </div>
+    </div>
+    <table class="word-table">
+      <thead>
+        <tr>
+          <th>#</th><th>Kana</th><th>Kanji</th><th>Meaning</th><th></th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+
+/* ── Flashcard ── */
+function renderFlashcardPanel(words, wKey) {
+  if (!words.length) return '<div class="empty-state">No words in this part.</div>';
+  const total = words.length;
+  const w = words[0];
+  return `
+    <div class="flashcard-area">
+      <div class="flashcard-counter">Card <span id="fc-cur-${wKey}">1</span> of <span>${total}</span></div>
+
+      <div class="flashcard-scene" id="fc-scene-${wKey}" onclick="flipCard('${wKey}')">
+        <div class="flashcard-inner" id="fc-inner-${wKey}">
+          <div class="card-face card-front">
+            <span class="card-hint">What is the meaning?</span>
+            <div class="card-kana" id="fc-kana-${wKey}">${w.word}</div>
+            <div class="card-kanji" id="fc-kanji-${wKey}">${w.kanji || ''}</div>
+          </div>
+          <div class="card-face card-back">
+            <span class="card-label">Meaning</span>
+            <div class="card-meaning" id="fc-meaning-${wKey}">${w.meaning}</div>
+            <div class="card-kana-small" id="fc-kana-back-${wKey}">${w.word}</div>
+            <button class="card-listen-btn" onclick="event.stopPropagation();speakWord('${escAttr(w.word)}')">🔊</button>
+          </div>
+        </div>
+      </div>
+
+      <p class="flip-hint">Click or hover the card to reveal the answer</p>
+
+      <div class="flashcard-nav">
+        <button class="nav-arrow" onclick="navigateCard('${wKey}', -1)" title="Previous (←)">←</button>
+        <div class="flashcard-progress-bar">
+          <div class="flashcard-progress-fill" id="fc-bar-${wKey}" style="width:${Math.round(1/total*100)}%"></div>
+        </div>
+        <button class="nav-arrow" onclick="navigateCard('${wKey}', 1)" title="Next (→)">→</button>
+      </div>
+      <button class="btn btn-ghost" id="fc-shuffle-${wKey}" onclick="shuffleCards('${wKey}')" style="font-size:12px;margin-top:2px">🔀 Shuffle</button>
+    </div>`;
+}
+
+/* ── Quiz ── */
+function renderQuizPanel(words, wKey) {
+  if (words.length < 4) return '<div class="empty-state">Need at least 4 words to start a quiz.</div>';
+  return `
+    <div class="quiz-area" id="quiz-area-${wKey}">
+      <div class="quiz-header">
+        <div class="quiz-progress-track"><div class="quiz-progress-fill" id="qz-prog-${wKey}" style="width:0%"></div></div>
+        <span class="quiz-score" id="qz-score-${wKey}">0 / ${words.length}</span>
+      </div>
+
+      <div class="quiz-card" id="qz-card-${wKey}">
+        <div class="quiz-question-label">
+          <span class="quiz-q-number" id="qz-num-${wKey}">Q1</span> Choose the correct meaning
+        </div>
+        <div class="quiz-word-display">
+          <span class="quiz-word-kana" id="qz-kana-${wKey}">—</span>
+          <span class="quiz-word-kanji" id="qz-kanji-${wKey}"></span>
+          <button class="quiz-listen-btn" id="qz-listen-${wKey}" onclick="speakWord('')" title="Listen">🔊</button>
+        </div>
+        <div class="quiz-choices" id="qz-choices-${wKey}"></div>
+      </div>
+
+      <div class="quiz-review-screen" id="qz-review-${wKey}">
+        <div class="review-emoji">🎉</div>
+        <div class="review-title">Quiz Complete!</div>
+        <div class="review-sub">Here's how you did on this part.</div>
+        <div class="review-stats">
+          <div class="review-stat">
+            <span class="review-stat-val green" id="qz-correct-${wKey}">—</span>
+            <span class="review-stat-label">Correct</span>
+          </div>
+          <div class="review-stat">
+            <span class="review-stat-val red" id="qz-wrong-${wKey}">—</span>
+            <span class="review-stat-label">Wrong</span>
+          </div>
+          <div class="review-stat">
+            <span class="review-stat-val" id="qz-pct-${wKey}">—</span>
+            <span class="review-stat-label">Score</span>
+          </div>
+        </div>
+        <button class="btn btn-primary" onclick="startQuiz('${wKey}')">Try Again</button>
+      </div>
+
+      <button class="btn btn-primary" onclick="startQuiz('${wKey}')">Start Quiz</button>
+    </div>`;
+}
+
+/* ── Stroke Order ── */
+function renderStrokePanel(words, wKey) {
+  const kanjiWords = words.filter(w => w.kanji && w.kanji !== '—');
+  if (!kanjiWords.length) return '<div class="empty-state">No kanji found in this part.</div>';
+
+  const chips = kanjiWords.map((w, i) =>
+    `<button class="stroke-word-chip${i === 0 ? ' active' : ''}"
+        onclick="selectStrokeWord('${wKey}', this, '${escAttr(w.kanji)}')">${w.kanji}</button>`
+  ).join('');
+
+  const firstKanji = kanjiWords[0].kanji;
+  const charBoxes = [...firstKanji].map(ch => `
+    <div style="display:flex;flex-direction:column;align-items:center;gap:8px;">
+      <div class="stroke-char-box" id="stroke-box-${wKey}-${escId(ch)}" data-char="${escAttr(ch)}">${ch}</div>
+      <span class="stroke-char-label">${ch}</span>
+    </div>`).join('');
+
+  return `
+    <div class="stroke-area">
+      <div class="stroke-toolbar">
+        <div class="stroke-word-selector" id="stroke-chips-${wKey}">${chips}</div>
+      </div>
+      <div class="stroke-canvas-area">
+        <div class="stroke-kanji-display" id="stroke-display-${wKey}">${charBoxes}</div>
+        <p class="stroke-placeholder-msg">Click a kanji above to animate its stroke order.<br>Powered by AnimCJK.</p>
+        <div class="stroke-controls">
+          <button class="btn btn-outline" onclick="animateStrokes('${wKey}')">▶ Animate</button>
+          <button class="btn btn-ghost" onclick="resetStrokes('${wKey}')">↺ Reset</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+/* ── Word List ── */
+function renderWordListPanel(words, wKey) {
+  if (!words.length) return '<div class="empty-state">No words in this part.</div>';
+  const rows = words.map((w, i) => `
+    <tr>
+      <td class="cell-check"><input type="checkbox" class="check-box" /></td>
+      <td class="cell-num" style="font-size:12px;color:var(--ink-mute)">${i + 1}</td>
+      <td class="wl-kana">${w.word}</td>
+      <td class="wl-kanji">${w.kanji || '—'}</td>
+      <td class="wl-meaning">${w.meaning}</td>
+      <td class="wl-notes"></td>
+    </tr>`).join('');
+
+  return `
+    <div class="wordlist-area">
+      <div class="wordlist-toolbar">
+        <span style="font-size:13px;color:var(--ink-mute)">${words.length} words</span>
+        <button class="btn btn-outline" onclick="window.print()">🖨️ Print</button>
+      </div>
+      <table class="wordlist-table">
+        <thead>
+          <tr>
+            <th>✓</th><th>#</th><th>Kana</th><th>Kanji</th><th>Meaning</th><th>Notes</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+}
+
+/* ══════════════════════════════════════════════
+   UTILS — shared helpers used throughout
+══════════════════════════════════════════════ */
+
+/* Escape a string for safe use inside an HTML attribute quoted with ' */
+function escAttr(s) { return String(s).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;'); }
+
+/* Return a numeric CSS id-safe token from a single character */
+function escId(s) { return String(s).charCodeAt(0); }
+
+/* Fisher-Yates shuffle — always returns a new array */
+function _shuffle(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+/* Extract only the leading digits from a string like "Unit 1" → "1",
+   "Part 12" → "12". Used to build audio file paths. */
+function _digitsOnly(str) {
+  const m = String(str).match(/\d+/);
+  return m ? m[0] : '0';
+}
+
+/* Build the exact GitHub Pages audio path for one vocabulary word.
+   Formula: audio/u[UnitNum]_p[PartNum]_word-[id].mp3
+   Example: { id:21, unit:"Unit 1", part:"Part 2" }
+            → "audio/u1_p2_word-21.mp3"                         */
+function buildAudioPath(word) {
+  const u = _digitsOnly(word.unit);
+  const p = _digitsOnly(word.part);
+  return `audio/u${u}_p${p}_word-${word.id}.mp3`;
+}
+
+/* Return every word object belonging to a workspace key.
+   wKey format is produced by workspaceKey() above:
+   "unit-1__part-2" — matched by round-tripping through
+   unitKey() / partKey() so the filter is exact.             */
+function _wordsFromWKey(wKey) {
+  if (typeof vocabularyData === 'undefined') return [];
+  const [uSeg, pSeg] = wKey.split('__');
+  return vocabularyData.filter(w =>
+    unitKey(w.unit) === uSeg && partKey(w.part) === pSeg
+  );
+}
+
+
+/* ══════════════════════════════════════════════
+   PROGRESS — localStorage with canonical keys
+   ─ Storage key format : progress_Unit[N]_Part[N]
+     e.g.               : progress_Unit1_Part1
+   ─ Value stored       : "correct/total"
+     e.g.               : "18/20"
+   ─ getProgress(wKey)  : returns { done, total, pct }
+     by reading from localStorage and cross-referencing
+     vocabularyData for the authoritative total count.
+   ─ saveProgress(wKey, correct, total) : write to store
+     then immediately refresh every accordion badge that
+     belongs to this wKey so the UI updates live.
+══════════════════════════════════════════════ */
+
+/* Convert a workspace key back to its canonical storage key.
+   wKey "unit-1__part-2" → "progress_Unit1_Part2"            */
+function _progressStorageKey(wKey) {
+  const [uSeg, pSeg] = wKey.split('__');
+  // uSeg = "unit-1"  → digits → "1"  → "Unit1"
+  // pSeg = "part-2"  → digits → "2"  → "Part2"
+  const uNum = _digitsOnly(uSeg);
+  const pNum = _digitsOnly(pSeg);
+  return `progress_Unit${uNum}_Part${pNum}`;
+}
+
+/* Read progress for one wKey.
+   Returns { done: Number, total: Number, pct: Number }      */
+function getProgress(wKey) {
+  try {
+    const storageKey = _progressStorageKey(wKey);
+    const raw = localStorage.getItem(storageKey);
+    const totalWords = _wordsFromWKey(wKey).length;
+    if (!raw) return { done: 0, total: totalWords, pct: 0 };
+    const [doneStr, totalStr] = raw.split('/');
+    const done  = parseInt(doneStr,  10) || 0;
+    // Use the stored total as a fallback if data hasn't loaded yet
+    const total = totalWords || parseInt(totalStr, 10) || 0;
+    const pct   = total > 0 ? Math.round((done / total) * 100) : 0;
+    return { done, total, pct };
+  } catch {
+    return { done: 0, total: _wordsFromWKey(wKey).length, pct: 0 };
+  }
+}
+
+/* Persist quiz result and refresh every visible accordion badge. */
+function saveProgress(wKey, correct, total) {
+  try {
+    const storageKey = _progressStorageKey(wKey);
+    // Only update if this run is the best result so far
+    const existing = localStorage.getItem(storageKey);
+    let prevCorrect = 0;
+    if (existing) {
+      prevCorrect = parseInt(existing.split('/')[0], 10) || 0;
+    }
+    if (correct >= prevCorrect) {
+      localStorage.setItem(storageKey, `${correct}/${total}`);
+    }
+  } catch { /* storage unavailable — silently continue */ }
+
+  // Refresh every accordion badge that matches this wKey
+  _refreshAccordionBadge(wKey);
+}
+
+/* Re-read localStorage and update the badge + mini bar in the
+   accordion header for this wKey without re-rendering the panel. */
+function _refreshAccordionBadge(wKey) {
+  const [uSeg, pSeg] = wKey.split('__');
+  const badgeId  = `acc-${uSeg}-${pSeg}`;
+  const item = document.getElementById(badgeId);
+  if (!item) return;
+
+  const { done, total, pct } = getProgress(wKey);
+  const badgeClass = done === 0 ? 'not-started' : (done >= total ? 'complete' : 'in-progress');
+  const fillClass  = done >= total ? '' : 'partial';
+
+  const badge = item.querySelector('.progress-badge');
+  const fill  = item.querySelector('.progress-bar-mini-fill');
+
+  if (badge) {
+    badge.textContent = `${done}/${total} words`;
+    badge.className   = `progress-badge ${badgeClass}`;
+  }
+  if (fill) {
+    fill.style.width = pct + '%';
+    fill.className   = `progress-bar-mini-fill${fillClass ? ' ' + fillClass : ''}`;
+  }
+}
+
+/* Called once at init to refresh ALL accordion badges from storage */
+function refreshAllBadges() {
+  if (typeof vocabularyData === 'undefined') return;
+  const units = getUnits();
+  units.forEach(unit => {
+    const parts = getPartsForUnit(unit);
+    parts.forEach(part => {
+      const wKey = workspaceKey(unit, part);
+      _refreshAccordionBadge(wKey);
+    });
+  });
+}
+
+/* Update the global word-count summary in the header */
+function updateGlobalProgress() {
+  if (typeof vocabularyData === 'undefined') return;
+  const total = vocabularyData.length;
+  const el = document.getElementById('global-progress');
+  if (el) el.innerHTML = `Total: <strong>${total}</strong> words`;
+}
+
+
+/* ══════════════════════════════════════════════
+   AUDIO — HTML5 Audio() with local .mp3 files
+   ─ speakWord(wordObj)      : play one word's mp3
+     (accepts a full word object OR a bare path string
+      for backwards compatibility with older callers)
+   ─ autoPlayAll(wKey)       : play every word in the
+     part sequentially; waits for the audio's `onended`
+     event, then pauses 2 s before advancing to the
+     next word row.
+   ─ stopAutoPlay()          : cancel any running
+     sequence immediately.
+══════════════════════════════════════════════ */
+
+/* Module-level singleton for autoplay state */
+const _ap = {
+  active:    false,   // true while a sequence is running
+  cancelled: false,   // set to true by stopAutoPlay()
+  current:   null,    // the HTMLAudioElement currently playing
+  timer:     null,    // the 2-second between-word setTimeout
+};
+
+/* Play a single audio file by its full src path.
+   Returns a Promise that resolves when the audio ends,
+   or when it is cancelled (paused externally).            */
+function _playAudioFile(src) {
+  return new Promise((resolve) => {
+    // Stop and discard any previous single-play instance
+    if (_ap.current) {
+      _ap.current.pause();
+      _ap.current.src = '';
+    }
+    const a = new Audio(src);
+    _ap.current = a;
+
+    a.onended  = () => resolve('ended');
+    a.onerror  = () => resolve('error');   // resolve so the loop continues
+    a.onpause  = () => resolve('paused');  // fired by stopAutoPlay()
+
+    a.play().catch(() => resolve('error'));
+  });
+}
+
+/* Wraps setTimeout as a cancellable Promise.
+   Stores the handle in _ap.timer so stopAutoPlay can clear it. */
+function _apDelay(ms) {
+  return new Promise((resolve) => {
+    _ap.timer = setTimeout(resolve, ms);
+  });
+}
+
+/* Public: play the .mp3 for one vocabulary word.
+   Accepts either a full word object or a pre-built path string. */
+function speakWord(wordOrPath) {
+  stopAutoPlay();   // cancel any running autoplay first
+  let src;
+  if (typeof wordOrPath === 'string') {
+    // Legacy call passing a raw path (e.g. from older inline onclick)
+    src = wordOrPath;
+  } else if (wordOrPath && typeof wordOrPath === 'object') {
+    src = buildAudioPath(wordOrPath);
+  } else {
+    return;
+  }
+  _playAudioFile(src);
+}
+
+/* Public: play all words in a part, one after another.
+   Sequence per word:
+     1. Highlight the row in the Study table
+     2. Play the word's .mp3 (wait for onended)
+     3. Wait 2 000 ms
+     4. Clear highlight, move to next word               */
+function autoPlayAll(wKey) {
+  stopAutoPlay();   // reset state from any previous run
+
+  const words = _wordsFromWKey(wKey);
+  if (!words.length) return;
+
+  _ap.active    = true;
+  _ap.cancelled = false;
+
+  _setAutoplayUI(wKey, true);
+
+  // Use an index-based recursive approach (avoids async/await
+  // closure issues with the cancellation flag).
+  function playNext(i) {
+    if (_ap.cancelled || i >= words.length) {
+      // Sequence finished or was stopped
+      _highlightStudyRow(wKey, -1);
+      _setAutoplayUI(wKey, false);
+      _ap.active = false;
+      return;
+    }
+
+    const w = words[i];
+    _highlightStudyRow(wKey, i);
+
+    const src = buildAudioPath(w);
+    _playAudioFile(src).then((reason) => {
+      if (_ap.cancelled) {
+        _highlightStudyRow(wKey, -1);
+        _setAutoplayUI(wKey, false);
+        _ap.active = false;
+        return;
+      }
+      // Wait 2 seconds then advance
+      _apDelay(2000).then(() => {
+        if (!_ap.cancelled) playNext(i + 1);
+      });
+    });
+  }
+
+  playNext(0);
+}
+
+/* Public: immediately cancel any running autoplay sequence */
+function stopAutoPlay() {
+  _ap.cancelled = true;
+  _ap.active    = false;
+
+  // Stop the current audio element
+  if (_ap.current) {
+    _ap.current.pause();
+    _ap.current.src = '';
+    _ap.current = null;
+  }
+  // Cancel the between-word delay
+  if (_ap.timer !== null) {
+    clearTimeout(_ap.timer);
+    _ap.timer = null;
+  }
+  // Clear all row highlights and reset all autoplay buttons
+  document.querySelectorAll('.word-table tbody tr.playing')
+    .forEach(r => r.classList.remove('playing'));
+  document.querySelectorAll('[id^="autoplay-btn-"]').forEach(btn => {
+    btn.innerHTML = '▶ Auto Play All';
+    btn.classList.remove('btn-playing');
+  });
+}
+
+/* Highlight row i in the Study table (pass -1 to clear all) */
+function _highlightStudyRow(wKey, idx) {
+  const tbody = document.querySelector(`#subpanel-${wKey}-study .word-table tbody`);
+  if (!tbody) return;
+  [...tbody.rows].forEach((r, i) => r.classList.toggle('playing', i === idx));
+  if (idx >= 0 && tbody.rows[idx]) {
+    tbody.rows[idx].scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }
+}
+
+/* Toggle the Auto Play button between idle and playing states */
+function _setAutoplayUI(wKey, playing) {
+  const btn = document.getElementById('autoplay-btn-' + wKey);
+  if (!btn) return;
+  btn.innerHTML = playing ? '⏸ Playing…' : '▶ Auto Play All';
+  btn.classList.toggle('btn-playing', playing);
+}
+
+
+/* ══════════════════════════════════════════════
+   FLASHCARD LOGIC
+   ─ fcState[wKey] = { idx, words, shuffled,
+                       originalWords }
+   ─ flipCard(wKey)          : toggle flip
+   ─ navigateCard(wKey, dir) : ±1, wraps around,
+     auto-unflips on move, rewires 🔊 button
+   ─ shuffleCards(wKey)      : toggle shuffle
+══════════════════════════════════════════════ */
+
+const fcState = {};  // wKey → { idx, words, originalWords, shuffled }
+
+/* Lazy-initialise state for wKey on first interaction */
+function _fcInit(wKey) {
+  if (fcState[wKey]) return;
+  const words = _wordsFromWKey(wKey);
+  fcState[wKey] = {
+    idx:           0,
+    words:         words,
+    originalWords: words,  // keep original order for unshuffle
+    shuffled:      false,
+  };
+}
+
+/* Render DOM for the word at fcState[wKey].idx.
+   Updates counter, progress bar, both card faces,
+   and rewires the 🔊 button to the current word's .mp3. */
+function _fcRender(wKey) {
+  const s = fcState[wKey];
+  if (!s || !s.words.length) return;
+
+  const w     = s.words[s.idx];
+  const total = s.words.length;
+
+  // Always start unflipped when advancing to a new card
+  const scene = document.getElementById('fc-scene-' + wKey);
+  if (scene) scene.classList.remove('flipped');
+
+  // Counter badge
+  const cur = document.getElementById('fc-cur-' + wKey);
+  if (cur) cur.textContent = s.idx + 1;
+
+  // Progress bar fill
+  const bar = document.getElementById('fc-bar-' + wKey);
+  if (bar) bar.style.width = Math.round(((s.idx + 1) / total) * 100) + '%';
+
+  // Front face: kana + kanji
+  const kanaEl  = document.getElementById('fc-kana-'  + wKey);
+  const kanjiEl = document.getElementById('fc-kanji-' + wKey);
+  if (kanaEl)  kanaEl.textContent  = w.word;
+  if (kanjiEl) kanjiEl.textContent = w.kanji || '';
+
+  // Back face: meaning + kana echo
+  const meaningEl  = document.getElementById('fc-meaning-'   + wKey);
+  const kanaBackEl = document.getElementById('fc-kana-back-' + wKey);
+  if (meaningEl)  meaningEl.textContent  = w.meaning;
+  if (kanaBackEl) kanaBackEl.textContent = w.word;
+
+  // Rewire the back-face 🔊 button to the current word's mp3
+  if (scene) {
+    const listenBtn = scene.querySelector('.card-listen-btn');
+    if (listenBtn) {
+      // Replace the node to avoid accumulating onclick listeners
+      const fresh = listenBtn.cloneNode(true);
+      fresh.addEventListener('click', e => {
+        e.stopPropagation();
+        speakWord(w);
+      });
+      listenBtn.parentNode.replaceChild(fresh, listenBtn);
+    }
+  }
+}
+
+/* Public: toggle flip on click */
+function flipCard(wKey) {
+  _fcInit(wKey);
+  const scene = document.getElementById('fc-scene-' + wKey);
+  if (scene) scene.classList.toggle('flipped');
+}
+
+/* Public: navigate ±1 with wrap-around */
+function navigateCard(wKey, dir) {
+  _fcInit(wKey);
+  const s = fcState[wKey];
+  if (!s || !s.words.length) return;
+  s.idx = (s.idx + dir + s.words.length) % s.words.length;
+  _fcRender(wKey);
+}
+
+/* Public: toggle shuffle / restore original order */
+function shuffleCards(wKey) {
+  _fcInit(wKey);
+  const s = fcState[wKey];
+  if (!s) return;
+
+  if (!s.shuffled) {
+    s.words    = _shuffle(s.originalWords);
+    s.shuffled = true;
+  } else {
+    s.words    = [...s.originalWords];
+    s.shuffled = false;
+  }
+  s.idx = 0;
+  _fcRender(wKey);
+
+  const btn = document.getElementById('fc-shuffle-' + wKey);
+  if (btn) btn.textContent = s.shuffled ? '🔀 Unshuffled' : '🔀 Shuffle';
+}
+
+
+/* ══════════════════════════════════════════════
+   QUIZ LOGIC
+   ─ qzState[wKey] = { words, queue, idx,
+       correct, wrong, answered }
+   ─ startQuiz(wKey)          : init session, render Q1
+   ─ answerQuiz(wKey, i, c)   : handle tap, play mp3,
+     schedule advance
+   ─ _qzRenderQuestion(wKey)  : paint the current card
+   ─ _qzAdvance(wKey)         : move idx or show review
+   ─ _qzShowReview(wKey)      : tally, persist progress,
+     refresh accordion badge
+   ─ _qzBuildChoices(w, pool) : correct + 3 distractors
+══════════════════════════════════════════════ */
+
+const qzState = {};  // wKey → quiz session object
+
+/* Public: (re-)start the quiz for a workspace */
+function startQuiz(wKey) {
+  const allWords = _wordsFromWKey(wKey);
+  if (allWords.length < 4) return;
+
+  qzState[wKey] = {
+    words:    allWords,          // full pool for distractor sampling
+    queue:    _shuffle([...allWords]),  // randomised question order
+    idx:      0,
+    correct:  0,
+    wrong:    0,
+    answered: false,
+  };
+
+  // UI: show question card, hide review, hide initial Start button
+  const card   = document.getElementById('qz-card-'   + wKey);
+  const review = document.getElementById('qz-review-' + wKey);
+  const area   = document.getElementById('quiz-area-' + wKey);
+  if (card)   card.style.display   = 'block';
+  if (review) review.style.display = 'none';
+  if (area) {
+    const startBtn = area.querySelector(':scope > .btn.btn-primary:last-child');
+    if (startBtn) startBtn.style.display = 'none';
+  }
+
+  _qzRenderQuestion(wKey);
+}
+
+/* Render the question at qzState[wKey].idx */
+function _qzRenderQuestion(wKey) {
+  const s = qzState[wKey];
+  if (!s) return;
+
+  const w     = s.queue[s.idx];
+  const total = s.queue.length;
+  s.answered  = false;
+
+  // Progress header
+  const numEl   = document.getElementById('qz-num-'   + wKey);
+  const progEl  = document.getElementById('qz-prog-'  + wKey);
+  const scoreEl = document.getElementById('qz-score-' + wKey);
+  if (numEl)   numEl.textContent  = `Q${s.idx + 1}`;
+  if (progEl)  progEl.style.width = Math.round((s.idx / total) * 100) + '%';
+  if (scoreEl) scoreEl.textContent = `${s.correct} / ${total}`;
+
+  // Question word display
+  const kanaEl  = document.getElementById('qz-kana-'  + wKey);
+  const kanjiEl = document.getElementById('qz-kanji-' + wKey);
+  if (kanaEl)  kanaEl.textContent  = w.word;
+  if (kanjiEl) kanjiEl.textContent = w.kanji || '';
+
+  // Rewire the 🔊 listen button to this word's .mp3
+  const listenBtn = document.getElementById('qz-listen-' + wKey);
+  if (listenBtn) {
+    const fresh = listenBtn.cloneNode(true);
+    fresh.addEventListener('click', () => speakWord(w));
+    listenBtn.parentNode.replaceChild(fresh, listenBtn);
+  }
+
+  // Build answer choices: 1 correct + 3 distractors
+  const choices    = _qzBuildChoices(w, s.words);
+  const correctIdx = choices.indexOf(w.meaning);
+
+  const choicesEl = document.getElementById('qz-choices-' + wKey);
+  if (!choicesEl) return;
+
+  const labels = ['A', 'B', 'C', 'D'];
+  choicesEl.innerHTML = choices.map((meaning, i) => `
+    <button class="choice-btn"
+            id="qz-choice-${wKey}-${i}"
+            onclick="answerQuiz('${wKey}', ${i}, ${correctIdx})">
+      <span class="choice-label">${labels[i]}</span>${meaning}
+    </button>`).join('');
+}
+
+/* Public: handle a choice selection */
+function answerQuiz(wKey, chosenIdx, correctIdx) {
+  const s = qzState[wKey];
+  if (!s || s.answered) return;  // block double-tap
+  s.answered = true;
+
+  const isCorrect = chosenIdx === correctIdx;
+  if (isCorrect) s.correct++; else s.wrong++;
+
+  // Colour all four buttons: correct = sage, wrong tap = vermillion
+  for (let i = 0; i < 4; i++) {
+    const btn = document.getElementById(`qz-choice-${wKey}-${i}`);
+    if (!btn) continue;
+    btn.disabled = true;
+    if (i === correctIdx)      btn.classList.add('correct');
+    else if (i === chosenIdx)  btn.classList.add('wrong');
+  }
+
+  // Play the correct word's .mp3 as audio feedback
+  const w = s.queue[s.idx];
+  speakWord(w);
+
+  // Advance to next question after 1 400 ms
+  setTimeout(() => _qzAdvance(wKey), 1400);
+}
+
+/* Move to next question, or end the quiz */
+function _qzAdvance(wKey) {
+  const s = qzState[wKey];
+  if (!s) return;
+  s.idx++;
+  if (s.idx >= s.queue.length) {
+    _qzShowReview(wKey);
+  } else {
+    _qzRenderQuestion(wKey);
+  }
+}
+
+/* Show the end-of-quiz Review Screen and persist progress */
+function _qzShowReview(wKey) {
+  const s = qzState[wKey];
+  if (!s) return;
+
+  const total = s.queue.length;
+  const pct   = Math.round((s.correct / total) * 100);
+
+  // Show review panel, hide question card
+  const card   = document.getElementById('qz-card-'   + wKey);
+  const review = document.getElementById('qz-review-' + wKey);
+  if (card)   card.style.display   = 'none';
+  if (review) review.style.display = 'block';
+
+  // Fill in review stats
+  const correctEl = document.getElementById('qz-correct-' + wKey);
+  const wrongEl   = document.getElementById('qz-wrong-'   + wKey);
+  const pctEl     = document.getElementById('qz-pct-'     + wKey);
+  const scoreEl   = document.getElementById('qz-score-'   + wKey);
+  const progEl    = document.getElementById('qz-prog-'    + wKey);
+  if (correctEl) correctEl.textContent = s.correct;
+  if (wrongEl)   wrongEl.textContent   = s.wrong;
+  if (pctEl)     pctEl.textContent     = pct + '%';
+  if (scoreEl)   scoreEl.textContent   = `${s.correct} / ${total}`;
+  if (progEl)    progEl.style.width    = '100%';
+
+  // Dynamic trophy emoji
+  const emojiEl = review && review.querySelector('.review-emoji');
+  if (emojiEl) {
+    emojiEl.textContent =
+      pct >= 90 ? '🏆' :
+      pct >= 70 ? '🎉' :
+      pct >= 50 ? '💪' : '📚';
+  }
+
+  /* ── PERSIST PROGRESS ──────────────────────────
+     Storage key : progress_Unit[N]_Part[N]
+     Value        : "correct/total"  e.g. "18/20"
+     Rule         : only overwrite if this run scored
+                    higher than the stored best.
+  ─────────────────────────────────────────────── */
+  saveProgress(wKey, s.correct, total);
+}
+
+/* Return 4 shuffled choices: the correct meaning + 3 unique distractors
+   drawn randomly from the full word pool for this part.              */
+function _qzBuildChoices(correctWord, allWords) {
+  const correct = correctWord.meaning;
+  const pool    = allWords.filter(w => w.meaning !== correct);
+  const distractors = _shuffle(pool).slice(0, 3).map(w => w.meaning);
+  return _shuffle([correct, ...distractors]);
+}
+
+
+/* ══════════════════════════════════════════════
+   STROKE ORDER (stub — AnimCJK wiring next phase)
+══════════════════════════════════════════════ */
+function selectStrokeWord(wKey, btnEl, kanji) {
+  document.querySelectorAll(`#stroke-chips-${wKey} .stroke-word-chip`)
+    .forEach(b => b.classList.remove('active'));
+  btnEl.classList.add('active');
+}
+
+function animateStrokes(wKey) { /* AnimCJK integration: next phase */ }
+function resetStrokes(wKey)   { /* AnimCJK integration: next phase */ }
+
+
+/* ══════════════════════════════════════════════
+   INIT
+══════════════════════════════════════════════ */
+document.addEventListener('DOMContentLoaded', () => {
+  if (typeof vocabularyData !== 'undefined') {
+    renderUnitTabs();       // builds Tier 2 + 3 + 4 DOM
+    refreshAllBadges();     // load persisted quiz scores into badges
+    updateGlobalProgress(); // header word-count summary
+  } else {
+    const bar = document.getElementById('unit-tabs-bar');
+    if (bar) bar.innerHTML = `
+      <div style="padding:14px 18px;font-size:13px;color:var(--ink-mute)">
+        ⚠️ <strong>data.js not found.</strong>
+        Place data.js in the same folder as this HTML file and refresh.
+      </div>`;
+    updateGlobalProgress();
+  }
+});
+</script>
+</body>
+</html>
