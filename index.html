@@ -941,6 +941,7 @@ body {
 }
 
 .quiz-word-sub {
+  display: none; /* Thêm dòng này để ẩn text phụ ở tất cả các chế độ Quiz */
   font-size: 16px;
   color: var(--ink-mute);
   margin-top: 4px;
@@ -1459,7 +1460,6 @@ function renderUnitContent() {
               <button class="sub-tab ${curTab === 'study' ? 'active' : ''}" id="tab-btn-${escAttr(partKey)}-study" onclick="switchSubTab('${escAttr(partKey)}', 'study')"><span class="tab-icon">📖</span> Study & Listen</button>
               <button class="sub-tab ${curTab === 'card' ? 'active' : ''}" id="tab-btn-${escAttr(partKey)}-card" onclick="switchSubTab('${escAttr(partKey)}', 'card')"><span class="tab-icon">🎴</span> Flashcard</button>
               <button class="sub-tab ${curTab === 'quiz' ? 'active' : ''}" id="tab-btn-${escAttr(partKey)}-quiz" onclick="switchSubTab('${escAttr(partKey)}', 'quiz')"><span class="tab-icon">📝</span> Quiz</button>
-              <button class="sub-tab ${curTab === 'stroke' ? 'active' : ''}" id="tab-btn-${escAttr(partKey)}-stroke" onclick="switchSubTab('${escAttr(partKey)}', 'stroke')"><span class="tab-icon">✍️</span> Stroke Order</button>
             </div>
             <div class="sub-tabs-panels" id="panels-${escAttr(partKey)}">
             </div>
@@ -1571,28 +1571,11 @@ function buildWorkspacePanels(partKey, activeTab) {
     </div>
   `;
 
-  // 4. Stroke Order Board
-  let strokeHtml = `
-    <div class="sub-panel ${strokeActive}">
-      <div class="stroke-area">
-        <div class="stroke-toolbar">
-          <span style="font-size:13px; font-weight:600; color:var(--ink-soft)">Choose Kanji:</span>
-          <div class="stroke-word-selector" id="stroke-select-${partKey}"></div>
-        </div>
-        <div class="stroke-canvas-area">
-          <div class="stroke-kanji-display" id="stroke-kanji-container-${partKey}">
-            <div class="stroke-placeholder-msg">Select a Kanji from the selector above to practice its stroke order.</div>
-          </div>
-        </div>
-      </div>
-    </div>
-  `;
 
-  container.innerHTML = studyHtml + cardHtml + quizHtml + strokeHtml;
+  container.innerHTML = studyHtml + cardHtml + quizHtml;
 
   if (activeTab === 'card') initFlashcardEngine(partKey);
   if (activeTab === 'quiz') initQuizEngine(partKey);
-  if (activeTab === 'stroke') initStrokeEngine(partKey);
 }
 
 /* ══════════════════════════════════════════════
@@ -1924,7 +1907,6 @@ function renderQuizQuestion(partKey) {
       <div class="quiz-word-display">
         <div>
           <div class="quiz-word-main">${q.questionMain}</div>
-          <div class="quiz-word-sub">${q.questionSub}</div>
         </div>
         <button class="quiz-listen-btn" onclick="playSingleAudio(${q.word.id}, '${buildAudioPath(q.word)}', '${partKey}')">🎵</button>
       </div>
