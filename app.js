@@ -12,6 +12,12 @@ const state = {
   isAutoplay: false
 };
 
+// CẤU HÌNH QUẢN LÝ CHO HỌC VIÊN (Đặt ngay tại đây)
+const STUDENT_CONFIG = {
+  studentName: "Học viên A", // Thay tên học viên của bạn vào đây
+  googleScriptUrl: "https://script.google.com/macros/s/AKfycbzwmTFWowwaAVQ-ZLmk3cveLH8l9Bi7rJZk6TDE2ikNnjlwB36Rn0a5An0PgmQu1Rag2w/exec" 
+};
+
 document.addEventListener('DOMContentLoaded', () => {
   initApp();
 });
@@ -662,6 +668,27 @@ function evaluateQuizEnd(partKey) {
   localStorage.setItem(`quiz_${partKey}`, `${score}/${total}`);
   updateGlobalProgress();
   refreshBadgeOnAccordion(partKey, score, total);
+
+  // ─── ĐOẠN CODE TỰ ĐỘNG GỬI ĐIỂM LÊN GOOGLE SHEETS ĐƯỢC CHÈN VÀO ĐÂY ───
+  if (STUDENT_CONFIG.googleScriptUrl && STUDENT_CONFIG.googleScriptUrl !== "") {
+    const payload = {
+      studentName: STUDENT_CONFIG.studentName,
+      partKey: partKey, 
+      quizMode: quiz.quizMode === 'k2m' ? 'Kanji -> Meaning' : (quiz.quizMode === 'f2k' ? 'Kana -> Kanji' : 'Meaning -> Kanji'),
+      scoreText: `${score}/${total}`,
+      accuracy: `${pct}%`
+    };
+
+    fetch(STUDENT_CONFIG.googleScriptUrl, {
+      method: "POST",
+      mode: "no-cors", 
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    })
+    .then(() => console.log("Gửi điểm thành công về Google Sheets!"))
+    .catch(err => console.error("Lỗi gửi điểm:", err));
+  }
+  // ───────────────────────────────────────────────────────────────────
 
   let emoji = '🎉'; let title = 'Excellent Work!';
   if (pct < 50) { emoji = '🩹'; title = 'Keep Practicing!'; } else if (pct < 80) { emoji = '👍'; title = 'Good Effort!'; }
