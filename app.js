@@ -152,6 +152,75 @@ function renderUnitContent() {
   
   let html = `<div class="parts-container">`;
   
+  parts.forEach((p, idx) => {
+    const partKey = `${unit}_${p}`;
+    
+    // Chỉ mở nếu người dùng chủ động bấm chọn (mặc định ban đầu sẽ đóng hết)
+    const isOpen = (state.activeAccordion[unit] === p);
+    
+    const savedScore = localStorage.getItem(`quiz_${partKey}`);
+    let badgeHtml = `<div class="progress-badge not-started">Not Started</div>`;
+    let fillWidth = '0%';
+    let partialClass = '';
+    
+    if (savedScore !== null) {
+      const [score, total] = savedScore.split('/').map(Number);
+      if (total > 0) {
+        fillWidth = `${(score / total) * 100}%`;
+        if (score === total) {
+          badgeHtml = `<div class="progress-badge complete">✓ Passed (${score}/${total})</div>`;
+        } else {
+          badgeHtml = `<div class="progress-badge in-progress">${score}/${total}</div>`;
+          partialClass = 'partial';
+        }
+      }
+    }
+    
+    const curTab = state.activeSubTab[partKey] || 'study';
+    
+    html += `
+      <div class="accordion-item ${isOpen ? 'open' : ''}" id="acc-item-${escAttr(partKey)}">
+        <button class="accordion-header" onclick="toggleAccordion('${escAttr(unit)}', '${escAttr(p)}')">
+          <span class="accordion-chevron">▶</span>
+          <span class="accordion-part-label">${p}</span>
+          <div class="accordion-meta">
+            ${badgeHtml}
+            <div class="progress-bar-mini">
+              <div class="progress-bar-mini-fill ${partialClass}" style="width: ${fillWidth}"></div>
+            </div>
+          </div>
+        </button>
+        <div class="accordion-body">
+          <div class="workspace">
+            <div class="sub-tabs-bar">
+              <button class="sub-tab ${curTab === 'study' ? 'active' : ''}" id="tab-btn-${partKey}-study" onclick="switchSubTab('${escAttr(partKey)}', 'study')"><span class="tab-icon">📖</span> Study & Listen</button>
+              <button class="sub-tab ${curTab === 'card' ? 'active' : ''}" id="tab-btn-${partKey}-card" onclick="switchSubTab('${escAttr(partKey)}', 'card')"><span class="tab-icon">🎴</span> Flashcard</button>
+              <button class="sub-tab ${curTab === 'quiz' ? 'active' : ''}" id="tab-btn-${partKey}-quiz" onclick="switchSubTab('${escAttr(partKey)}', 'quiz')"><span class="tab-icon">📝</span> Quiz</button>
+            </div>
+            <div class="sub-tabs-panels" id="panels-${escAttr(partKey)}">
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  });
+  
+  html += `</div>`;
+  wrap.innerHTML = html;
+
+  // Chỉ dựng Workspace panel cho những bài nào đang thực sự được mở
+  parts.forEach((p, idx) => {
+    const partKey = `${unit}_${p}`;
+    const isOpen = (state.activeAccordion[unit] === p);
+    if (isOpen) {
+      const curTab = state.activeSubTab[partKey] || 'study';
+      buildWorkspacePanels(partKey, curTab);
+    }
+  });
+}
+  
+  let html = `<div class="parts-container">`;
+  
 // Chỉ dựng Workspace panel cho những bài nào đang thực sự được mở
   parts.forEach((p, idx) => {
     const partKey = `${unit}_${p}`;
