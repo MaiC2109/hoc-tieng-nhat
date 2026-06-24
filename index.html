@@ -1639,15 +1639,8 @@ function renderSubPanelContent(tabId, unitName, partName, words, wKey) {
 
 /* ══════════════════════════════════════════════
    SUB PANEL 1: STUDY & LISTEN
-   Columns (in order):
-     1. No. (STT)
-     2. Kanji (漢字)      ← word.kanji
-     3. Kana  (かな)      ← word.kana
-     4. Meaning (Ý nghĩa) ← word.meaning
-     5. Example (Ví dụ)   ← word.example
-     6. Ex. Meaning       ← word.example_meaning
-     7. Listen (Nghe)
-   All fields use || '—' to prevent undefined renders.
+   6 columns: No. | Kanji | Kana | Meaning | Example | Listen
+   Keys: w.kanji, w.kana, w.meaning, w.example (all with || '—' fallback via s())
 ══════════════════════════════════════════════ */
 function renderStudyPanel(words, wKey) {
   if (!words.length) return '<div class="empty-state">No words in this part.</div>';
@@ -1658,8 +1651,7 @@ function renderStudyPanel(words, wKey) {
       <td class="cell-kanji">${s(w.kanji)}</td>
       <td class="cell-kana">${s(w.kana)}</td>
       <td class="cell-meaning">${s(w.meaning)}</td>
-      <td style="font-family:var(--font-ja);font-size:13px;color:var(--ink-soft);max-width:220px">${s(w.example)}</td>
-      <td style="font-size:13px;color:var(--ink-mute);max-width:200px">${s(w.example_meaning)}</td>
+      <td style="font-family:var(--font-ja);font-size:14px;color:var(--ink-soft);max-width:260px">${s(w.example)}</td>
       <td class="cell-action">
         <button class="btn-icon btn"
                 onclick="speakWord(${w.id},'${escAttr(w.unit)}','${escAttr(w.part)}')"
@@ -1684,12 +1676,11 @@ function renderStudyPanel(words, wKey) {
         <thead>
           <tr>
             <th>No.</th>
-            <th>漢字</th>
-            <th>かな</th>
-            <th>Ý nghĩa</th>
-            <th>Ví dụ / 例文</th>
-            <th>Nghĩa ví dụ</th>
-            <th>Nghe</th>
+            <th>Kanji</th>
+            <th>Kana</th>
+            <th>Meaning</th>
+            <th>Example</th>
+            <th>Listen</th>
           </tr>
         </thead>
         <tbody>${rows}</tbody>
@@ -2395,41 +2386,6 @@ document.addEventListener('DOMContentLoaded', () => {
     updateGlobalProgress();
   }
 });
-</script>
-</body>
-</html>
-
-  if (!units.length) {
-    bar.innerHTML = '<div style="padding:14px 18px;font-size:13px;color:var(--ink-mute)">No vocabulary data found. Make sure data.js is loaded.</div>';
-    return;
-  }
-
-  bar.innerHTML = '';
-  wrap.innerHTML = '';
-
-  units.forEach((unit, idx) => {
-    const wordCount = vocabularyData.filter(w => w.unit === unit).length;
-    const uKey = unitKey(unit);
-
-    // Tab button
-    const tab = document.createElement('button');
-    tab.className = 'unit-tab' + (idx === 0 ? ' active' : '');
-    tab.dataset.unit = uKey;
-    tab.innerHTML = `${unit}<span class="unit-word-count">${wordCount}</span>`;
-    tab.addEventListener('click', () => switchUnit(uKey));
-    bar.appendChild(tab);
-
-    // Unit panel
-    const panel = document.createElement('div');
-    panel.className = 'unit-panel' + (idx === 0 ? ' active' : '');
-    panel.id = 'unit-panel-' + uKey;
-    panel.innerHTML = renderPartsHTML(unit);
-    wrap.appendChild(panel);
-  });
-
-  if (units.length) state.activeUnit = unitKey(units[0]);
-  updateGlobalProgress();
-}
 </script>
 </body>
 </html>
