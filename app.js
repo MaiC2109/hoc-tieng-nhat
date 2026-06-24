@@ -15,7 +15,7 @@ const state = {
 // CẤU HÌNH QUẢN LÝ CHO HỌC VIÊN (Đặt ngay tại đây)
 const STUDENT_CONFIG = {
   studentName: "Học viên A", // Thay tên học viên của bạn vào đây
-  googleScriptUrl: "https://script.google.com/macros/s/AKfycbzwmTFWowwaAVQ-ZLmk3cveLH8l9Bi7rJZk6TDE2ikNnjlwB36Rn0a5An0PgmQu1Rag2w/exec" 
+  googleScriptUrl: "https://script.google.com/macros/s/AKfycbxDCDzDn2ZcBRAlE5M_OEMWNnB3J36ofdFb0VMzdBEPLURNaarOHYb6G4VG_0F1KnIPzQ/exec" 
 };
 
 document.addEventListener('DOMContentLoaded', () => {
