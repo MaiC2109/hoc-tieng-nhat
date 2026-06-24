@@ -10,9 +10,9 @@
 
 <style>
 /* ─────────────────────────────────────────────
-   DESIGN TOKENS
-   Palette: deep ink navy + warm rice paper + 
-   vermillion accent + muted sage
+    DESIGN TOKENS
+    Palette: deep ink navy + warm rice paper + 
+    vermillion accent + muted sage
 ───────────────────────────────────────────── */
 :root {
   --ink:        #1a1f2e;
@@ -386,8 +386,6 @@ body {
   font-weight: 500;
   padding: 4px 10px;
   border-radius: 20px;
-  background: var(--sage-light);
-  color: var(--sage);
 }
 
 .progress-badge.complete {
@@ -550,29 +548,6 @@ body {
 }
 .btn-icon:hover { background: var(--vermillion); color: #fff; border-color: var(--vermillion); }
 
-.view-toggle {
-  display: flex;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  overflow: hidden;
-  background: var(--paper-card);
-}
-
-.view-toggle-btn {
-  padding: 6px 11px;
-  border: none;
-  background: transparent;
-  font-size: 14px;
-  color: var(--ink-mute);
-  cursor: pointer;
-  transition: all var(--transition);
-}
-
-.view-toggle-btn.active {
-  background: var(--ink);
-  color: #fff;
-}
-
 /* Study word table */
 .word-table {
   width: 100%;
@@ -627,6 +602,11 @@ body {
   font-size: 14px;
 }
 
+.word-table .cell-example {
+  color: var(--ink-mute);
+  font-size: 13px;
+}
+
 .word-table .cell-action { width: 48px; text-align: center; }
 
 /* ─────────────────────────────────────────────
@@ -667,7 +647,6 @@ body {
   transition: transform 0.55s cubic-bezier(0.4, 0.2, 0.2, 1);
 }
 
-.flashcard-scene:hover .flashcard-inner,
 .flashcard-scene.flipped .flashcard-inner {
   transform: rotateY(180deg);
 }
@@ -807,7 +786,7 @@ body {
   height: 100%;
   background: var(--vermillion);
   border-radius: 2px;
-  width: 20%;
+  width: 0%;
   transition: width 0.3s ease;
 }
 
@@ -835,7 +814,7 @@ body {
   height: 100%;
   background: var(--vermillion);
   border-radius: 3px;
-  width: 40%;
+  width: 0%;
   transition: width 0.3s ease;
 }
 
@@ -974,7 +953,7 @@ body {
   color: var(--ink-mute);
 }
 
-/* Review Screen (shown after quiz completes) */
+/* Review Screen */
 .quiz-review-screen {
   display: none;
   background: var(--paper-card);
@@ -996,7 +975,7 @@ body {
   margin-bottom: 24px;
 }
 
-.review-stat {
+.review-stats .review-stat {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1125,119 +1104,7 @@ body {
 }
 
 /* ─────────────────────────────────────────────
-   SUB PANEL 5: WORD LIST
-───────────────────────────────────────────── */
-.wordlist-area {}
-
-.wordlist-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 14px;
-  gap: 10px;
-}
-
-.wordlist-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 14px;
-}
-
-.wordlist-table th {
-  text-align: left;
-  padding: 8px 14px;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
-  color: var(--ink-mute);
-  border-bottom: 2px solid var(--border-md);
-}
-
-.wordlist-table td {
-  padding: 10px 14px;
-  border-bottom: 1px dashed var(--border);
-  vertical-align: middle;
-}
-
-.wordlist-table tbody tr:last-child td { border-bottom: none; }
-
-.wordlist-table .cell-check {
-  width: 32px;
-}
-
-.check-box {
-  width: 18px;
-  height: 18px;
-  border: 1.5px solid var(--border-md);
-  border-radius: 4px;
-  cursor: pointer;
-  display: block;
-  transition: all var(--transition);
-  flex-shrink: 0;
-  appearance: none;
-  -webkit-appearance: none;
-  background: #fff;
-  position: relative;
-}
-
-.check-box:checked {
-  background: var(--sage);
-  border-color: var(--sage);
-}
-
-.check-box:checked::after {
-  content: '✓';
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 11px;
-  color: #fff;
-  font-weight: 700;
-  display: grid;
-  place-items: center;
-}
-
-.wl-kana { font-family: var(--font-ja); font-size: 16px; }
-.wl-kanji { font-family: var(--font-ja-serif); font-size: 17px; font-weight: 700; }
-.wl-meaning { color: var(--ink-soft); }
-.wl-notes { color: var(--ink-mute); font-size: 13px; font-style: italic; }
-
-/* ─────────────────────────────────────────────
-   PLACEHOLDER (Grammar / Kanji panels)
-───────────────────────────────────────────── */
-.placeholder-panel {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  padding: 60px 24px;
-  color: var(--ink-mute);
-}
-
-.placeholder-panel .placeholder-icon {
-  font-size: 48px;
-  opacity: 0.3;
-}
-
-.placeholder-panel h3 {
-  font-size: 18px;
-  font-weight: 600;
-  color: var(--ink-soft);
-}
-
-.placeholder-panel p {
-  font-size: 14px;
-  text-align: center;
-  max-width: 320px;
-}
-
-/* ─────────────────────────────────────────────
-   EMPTY STATE
+   EMPTY STATE & GLOBAL ELEMENTS
 ───────────────────────────────────────────── */
 .empty-state {
   text-align: center;
@@ -1246,16 +1113,10 @@ body {
   font-size: 14px;
 }
 
-/* ─────────────────────────────────────────────
-   SCROLLBAR (subtle)
-───────────────────────────────────────────── */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border-md); border-radius: 3px; }
 
-/* ─────────────────────────────────────────────
-   RESPONSIVE
-───────────────────────────────────────────── */
 @media (max-width: 640px) {
   .app-header { padding: 0 14px; }
   .parts-container { padding: 12px 14px; gap: 8px; }
@@ -1265,18 +1126,6 @@ body {
   .unit-tabs-bar { padding: 0 14px; }
   .logo-text { display: none; }
   .main-nav-btn { padding: 0 12px; font-size: 13px; }
-}
-
-@media print {
-  .app-header,
-  .unit-tabs-bar,
-  .accordion-header,
-  .sub-tabs-bar,
-  .study-toolbar,
-  .wordlist-toolbar { display: none !important; }
-  .accordion-body { display: block !important; }
-  .sub-panel { display: block !important; }
-  .wordlist-table { border: 1px solid #ccc; }
 }
 </style>
 </head>
@@ -1320,20 +1169,13 @@ body {
 
   <!-- VOCAB SECTION -->
   <div class="section-panel active" id="section-vocab">
-
     <!-- TIER 2 — UNIT TABS -->
-    <div class="unit-tabs-bar" id="unit-tabs-bar">
-      <!-- Dynamically rendered by JS -->
-    </div>
-
+    <div class="unit-tabs-bar" id="unit-tabs-bar"></div>
     <!-- UNIT CONTENT -->
-    <div class="unit-content-wrap" id="unit-content-wrap">
-      <!-- Dynamically rendered by JS -->
-    </div>
+    <div class="unit-content-wrap" id="unit-content-wrap"></div>
+  </div>
 
-  </div><!-- /section-vocab -->
-
-  <!-- GRAMMAR PLACEHOLDER -->
+  <!-- PLACEHOLDERS -->
   <div class="section-panel" id="section-grammar">
     <div class="placeholder-panel">
       <div class="placeholder-icon">✍️</div>
@@ -1342,7 +1184,6 @@ body {
     </div>
   </div>
 
-  <!-- KANJI PLACEHOLDER -->
   <div class="section-panel" id="section-kanji">
     <div class="placeholder-panel">
       <div class="placeholder-icon">漢</div>
@@ -1351,54 +1192,61 @@ body {
     </div>
   </div>
 
-</div><!-- /app-body -->
+</div>
 
-<!-- ─────────────────────────────────────────────
-     EXTERNAL LIBRARIES
-───────────────────────────────────────────── -->
-<!-- AnimCJK for stroke order (CDN) -->
+<!-- EXTERNAL LIBRARIES -->
 <script src="https://cdn.jsdelivr.net/npm/animcjk@latest/AnimCJK.js"></script>
-
-<!-- Vocabulary data (must sit beside this HTML file) -->
 <script src="data.js"></script>
 
-<!-- ─────────────────────────────────────────────
-     CORE JAVASCRIPT
-───────────────────────────────────────────── -->
+<!-- CORE JAVASCRIPT -->
 <script>
 'use strict';
 
-/* ══════════════════════════════════════════════
-   NAVIGATION STATE
-══════════════════════════════════════════════ */
 const state = {
-  activeUnit:      null,
-  activeAccordion: {},   // unitKey → partKey
-  activeSubTab:    {},   // wKey    → tabId
+  activeUnit: null,
+  activeAccordion: {}, 
+  activeSubTab: {},    
+  quizState: {},       // Theo dõi trạng thái Quiz của từng part
+  flashcardIndex: {},  // Chỉ mục từ vựng hiện tại của Flashcard từng part
+  currentAudio: null,  // Đối tượng Audio đang chơi độc lập
+  playlist: [],        // Danh sách phát tự động liên tục
+  playlistIndex: -1,
+  isAutoplay: false
 };
 
-/* ══════════════════════════════════════════════
-   TIER 1 — Main Section Switch
-══════════════════════════════════════════════ */
+// Khởi tạo ứng dụng an toàn khi DOM sẵn sàng
+document.addEventListener('DOMContentLoaded', () => {
+  initApp();
+});
+
+function initApp() {
+  if (typeof vocabularyData === 'undefined' || !Array.isArray(vocabularyData)) {
+    document.getElementById('global-progress').textContent = 'No data';
+    return;
+  }
+  
+  const units = getUnits();
+  if (units.length > 0) {
+    state.activeUnit = units[0];
+    renderUnitTabs(units);
+    renderUnitContent();
+    updateGlobalProgress();
+  }
+}
+
 function switchMainSection(sectionId) {
   document.querySelectorAll('.section-panel').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.main-nav-btn').forEach(b => b.classList.remove('active'));
   const panel = document.getElementById('section-' + sectionId);
   if (panel) panel.classList.add('active');
   document.querySelectorAll('.main-nav-btn').forEach(b => {
-    if (b.textContent.trim().toLowerCase().startsWith(sectionId.toLowerCase()))
+    if (b.textContent.trim().toLowerCase().includes(sectionId.toLowerCase()))
       b.classList.add('active');
   });
 }
 
-/* ══════════════════════════════════════════════
-   UTILS
-══════════════════════════════════════════════ */
-
-/* Safe string fallback — never returns undefined/null */
 function s(v) { return (v !== undefined && v !== null && v !== '') ? String(v) : '—'; }
 
-/* Escape a value for use inside a single-quoted HTML attribute */
 function escAttr(v) {
   return String(v === undefined || v === null ? '' : v)
     .replace(/\\/g, '\\\\')
@@ -1406,10 +1254,6 @@ function escAttr(v) {
     .replace(/"/g, '&quot;');
 }
 
-/* Return a numeric char-code token safe for use in element IDs */
-function escId(ch) { return String(ch).charCodeAt(0); }
-
-/* Fisher-Yates shuffle — always returns a brand-new array */
 function _shuffle(arr) {
   const a = [...arr];
   for (let i = a.length - 1; i > 0; i--) {
@@ -1419,973 +1263,688 @@ function _shuffle(arr) {
   return a;
 }
 
-/* Extract leading digits from strings like "Unit 1" → "1", "Part 12" → "12" */
 function _digits(str) {
   const m = String(str || '').match(/\d+/);
   return m ? m[0] : '0';
 }
 
-/*
-  Build the local .mp3 path for one vocabulary word object.
-  Formula : audio/u[UnitNum]_p[PartNum]_word-[id].mp3
-  Example  : { id:21, unit:"Unit 1", part:"Part 2" }
-             → "audio/u1_p2_word-21.mp3"
-*/
 function buildAudioPath(wordObj) {
   const u = _digits(wordObj.unit);
   const p = _digits(wordObj.part);
   return `audio/u${u}_p${p}_word-${wordObj.id}.mp3`;
 }
 
-/* ══════════════════════════════════════════════
-   DATA HELPERS
-══════════════════════════════════════════════ */
 function getUnits() {
   if (typeof vocabularyData === 'undefined') return [];
   const units = [...new Set(vocabularyData.map(w => w.unit))];
-  return units.sort((a, b) => naturalSort(a, b));
+  return units.sort((a, b) => String(a).localeCompare(String(b), undefined, {numeric: true, sensitivity: 'base'}));
 }
 
 function getPartsForUnit(unitName) {
   if (typeof vocabularyData === 'undefined') return [];
-  const parts = [...new Set(
-    vocabularyData.filter(w => w.unit === unitName).map(w => w.part)
-  )];
-  return parts.sort((a, b) => naturalSort(a, b));
+  const filtered = vocabularyData.filter(w => w.unit === unitName);
+  const parts = [...new Set(filtered.map(w => w.part))];
+  return parts.sort((a, b) => String(a).localeCompare(String(b), undefined, {numeric: true, sensitivity: 'base'}));
 }
 
-function getWordsForPart(unitName, partName) {
-  if (typeof vocabularyData === 'undefined') return [];
+function getWords(unitName, partName) {
   return vocabularyData.filter(w => w.unit === unitName && w.part === partName);
 }
 
-function naturalSort(a, b) {
-  return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
+// RENDER TIER 2 — UNIT TABS
+function renderUnitTabs(units) {
+  const bar = document.getElementById('unit-tabs-bar');
+  if (!bar) return;
+  
+  bar.innerHTML = units.map(u => {
+    const totalWords = vocabularyData.filter(w => w.unit === u).length;
+    const activeClass = (u === state.activeUnit) ? 'active' : '';
+    return `
+      <button class="unit-tab ${activeClass}" onclick="selectUnit('${escAttr(u)}')">
+        ${u} <span class="unit-word-count">${totalWords}</span>
+      </button>
+    `;
+  }).join('');
 }
 
-function unitKey(unit) { return unit.replace(/\s+/g, '-').toLowerCase(); }
-function partKey(part) { return part.replace(/\s+/g, '-').toLowerCase(); }
-function workspaceKey(unit, part) { return unitKey(unit) + '__' + partKey(part); }
+function selectUnit(unitName) {
+  stopAllAudio();
+  state.activeUnit = unitName;
+  document.querySelectorAll('.unit-tab').forEach(t => t.classList.remove('active'));
+  renderUnitTabs(getUnits());
+  renderUnitContent();
+}
 
-/* ══════════════════════════════════════════════
-   RENDER — TIER 2: UNIT TABS
-══════════════════════════════════════════════ */
-function renderUnitTabs() {
-  const units = getUnits();
-  const bar  = document.getElementById('unit-tabs-bar');
+// RENDER TIER 3 & TIER 4 CONTENT
+function renderUnitContent() {
   const wrap = document.getElementById('unit-content-wrap');
-
-  if (!units.length) {
-    bar.innerHTML = '<div style="padding:14px 18px;font-size:13px;color:var(--ink-mute)">No vocabulary data found. Make sure data.js is loaded.</div>';
+  if (!wrap) return;
+  
+  const unit = state.activeUnit;
+  const parts = getPartsForUnit(unit);
+  
+  if (parts.length === 0) {
+    wrap.innerHTML = `<div class="empty-state">No data available for this Unit.</div>`;
     return;
   }
-
-  bar.innerHTML  = '';
-  wrap.innerHTML = '';
-
-  units.forEach((unit, idx) => {
-    const wordCount = vocabularyData.filter(w => w.unit === unit).length;
-    const uKey = unitKey(unit);
-
-    // Tab button
-    const tab = document.createElement('button');
-    tab.className    = 'unit-tab' + (idx === 0 ? ' active' : '');
-    tab.dataset.unit = uKey;
-    tab.innerHTML    = `${unit}<span class="unit-word-count">${wordCount}</span>`;
-    tab.addEventListener('click', () => switchUnit(uKey));
-    bar.appendChild(tab);
-
-    // Unit panel
-    const panel = document.createElement('div');
-    panel.className = 'unit-panel' + (idx === 0 ? ' active' : '');
-    panel.id        = 'unit-panel-' + uKey;
-    panel.innerHTML = renderPartsHTML(unit);
-    wrap.appendChild(panel);
-  });
-
-  if (units.length) state.activeUnit = unitKey(units[0]);
-  updateGlobalProgress();
-}
-
-/* ══════════════════════════════════════════════
-   TIER 2 SWITCH
-══════════════════════════════════════════════ */
-function switchUnit(uKey) {
-  state.activeUnit = uKey;
-  document.querySelectorAll('.unit-tab').forEach(t => {
-    t.classList.toggle('active', t.dataset.unit === uKey);
-  });
-  document.querySelectorAll('.unit-panel').forEach(p => {
-    p.classList.toggle('active', p.id === 'unit-panel-' + uKey);
-  });
-}
-
-/* ══════════════════════════════════════════════
-   RENDER — TIER 3: PARTS ACCORDION HTML
-══════════════════════════════════════════════ */
-function renderPartsHTML(unitName) {
-  const parts = getPartsForUnit(unitName);
-  if (!parts.length) return '<div class="empty-state">No parts found for this unit.</div>';
-
-  const uKey = unitKey(unitName);
-
-  return `<div class="parts-container">${parts.map(part => {
-    const words    = getWordsForPart(unitName, part);
-    const pKey     = partKey(part);
-    const wKey     = workspaceKey(unitName, part);
-    const prog     = getProgress(wKey);
-    const done     = prog.done;
-    const total    = words.length;
-    const pct      = total ? Math.round((done / total) * 100) : 0;
-    const badgeClass = done === 0 ? 'not-started' : (done >= total ? 'complete' : 'in-progress');
-    const fillClass  = done >= total ? '' : ' partial';
-
-    return `
-    <div class="accordion-item" id="acc-${uKey}-${pKey}">
-      <button class="accordion-header" onclick="toggleAccordion('${uKey}','${pKey}')">
-        <svg class="accordion-chevron" viewBox="0 0 20 20" fill="currentColor">
-          <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
-        </svg>
-        <span class="accordion-part-label">${part}</span>
-        <span class="accordion-part-name">${part} — ${unitName}</span>
-        <div class="accordion-meta">
-          <div class="progress-bar-mini">
-            <div class="progress-bar-mini-fill${fillClass}" style="width:${pct}%"></div>
+  
+  let html = `<div class="parts-container">`;
+  
+  parts.forEach((p, idx) => {
+    const partKey = `${unit}_${p}`;
+    const words = getWords(unit, p);
+    const isOpen = (state.activeAccordion[unit] === p || (!state.activeAccordion[unit] && idx === 0));
+    
+    if (isOpen && !state.activeAccordion[unit]) {
+      state.activeAccordion[unit] = p;
+    }
+    
+    // Đọc điểm Quiz từ localStorage để hiển thị Badge tiến độ an toàn
+    const savedScore = localStorage.getItem(`quiz_${partKey}`);
+    let badgeHtml = `<div class="progress-badge not-started">Not Started</div>`;
+    let fillWidth = '0%';
+    let partialClass = '';
+    
+    if (savedScore !== null) {
+      const [score, total] = savedScore.split('/').map(Number);
+      if (total > 0) {
+        fillWidth = `${(score / total) * 100}%`;
+        if (score === total) {
+          badgeHtml = `<div class="progress-badge complete">✓ Pass (${score}/${total})</div>`;
+        } else {
+          badgeHtml = `<div class="progress-badge in-progress">${score}/${total}</div>`;
+          partialClass = 'partial';
+        }
+      }
+    }
+    
+    const curTab = state.activeSubTab[partKey] || 'study';
+    
+    html += `
+      <div class="accordion-item ${isOpen ? 'open' : ''}" id="acc-item-${escAttr(partKey)}">
+        <button class="accordion-header" onclick="toggleAccordion('${escAttr(unit)}', '${escAttr(p)}')">
+          <span class="accordion-chevron">▶</span>
+          <span class="accordion-part-label">${p}</span>
+          <span class="accordion-part-name">Vocabulary Exploration</span>
+          <div class="accordion-meta">
+            ${badgeHtml}
+            <div class="progress-bar-mini">
+              <div class="progress-bar-mini-fill ${partialClass}" style="width: ${fillWidth}"></div>
+            </div>
           </div>
-          <span class="progress-badge ${badgeClass}">${done}/${total} words</span>
-        </div>
-      </button>
-      <div class="accordion-body">
-        <div class="workspace">
-          ${renderWorkspaceHTML(unitName, part, words)}
+        </button>
+        <div class="accordion-body">
+          <div class="workspace">
+            <div class="sub-tabs-bar">
+              <button class="sub-tab ${curTab === 'study' ? 'active' : ''}" onclick="switchSubTab('${escAttr(partKey)}', 'study')">📖 Study & Listen</button>
+              <button class="sub-tab ${curTab === 'card' ? 'active' : ''}" onclick="switchSubTab('${escAttr(partKey)}', 'card')">🎴 Flashcard</button>
+              <button class="sub-tab ${curTab === 'quiz' ? 'active' : ''}" onclick="switchSubTab('${escAttr(partKey)}', 'quiz')">📝 Quiz</button>
+              <button class="sub-tab ${curTab === 'stroke' ? 'active' : ''}" onclick="switchSubTab('${escAttr(partKey)}', 'stroke')">✍️ Tập Viết</button>
+            </div>
+            <div class="sub-tab-panels" id="panels-${escAttr(partKey)}">
+              ${renderSubPanels(unit, p, curTab)}
+            </div>
+          </div>
         </div>
       </div>
-    </div>`;
-  }).join('')}</div>`;
+    `;
+  });
+  
+  html += `</div>`;
+  wrap.innerHTML = html;
+  
+  // Kích hoạt bổ trợ cấu trúc đặc thù như thư viện tập viết nét chữ sau khi chèn HTML
+  parts.forEach(p => {
+    const partKey = `${unit}_${p}`;
+    if (state.activeSubTab[partKey] === 'stroke') {
+      initStrokePanel(unit, p);
+    }
+  });
 }
 
-/* ══════════════════════════════════════════════
-   TIER 3 ACCORDION TOGGLE
-══════════════════════════════════════════════ */
-function toggleAccordion(uKey, pKey) {
-  const item = document.getElementById(`acc-${uKey}-${pKey}`);
-  if (!item) return;
-  const isOpen = item.classList.contains('open');
-  // Collapse all sibling parts in this unit first
-  document.querySelectorAll(`[id^="acc-${uKey}-"]`).forEach(el => el.classList.remove('open'));
-  if (!isOpen) {
-    item.classList.add('open');
-    state.activeAccordion[uKey] = pKey;
+function toggleAccordion(unit, p) {
+  stopAllAudio();
+  const partKey = `${unit}_${p}`;
+  const currentActive = state.activeAccordion[unit];
+  
+  if (currentActive === p) {
+    state.activeAccordion[unit] = null;
   } else {
-    delete state.activeAccordion[uKey];
+    state.activeAccordion[unit] = p;
   }
+  renderUnitContent();
 }
 
-/* ══════════════════════════════════════════════
-   RENDER — TIER 4: WORKSPACE
-══════════════════════════════════════════════ */
-function renderWorkspaceHTML(unitName, partName, words) {
-  const wKey = workspaceKey(unitName, partName);
-  const tabs = [
-    { id: 'study',     icon: '🔊', label: 'Study & Listen' },
-    { id: 'flashcard', icon: '🃏', label: 'Flashcard'       },
-    { id: 'quiz',      icon: '✏️', label: 'Quiz'            },
-    { id: 'stroke',    icon: '✒️', label: 'Stroke Order'    },
-    { id: 'wordlist',  icon: '📋', label: 'Word List'       },
-  ];
-
-  const tabsHTML = tabs.map((t, i) => `
-    <button class="sub-tab${i === 0 ? ' active' : ''}"
-            id="subtab-${wKey}-${t.id}"
-            onclick="switchSubTab('${wKey}','${t.id}')">
-      <span class="tab-icon">${t.icon}</span>${t.label}
-    </button>`).join('');
-
-  const panelsHTML = tabs.map((t, i) => `
-    <div class="sub-panel${i === 0 ? ' active' : ''}" id="subpanel-${wKey}-${t.id}">
-      ${renderSubPanelContent(t.id, unitName, partName, words, wKey)}
-    </div>`).join('');
-
-  return `<div class="sub-tabs-bar">${tabsHTML}</div>
-          <div class="sub-tab-panels">${panelsHTML}</div>`;
+function switchSubTab(partKey, tabId) {
+  stopAllAudio();
+  state.activeSubTab[partKey] = tabId;
+  const [unit, part] = partKey.split('_');
+  renderUnitContent();
 }
 
-/* ══════════════════════════════════════════════
-   TIER 4 SUB-TAB SWITCH
-══════════════════════════════════════════════ */
-function switchSubTab(wKey, tabId) {
-  state.activeSubTab[wKey] = tabId;
-  document.querySelectorAll(`[id^="subtab-${wKey}-"]`).forEach(b => {
-    b.classList.toggle('active', b.id === `subtab-${wKey}-${tabId}`);
-  });
-  document.querySelectorAll(`[id^="subpanel-${wKey}-"]`).forEach(p => {
-    p.classList.toggle('active', p.id === `subpanel-${wKey}-${tabId}`);
-  });
-}
-
-/* ══════════════════════════════════════════════
-   RENDER — SUB-PANEL ROUTER
-══════════════════════════════════════════════ */
-function renderSubPanelContent(tabId, unitName, partName, words, wKey) {
-  switch (tabId) {
-    case 'study':     return renderStudyPanel(words, wKey);
-    case 'flashcard': return renderFlashcardPanel(words, wKey);
-    case 'quiz':      return renderQuizPanel(words, wKey);
-    case 'stroke':    return renderStrokePanel(words, wKey);
-    case 'wordlist':  return renderWordListPanel(words, wKey);
-    default:          return '';
-  }
-}
-
-/* ══════════════════════════════════════════════
-   SUB PANEL 1: STUDY & LISTEN
-   6 columns: No. | Kanji | Kana | Meaning | Example | Listen
-   Keys: w.kanji, w.kana, w.meaning, w.example (all with || '—' fallback via s())
-══════════════════════════════════════════════ */
-function renderStudyPanel(words, wKey) {
-  if (!words.length) return '<div class="empty-state">No words in this part.</div>';
-
-  const rows = words.map((w, i) => `
-    <tr data-row="${i}">
-      <td class="cell-num">${i + 1}</td>
-      <td class="cell-kanji">${s(w.kanji)}</td>
-      <td class="cell-kana">${s(w.kana)}</td>
-      <td class="cell-meaning">${s(w.meaning)}</td>
-      <td style="font-family:var(--font-ja);font-size:14px;color:var(--ink-soft);max-width:260px">${s(w.example)}</td>
-      <td class="cell-action">
-        <button class="btn-icon btn"
-                onclick="speakWord(${w.id},'${escAttr(w.unit)}','${escAttr(w.part)}')"
-                title="Nghe">🔊</button>
-      </td>
-    </tr>`).join('');
-
-  return `
-    <div class="study-toolbar">
-      <div class="study-toolbar-left">
-        <button class="btn btn-primary" id="autoplay-btn-${wKey}"
-                onclick="autoPlayAll('${wKey}')">▶ Auto Play All</button>
-        <button class="btn btn-outline" onclick="stopAutoPlay()">⏹ Stop</button>
+// RENDER WORKSPACE TIERS
+function renderSubPanels(unit, part, activeTab) {
+  const partKey = `${unit}_${part}`;
+  const words = getWords(unit, part);
+  
+  let studyActive = activeTab === 'study' ? 'active' : '';
+  let cardActive = activeTab === 'card' ? 'active' : '';
+  let quizActive = activeTab === 'quiz' ? 'active' : '';
+  let strokeActive = activeTab === 'stroke' ? 'active' : '';
+  
+  // TIER 4.1 — STUDY PANEL (STRICTLY 6 COLUMNS)
+  let studyHtml = `
+    <div class="sub-panel ${studyActive}">
+      <div class="study-toolbar">
+        <div class="study-toolbar-left">
+          <button class="btn btn-primary" id="btn-autoplay-${escAttr(partKey)}" onclick="toggleAutoplayAll('${escAttr(unit)}', '${escAttr(part)}')">▶ Nghe Toàn Bộ</button>
+        </div>
       </div>
-      <div class="view-toggle">
-        <button class="view-toggle-btn active" title="Table view">☰</button>
-        <button class="view-toggle-btn" title="Card view">⊞</button>
-      </div>
-    </div>
-    <div style="overflow-x:auto">
       <table class="word-table">
         <thead>
           <tr>
-            <th>No.</th>
+            <th class="cell-num">No.</th>
             <th>Kanji</th>
             <th>Kana</th>
             <th>Meaning</th>
             <th>Example</th>
-            <th>Listen</th>
+            <th class="cell-action">Listen</th>
           </tr>
         </thead>
-        <tbody>${rows}</tbody>
+        <tbody>
+          ${words.map((w, index) => `
+            <tr id="row-${partKey}-${w.id}">
+              <td class="cell-num">${index + 1}</td>
+              <td class="cell-kanji">${s(w.kanji)}</td>
+              <td class="cell-kana">${s(w.kana)}</td>
+              <td class="cell-meaning">${s(w.meaning)}</td>
+              <td class="cell-example">${s(w.example)}</td>
+              <td class="cell-action">
+                <button class="btn-icon" id="btn-audio-${w.id}" onclick="playSingleAudio(${w.id}, '${buildAudioPath(w)}')">🎵</button>
+              </td>
+            </tr>
+          `).join('')}
+        </tbody>
       </table>
-    </div>`;
-}
-
-/* ══════════════════════════════════════════════
-   SUB PANEL 2: FLASHCARD
-   Front: kana (large) + kanji (small)
-   Back : meaning + example + listen button
-══════════════════════════════════════════════ */
-function renderFlashcardPanel(words, wKey) {
-  if (!words.length) return '<div class="empty-state">No words in this part.</div>';
-  const total = words.length;
-  const w     = words[0];
-
-  return `
-    <div class="flashcard-area">
-      <div class="flashcard-counter">Card <span id="fc-cur-${wKey}">1</span> of <span>${total}</span></div>
-
-      <div class="flashcard-scene" id="fc-scene-${wKey}" onclick="flipCard('${wKey}')">
-        <div class="flashcard-inner" id="fc-inner-${wKey}">
-          <div class="card-face card-front">
-            <span class="card-hint">Nghĩa là gì? / What is the meaning?</span>
-            <div class="card-kana"  id="fc-kana-${wKey}">${s(w.kana)}</div>
-            <div class="card-kanji" id="fc-kanji-${wKey}">${s(w.kanji)}</div>
-          </div>
-          <div class="card-face card-back">
-            <span class="card-label">Ý nghĩa</span>
-            <div class="card-meaning" id="fc-meaning-${wKey}">${s(w.meaning)}</div>
-            <div class="card-kana-small" id="fc-kana-back-${wKey}"
-                 style="font-style:italic;font-size:13px;color:var(--ink-mute);text-align:center;max-width:320px">
-              ${s(w.example)}
+    </div>
+  `;
+  
+  // TIER 4.2 — FLASHCARD PANEL
+  if (!state.flashcardIndex[partKey]) state.flashcardIndex[partKey] = 0;
+  const curCardIdx = state.flashcardIndex[partKey];
+  const activeWord = words[curCardIdx] || words[0];
+  const progressPercent = words.length ? ((curCardIdx + 1) / words.length) * 100 : 0;
+  
+  let cardHtml = `
+    <div class="sub-panel ${cardActive}">
+      ${words.length ? `
+        <div class="flashcard-area">
+          <div class="flashcard-counter">Thẻ số <span>${curCardIdx + 1}</span> / ${words.length}</div>
+          <div class="flashcard-scene" onclick="this.classList.toggle('flipped')">
+            <div class="flashcard-inner">
+              <div class="card-face card-front">
+                <div class="card-hint">KANA</div>
+                <div class="card-kana">${s(activeWord.kana)}</div>
+                <div class="card-kanji">${s(activeWord.kanji)}</div>
+                <div class="flip-hint" style="margin-top:20px; opacity:0.6;">Chạm để lật mặt sau 🔄</div>
+              </div>
+              <div class="card-face card-back">
+                <div class="card-label">Ý NGHĨA</div>
+                <div class="card-meaning">${s(activeWord.meaning)}</div>
+                <div class="card-kana-small">${s(activeWord.kana)}</div>
+                <button class="card-listen-btn" onclick="event.stopPropagation(); playSingleAudio(${activeWord.id}, '${buildAudioPath(activeWord)}')">🎵</button>
+              </div>
             </div>
-            <button class="card-listen-btn" id="fc-listen-${wKey}"
-                    onclick="event.stopPropagation();speakWord(${w.id},'${escAttr(w.unit)}','${escAttr(w.part)}')">🔊</button>
+          </div>
+          <div class="flashcard-nav">
+            <button class="nav-arrow" onclick="moveFlashcard('${escAttr(partKey)}', -1)">◀</button>
+            <div class="flashcard-progress-bar">
+              <div class="flashcard-progress-fill" style="width: ${progressPercent}%"></div>
+            </div>
+            <button class="nav-arrow" onclick="moveFlashcard('${escAttr(partKey)}', 1)">▶</button>
+          </div>
+        </div>
+      ` : '<div class="empty-state">No cards available.</div>'}
+    </div>
+  `;
+  
+  // TIER 4.3 — QUIZ PANEL
+  let quizHtml = `
+    <div class="sub-panel ${quizActive}" id="quiz-workspace-${escAttr(partKey)}">
+      <div class="quiz-area">
+        <div class="quiz-header">
+          <div class="quiz-progress-track">
+            <div class="quiz-progress-fill" id="quiz-progress-${escAttr(partKey)}" style="width: 0%"></div>
+          </div>
+          <div class="quiz-score" id="quiz-live-score-${escAttr(partKey)}">Score: 0</div>
+          <button class="btn btn-outline" onclick="startQuiz('${escAttr(unit)}', '${escAttr(part)}')">🔄 Làm Lại Quiz</button>
+        </div>
+        
+        <div class="quiz-card" id="quiz-card-box-${escAttr(partKey)}">
+          <div style="text-align:center; padding: 20px 0;">
+            <button class="btn btn-primary" onclick="startQuiz('${escAttr(unit)}', '${escAttr(part)}')">🚀 Bắt Đầu Làm Bài Trắc Nghiệm</button>
           </div>
         </div>
       </div>
-
-      <p class="flip-hint">Click card to reveal · hover also flips</p>
-
-      <div class="flashcard-nav">
-        <button class="nav-arrow" onclick="navigateCard('${wKey}',-1)" title="Previous">←</button>
-        <div class="flashcard-progress-bar">
-          <div class="flashcard-progress-fill" id="fc-bar-${wKey}"
-               style="width:${Math.round(1/total*100)}%"></div>
-        </div>
-        <button class="nav-arrow" onclick="navigateCard('${wKey}',1)" title="Next">→</button>
-      </div>
-      <button class="btn btn-ghost" id="fc-shuffle-${wKey}"
-              onclick="shuffleCards('${wKey}')"
-              style="font-size:12px;margin-top:2px">🔀 Shuffle</button>
-    </div>`;
-}
-
-/* ══════════════════════════════════════════════
-   SUB PANEL 3: QUIZ
-══════════════════════════════════════════════ */
-function renderQuizPanel(words, wKey) {
-  if (words.length < 4) return '<div class="empty-state">Need at least 4 words to start a quiz.</div>';
-
-  return `
-    <div class="quiz-area" id="quiz-area-${wKey}">
-      <div class="quiz-header">
-        <div class="quiz-progress-track">
-          <div class="quiz-progress-fill" id="qz-prog-${wKey}" style="width:0%"></div>
-        </div>
-        <span class="quiz-score" id="qz-score-${wKey}">0 / ${words.length}</span>
-      </div>
-
-      <div class="quiz-card" id="qz-card-${wKey}" style="display:none">
-        <div class="quiz-question-label">
-          <span class="quiz-q-number" id="qz-num-${wKey}">Q1</span>
-          Chọn nghĩa đúng / Choose the correct meaning
-        </div>
-        <div class="quiz-word-display">
-          <span class="quiz-word-kana"  id="qz-kana-${wKey}">—</span>
-          <span class="quiz-word-kanji" id="qz-kanji-${wKey}"></span>
-          <button class="quiz-listen-btn" id="qz-listen-${wKey}" title="Nghe">🔊</button>
-        </div>
-        <div class="quiz-choices" id="qz-choices-${wKey}"></div>
-      </div>
-
-      <div class="quiz-review-screen" id="qz-review-${wKey}" style="display:none">
+      
+      <div class="quiz-review-screen" id="quiz-review-${escAttr(partKey)}">
         <div class="review-emoji">🎉</div>
-        <div class="review-title">Quiz Complete!</div>
-        <div class="review-sub">Kết quả của bạn / Here's how you did.</div>
+        <div class="review-title">Hoàn Thành Bài Học!</div>
+        <div class="review-sub">Tiến độ của bạn đã được ghi nhận tự động vào hệ thống.</div>
         <div class="review-stats">
           <div class="review-stat">
-            <span class="review-stat-val green" id="qz-correct-${wKey}">—</span>
-            <span class="review-stat-label">Đúng / Correct</span>
+            <span class="review-stat-val green" id="rev-correct-${escAttr(partKey)}">0</span>
+            <span class="review-stat-label">Đúng</span>
           </div>
           <div class="review-stat">
-            <span class="review-stat-val red" id="qz-wrong-${wKey}">—</span>
-            <span class="review-stat-label">Sai / Wrong</span>
-          </div>
-          <div class="review-stat">
-            <span class="review-stat-val" id="qz-pct-${wKey}">—</span>
-            <span class="review-stat-label">Điểm / Score</span>
+            <span class="review-stat-val red" id="rev-wrong-${escAttr(partKey)}">0</span>
+            <span class="review-stat-label">Sai</span>
           </div>
         </div>
-        <button class="btn btn-primary" onclick="startQuiz('${wKey}')">Làm lại / Try Again</button>
+        <button class="btn btn-primary" onclick="startQuiz('${escAttr(unit)}', '${escAttr(part)}')">Thử Thách Lại</button>
       </div>
-
-      <button class="btn btn-primary" id="qz-startbtn-${wKey}"
-              onclick="startQuiz('${wKey}')">Bắt đầu Quiz / Start Quiz</button>
-    </div>`;
-}
-
-/* ══════════════════════════════════════════════
-   SUB PANEL 4: STROKE ORDER (AnimCJK wired)
-══════════════════════════════════════════════ */
-function renderStrokePanel(words, wKey) {
-  // Only include words that have a non-empty kanji field
-  const kanjiWords = words.filter(w => w.kanji && w.kanji.trim() && w.kanji !== '—');
-  if (!kanjiWords.length) return '<div class="empty-state">No kanji found in this part.</div>';
-
-  const chips = kanjiWords.map((w, i) => `
-    <button class="stroke-word-chip${i === 0 ? ' active' : ''}"
-            onclick="selectStrokeWord('${wKey}',this,'${escAttr(w.kanji)}')">${s(w.kanji)}</button>`
-  ).join('');
-
-  // Pre-render character boxes for the first kanji word
-  const firstKanji = kanjiWords[0].kanji;
-  const charBoxes  = [...firstKanji].map(ch => `
-    <div style="display:flex;flex-direction:column;align-items:center;gap:8px;">
-      <div class="stroke-char-box"
-           id="stroke-box-${wKey}-${escId(ch)}"
-           data-char="${escAttr(ch)}">${ch}</div>
-      <span class="stroke-char-label">${ch}</span>
-    </div>`).join('');
-
-  return `
-    <div class="stroke-area">
-      <div class="stroke-toolbar">
-        <div class="stroke-word-selector" id="stroke-chips-${wKey}">${chips}</div>
-      </div>
-      <div class="stroke-canvas-area">
-        <div class="stroke-kanji-display" id="stroke-display-${wKey}">${charBoxes}</div>
-        <p class="stroke-placeholder-msg">
-          Nhấn ▶ Animate để xem thứ tự nét.<br>
-          Click ▶ Animate to see stroke order. Powered by AnimCJK.
-        </p>
-        <div class="stroke-controls">
-          <button class="btn btn-outline" onclick="animateStrokes('${wKey}')">▶ Animate</button>
-          <button class="btn btn-ghost"   onclick="resetStrokes('${wKey}')">↺ Reset</button>
+    </div>
+  `;
+  
+  // TIER 4.4 — STROKE WRITING PANEL
+  let strokeHtml = `
+    <div class="sub-panel ${strokeActive}">
+      <div class="stroke-area">
+        <div class="stroke-toolbar">
+          <span style="font-size:13px; font-weight:600; color:var(--ink-soft)">Chọn từ tập viết:</span>
+          <div class="stroke-word-selector" id="stroke-select-${escAttr(partKey)}"></div>
+        </div>
+        <div class="stroke-canvas-area">
+          <div class="stroke-kanji-display" id="stroke-kanji-container-${escAttr(partKey)}">
+            <div class="stroke-placeholder-msg">Hãy chọn một từ vựng có Hán tự ở danh sách trên để luyện viết theo nét nét chữ chuẩn quy tắc.</div>
+          </div>
+          <div class="stroke-controls" id="stroke-ctrls-${escAttr(partKey)}" style="display:none;">
+            <button class="btn btn-outline" id="btn-stroke-play-${escAttr(partKey)}">▶ Chạy Hoạt Ảnh</button>
+          </div>
         </div>
       </div>
-    </div>`;
+    </div>
+  `;
+  
+  return studyHtml + cardHtml + quizHtml + strokeHtml;
 }
 
-/* ══════════════════════════════════════════════
-   SUB PANEL 5: WORD LIST (printable checklist)
-   Uses lowercase keys: kana, kanji, meaning,
-   example, example_meaning
-══════════════════════════════════════════════ */
-function renderWordListPanel(words, wKey) {
-  if (!words.length) return '<div class="empty-state">No words in this part.</div>';
-
-  const rows = words.map((w, i) => `
-    <tr>
-      <td class="cell-check"><input type="checkbox" class="check-box" /></td>
-      <td class="cell-num" style="font-size:12px;color:var(--ink-mute)">${i + 1}</td>
-      <td class="wl-kanji">${s(w.kanji)}</td>
-      <td class="wl-kana">${s(w.kana)}</td>
-      <td class="wl-meaning">${s(w.meaning)}</td>
-      <td style="font-family:var(--font-ja);font-size:13px;color:var(--ink-soft)">${s(w.example)}</td>
-      <td class="wl-notes">${s(w.example_meaning)}</td>
-    </tr>`).join('');
-
-  return `
-    <div class="wordlist-area">
-      <div class="wordlist-toolbar">
-        <span style="font-size:13px;color:var(--ink-mute)">${words.length} từ / words</span>
-        <button class="btn btn-outline" onclick="window.print()">🖨️ In / Print</button>
-      </div>
-      <div style="overflow-x:auto">
-        <table class="wordlist-table">
-          <thead>
-            <tr>
-              <th>✓</th><th>No.</th>
-              <th>漢字</th><th>かな</th>
-              <th>Ý nghĩa</th><th>例文</th><th>Nghĩa ví dụ</th>
-            </tr>
-          </thead>
-          <tbody>${rows}</tbody>
-        </table>
-      </div>
-    </div>`;
+// AUDIO ENGINE
+function playSingleAudio(id, path) {
+  stopAllAudio();
+  const btn = document.getElementById(`btn-audio-${id}`);
+  if (btn) btn.classList.add('btn-playing');
+  
+  state.currentAudio = new Audio(path);
+  state.currentAudio.play().catch(err => console.log("Audio file missing:", path));
+  
+  state.currentAudio.onended = () => {
+    if (btn) btn.classList.remove('btn-playing');
+    state.currentAudio = null;
+  };
 }
 
-/* ══════════════════════════════════════════════
-   PROGRESS — localStorage
-   Key format : progress_Unit[N]_Part[N]
-   Value       : "correct/total"  e.g. "18/20"
-══════════════════════════════════════════════ */
-
-/* wKey "unit-1__part-2" → "progress_Unit1_Part2" */
-function _progressStorageKey(wKey) {
-  const [uSeg, pSeg] = wKey.split('__');
-  return `progress_Unit${_digits(uSeg)}_Part${_digits(pSeg)}`;
-}
-
-/* Returns { done, total, pct } */
-function getProgress(wKey) {
-  try {
-    const raw        = localStorage.getItem(_progressStorageKey(wKey));
-    const totalWords = _wordsFromWKey(wKey).length;
-    if (!raw) return { done: 0, total: totalWords, pct: 0 };
-    const [doneStr, totalStr] = raw.split('/');
-    const done  = parseInt(doneStr, 10)  || 0;
-    const total = totalWords            || parseInt(totalStr, 10) || 0;
-    const pct   = total > 0 ? Math.round((done / total) * 100) : 0;
-    return { done, total, pct };
-  } catch {
-    return { done: 0, total: _wordsFromWKey(wKey).length, pct: 0 };
+function stopAllAudio() {
+  if (state.currentAudio) {
+    state.currentAudio.pause();
+    state.currentAudio = null;
   }
-}
-
-/* Persist result, only overwriting when score improves */
-function saveProgress(wKey, correct, total) {
-  try {
-    const key      = _progressStorageKey(wKey);
-    const existing = localStorage.getItem(key);
-    const prev     = existing ? (parseInt(existing.split('/')[0], 10) || 0) : 0;
-    if (correct >= prev) localStorage.setItem(key, `${correct}/${total}`);
-  } catch { /* storage disabled — silently ignore */ }
-  _refreshAccordionBadge(wKey);
-}
-
-/* Update the badge + mini-bar for one accordion item without re-render */
-function _refreshAccordionBadge(wKey) {
-  const [uSeg, pSeg] = wKey.split('__');
-  const item = document.getElementById(`acc-${uSeg}-${pSeg}`);
-  if (!item) return;
-
-  const { done, total, pct } = getProgress(wKey);
-  const badgeClass = done === 0 ? 'not-started' : (done >= total ? 'complete' : 'in-progress');
-  const fillClass  = done >= total ? '' : ' partial';
-
-  const badge = item.querySelector('.progress-badge');
-  const fill  = item.querySelector('.progress-bar-mini-fill');
-  if (badge) { badge.textContent = `${done}/${total} words`; badge.className = `progress-badge ${badgeClass}`; }
-  if (fill)  { fill.style.width = pct + '%'; fill.className = `progress-bar-mini-fill${fillClass}`; }
-}
-
-/* Refresh all accordion badges from storage on page load */
-function refreshAllBadges() {
-  if (typeof vocabularyData === 'undefined') return;
-  getUnits().forEach(unit => {
-    getPartsForUnit(unit).forEach(part => {
-      _refreshAccordionBadge(workspaceKey(unit, part));
-    });
+  state.isAutoplay = false;
+  state.playlist = [];
+  state.playlistIndex = -1;
+  document.querySelectorAll('.btn-icon').forEach(b => b.classList.remove('btn-playing'));
+  document.querySelectorAll('.btn-primary').forEach(b => {
+    if (b.id && b.id.startsWith('btn-autoplay-')) b.textContent = '▶ Nghe Toàn Bộ';
   });
+  document.querySelectorAll('.word-table tbody tr').forEach(tr => tr.classList.remove('playing'));
 }
 
-/* Header total word count */
-function updateGlobalProgress() {
-  const total = (typeof vocabularyData !== 'undefined') ? vocabularyData.length : 0;
-  const el    = document.getElementById('global-progress');
-  if (el) el.innerHTML = total ? `Total: <strong>${total}</strong> words` : '';
-}
-
-/* ══════════════════════════════════════════════
-   AUDIO — HTML5 Audio() with local .mp3 files
-   speakWord(id, unit, part) builds the path and
-   plays it. Also accepts a bare word object for
-   internal callers (flashcard, quiz).
-   autoPlayAll uses onended + 2-second gap.
-══════════════════════════════════════════════ */
-
-const _ap = {
-  active:    false,
-  cancelled: false,
-  current:   null,   // HTMLAudioElement currently playing
-  timer:     null,   // 2-second inter-word setTimeout
-};
-
-/*
-  Public single-word player.
-  Called two ways:
-    1. Inline HTML onclick: speakWord(id, "Unit 1", "Part 2")
-    2. Internally with a word object: speakWord(wordObj)
-*/
-function speakWord(idOrObj, unit, part) {
-  stopAutoPlay();   // cancel any running autoplay
-  let path;
-
-  if (idOrObj && typeof idOrObj === 'object') {
-    // Called internally with a full word object
-    path = buildAudioPath(idOrObj);
-  } else if (idOrObj !== undefined && unit !== undefined && part !== undefined) {
-    // Called from inline onclick with (id, unit, part) strings
-    path = buildAudioPath({ id: idOrObj, unit: String(unit), part: String(part) });
-  } else {
+function toggleAutoplayAll(unit, part) {
+  const partKey = `${unit}_${part}`;
+  const masterBtn = document.getElementById(`btn-autoplay-${partKey}`);
+  
+  if (state.isAutoplay) {
+    stopAllAudio();
+    if (masterBtn) masterBtn.textContent = '▶ Nghe Toàn Bộ';
     return;
   }
-
-  _playFile(path);
+  
+  stopAllAudio();
+  state.isAutoplay = true;
+  if (masterBtn) masterBtn.textContent = '⏹ Dừng Phát';
+  
+  state.playlist = getWords(unit, part);
+  state.playlistIndex = 0;
+  playNextInPlaylist(partKey);
 }
 
-/* Play one file; returns a Promise resolving when done (or on error/pause) */
-function _playFile(src) {
-  return new Promise(resolve => {
-    if (_ap.current) {
-      _ap.current.pause();
-      _ap.current.src = '';
-    }
-    const a        = new Audio(src);
-    _ap.current    = a;
-    a.onended      = () => resolve('ended');
-    a.onerror      = () => resolve('error');
-    a.onpause      = () => resolve('paused');
-    a.play().catch(() => resolve('error'));
-  });
-}
-
-/* Cancellable 2-second inter-word delay */
-function _apDelay(ms) {
-  return new Promise(resolve => { _ap.timer = setTimeout(resolve, ms); });
-}
-
-/*
-  Public: sequentially play every word in a part.
-  Sequence per word:
-    1. Highlight the row in the Study table
-    2. Play word.mp3 — wait for onended event
-    3. 2-second pause
-    4. Clear highlight, advance to next word
-*/
-function autoPlayAll(wKey) {
-  stopAutoPlay();
-
-  const words = _wordsFromWKey(wKey);
-  if (!words.length) return;
-
-  _ap.active    = true;
-  _ap.cancelled = false;
-  _setAutoplayUI(wKey, true);
-
-  function playNext(i) {
-    if (_ap.cancelled || i >= words.length) {
-      _highlightStudyRow(wKey, -1);
-      _setAutoplayUI(wKey, false);
-      _ap.active = false;
-      return;
-    }
-    const w = words[i];
-    _highlightStudyRow(wKey, i);
-    _playFile(buildAudioPath(w)).then(() => {
-      if (_ap.cancelled) {
-        _highlightStudyRow(wKey, -1);
-        _setAutoplayUI(wKey, false);
-        _ap.active = false;
-        return;
-      }
-      _apDelay(2000).then(() => { if (!_ap.cancelled) playNext(i + 1); });
-    });
+function playNextInPlaylist(partKey) {
+  if (!state.isAutoplay || state.playlistIndex >= state.playlist.length) {
+    stopAllAudio();
+    return;
   }
-
-  playNext(0);
-}
-
-/* Public: immediately stop autoplay */
-function stopAutoPlay() {
-  _ap.cancelled = true;
-  _ap.active    = false;
-  if (_ap.current) { _ap.current.pause(); _ap.current.src = ''; _ap.current = null; }
-  if (_ap.timer !== null) { clearTimeout(_ap.timer); _ap.timer = null; }
-  document.querySelectorAll('.word-table tbody tr.playing').forEach(r => r.classList.remove('playing'));
-  document.querySelectorAll('[id^="autoplay-btn-"]').forEach(btn => {
-    btn.innerHTML = '▶ Auto Play All';
-    btn.classList.remove('btn-playing');
-  });
-}
-
-function _highlightStudyRow(wKey, idx) {
-  const tbody = document.querySelector(`#subpanel-${wKey}-study .word-table tbody`);
-  if (!tbody) return;
-  [...tbody.rows].forEach((r, i) => r.classList.toggle('playing', i === idx));
-  if (idx >= 0 && tbody.rows[idx]) tbody.rows[idx].scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-}
-
-function _setAutoplayUI(wKey, playing) {
-  const btn = document.getElementById('autoplay-btn-' + wKey);
-  if (!btn) return;
-  btn.innerHTML = playing ? '⏸ Playing…' : '▶ Auto Play All';
-  btn.classList.toggle('btn-playing', playing);
-}
-
-/* ══════════════════════════════════════════════
-   FLASHCARD LOGIC
-   State: fcState[wKey] = { idx, words, originalWords, shuffled }
-══════════════════════════════════════════════ */
-const fcState = {};
-
-function _fcInit(wKey) {
-  if (fcState[wKey]) return;
-  const words = _wordsFromWKey(wKey);
-  fcState[wKey] = { idx: 0, words: [...words], originalWords: words, shuffled: false };
-}
-
-/* Render DOM for the card at fcState[wKey].idx */
-function _fcRender(wKey) {
-  const st = fcState[wKey];
-  if (!st || !st.words.length) return;
-  const w     = st.words[st.idx];
-  const total = st.words.length;
-
-  // Always reset to front face on card change
-  const scene = document.getElementById('fc-scene-' + wKey);
-  if (scene) scene.classList.remove('flipped');
-
-  // Counter + progress bar
-  const cur = document.getElementById('fc-cur-' + wKey);
-  const bar = document.getElementById('fc-bar-' + wKey);
-  if (cur) cur.textContent = st.idx + 1;
-  if (bar) bar.style.width = Math.round(((st.idx + 1) / total) * 100) + '%';
-
-  // Front face
-  const kanaEl  = document.getElementById('fc-kana-'  + wKey);
-  const kanjiEl = document.getElementById('fc-kanji-' + wKey);
-  if (kanaEl)  kanaEl.textContent  = s(w.kana);
-  if (kanjiEl) kanjiEl.textContent = s(w.kanji);
-
-  // Back face: meaning + example
-  const meaningEl  = document.getElementById('fc-meaning-'   + wKey);
-  const kanaBackEl = document.getElementById('fc-kana-back-' + wKey);
-  if (meaningEl)  meaningEl.textContent  = s(w.meaning);
-  if (kanaBackEl) kanaBackEl.textContent = s(w.example);
-
-  // Rewire the listen button to the current word (clone removes stale listeners)
-  const listenEl = document.getElementById('fc-listen-' + wKey);
-  if (listenEl) {
-    const fresh = listenEl.cloneNode(true);
-    fresh.addEventListener('click', e => {
-      e.stopPropagation();
-      speakWord(w);
-    });
-    listenEl.parentNode.replaceChild(fresh, listenEl);
+  
+  document.querySelectorAll('.word-table tbody tr').forEach(tr => tr.classList.remove('playing'));
+  
+  const word = state.playlist[state.playlistIndex];
+  const row = document.getElementById(`row-${partKey}-${word.id}`);
+  if (row) {
+    row.classList.add('playing');
+    row.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
   }
-}
-
-/* Public: toggle card flip */
-function flipCard(wKey) {
-  _fcInit(wKey);
-  const scene = document.getElementById('fc-scene-' + wKey);
-  if (scene) scene.classList.toggle('flipped');
-}
-
-/* Public: navigate ±1 with wrap-around */
-function navigateCard(wKey, dir) {
-  _fcInit(wKey);
-  const st = fcState[wKey];
-  if (!st || !st.words.length) return;
-  st.idx = (st.idx + dir + st.words.length) % st.words.length;
-  _fcRender(wKey);
-}
-
-/* Public: toggle shuffle/restore */
-function shuffleCards(wKey) {
-  _fcInit(wKey);
-  const st = fcState[wKey];
-  if (!st) return;
-  st.words    = st.shuffled ? [...st.originalWords] : _shuffle(st.originalWords);
-  st.shuffled = !st.shuffled;
-  st.idx      = 0;
-  _fcRender(wKey);
-  const btn = document.getElementById('fc-shuffle-' + wKey);
-  if (btn) btn.textContent = st.shuffled ? '🔀 Unshuffled' : '🔀 Shuffle';
-}
-
-/* ══════════════════════════════════════════════
-   QUIZ LOGIC
-   qzState[wKey] = { words, queue, idx, correct, wrong, answered }
-══════════════════════════════════════════════ */
-const qzState = {};
-
-/* Public: (re-)start a quiz session */
-function startQuiz(wKey) {
-  const allWords = _wordsFromWKey(wKey);
-  if (allWords.length < 4) return;
-
-  qzState[wKey] = {
-    words:    allWords,
-    queue:    _shuffle([...allWords]),
-    idx:      0,
-    correct:  0,
-    wrong:    0,
-    answered: false,
+  
+  const path = buildAudioPath(word);
+  state.currentAudio = new Audio(path);
+  state.currentAudio.play().catch(e => {
+    console.log("Missing audio path:", path);
+    setTimeout(() => {
+      state.playlistIndex++;
+      playNextInPlaylist(partKey);
+    }, 1000);
+  });
+  
+  state.currentAudio.onended = () => {
+    state.playlistIndex++;
+    setTimeout(() => {
+      playNextInPlaylist(partKey);
+    }, 800); 
   };
-
-  const card     = document.getElementById('qz-card-'     + wKey);
-  const review   = document.getElementById('qz-review-'   + wKey);
-  const startBtn = document.getElementById('qz-startbtn-' + wKey);
-  if (card)     card.style.display     = 'block';
-  if (review)   review.style.display   = 'none';
-  if (startBtn) startBtn.style.display = 'none';
-
-  _qzRenderQuestion(wKey);
 }
 
-/* Render the current question card */
-function _qzRenderQuestion(wKey) {
-  const st = qzState[wKey];
-  if (!st) return;
-  const w     = st.queue[st.idx];
-  const total = st.queue.length;
-  st.answered = false;
+// FLASHCARD ENGINE
+function moveFlashcard(partKey, steps) {
+  const [unit, part] = partKey.split('_');
+  const words = getWords(unit, part);
+  if (!words.length) return;
+  
+  let currentIdx = state.flashcardIndex[partKey] || 0;
+  currentIdx += steps;
+  
+  if (currentIdx < 0) currentIdx = words.length - 1;
+  if (currentIdx >= words.length) currentIdx = 0;
+  
+  state.flashcardIndex[partKey] = currentIdx;
+  
+  renderUnitContent();
+}
 
-  const numEl   = document.getElementById('qz-num-'   + wKey);
-  const progEl  = document.getElementById('qz-prog-'  + wKey);
-  const scoreEl = document.getElementById('qz-score-' + wKey);
-  if (numEl)   numEl.textContent   = `Q${st.idx + 1}`;
-  if (progEl)  progEl.style.width  = Math.round((st.idx / total) * 100) + '%';
-  if (scoreEl) scoreEl.textContent = `${st.correct} / ${total}`;
+// QUIZ SYSTEM LOGIC
+function startQuiz(unit, part) {
+  const partKey = `${unit}_${part}`;
+  const words = getWords(unit, part);
+  if (words.length < 1) return;
+  
+  // Trộn câu hỏi ngẫu nhiên bằng Thuật toán Fisher-Yates
+  const shuffledQuestions = _shuffle(words);
+  
+  state.quizState[partKey] = {
+    questions: shuffledQuestions,
+    currentIndex: 0,
+    correctCount: 0,
+    wrongCount: 0
+  };
+  
+  // Ẩn bảng kết quả cũ nếu đang hiển thị
+  const reviewScreen = document.getElementById(`quiz-review-${partKey}`);
+  if (reviewScreen) reviewScreen.style.display = 'none';
+  
+  const cardBox = document.getElementById(`quiz-card-box-${partKey}`);
+  if (cardBox) cardBox.style.display = 'block';
+  
+  renderQuizQuestion(partKey);
+}
 
-  // Word display uses kana (primary) + kanji
-  const kanaEl  = document.getElementById('qz-kana-'  + wKey);
-  const kanjiEl = document.getElementById('qz-kanji-' + wKey);
-  if (kanaEl)  kanaEl.textContent  = s(w.kana);
-  if (kanjiEl) kanjiEl.textContent = s(w.kanji);
+function renderQuizQuestion(partKey) {
+  const quiz = state.quizState[partKey];
+  if (!quiz) return;
+  
+  const total = quiz.questions.length;
+  const currentWord = quiz.questions[quiz.currentIndex];
+  
+  // Cập nhật thanh tiến độ câu hỏi trắc nghiệm
+  const progressFill = document.getElementById(`quiz-progress-${partKey}`);
+  if (progressFill) progressFill.style.width = `${(quiz.currentIndex / total) * 100}%`;
+  
+  const liveScore = document.getElementById(`quiz-live-score-${partKey}`);
+  if (liveScore) liveScore.style.setContent = `Score: ${quiz.correctCount}`;
+  
+  // Sinh 3 đáp án sai từ vựng cùng Part ngẫu nhiên
+  const pool = vocabularyData.filter(w => w.meaning !== currentWord.meaning);
+  const shuffledPool = _shuffle(pool);
+  const distractors = shuffledPool.slice(0, 3).map(w => w.meaning);
+  
+  const choices = _shuffle([currentWord.meaning, ...distractors]);
+  const cardBox = document.getElementById(`quiz-card-box-${partKey}`);
+  
+  if (!cardBox) return;
+  
+  cardBox.innerHTML = `
+    <div class="quiz-question-label">
+      <span class="quiz-q-number">CÂU HỎI ${quiz.currentIndex + 1} / ${total}</span> Nghĩa của từ này là gì?
+    </div>
+    <div class="quiz-word-display">
+      <div class="quiz-word-kana">${s(currentWord.kana)}</div>
+      ${currentWord.kanji && currentWord.kanji !== '—' ? `<div class="quiz-word-kanji">${currentWord.kanji}</div>` : ''}
+      <button class="quiz-listen-btn" onclick="playSingleAudio(${currentWord.id}, '${buildAudioPath(currentWord)}')">🎵</button>
+    </div>
+    <div class="quiz-choices">
+      ${choices.map((choice, i) => {
+        const labels = ['A', 'B', 'C', 'D'];
+        return `
+          <button class="choice-btn" onclick="submitQuizAnswer(this, '${escAttr(partKey)}', '${escAttr(choice)}', '${escAttr(currentWord.meaning)}')">
+            <span class="choice-label">${labels[i]}</span> ${s(choice)}
+          </button>
+        `;
+      }).join('')}
+    </div>
+  `;
+}
 
-  // Rewire the listen button (clone to remove stale listeners)
-  const listenEl = document.getElementById('qz-listen-' + wKey);
-  if (listenEl) {
-    const fresh = listenEl.cloneNode(true);
-    fresh.addEventListener('click', () => speakWord(w));
-    listenEl.parentNode.replaceChild(fresh, listenEl);
+function submitQuizAnswer(btn, partKey, chosenAnswer, correctAnswer) {
+  const quiz = state.quizState[partKey];
+  if (!quiz) return;
+  
+  // Vô hiệu hóa tất cả các nút đáp án khác sau khi đã chọn
+  const parent = btn.parentElement;
+  if (parent) {
+    parent.querySelectorAll('.choice-btn').forEach(b => b.disabled = true);
   }
-
-  // Build 4 choices: 1 correct + 3 unique distractors
-  const choices    = _qzBuildChoices(w, st.words);
-  const correctIdx = choices.indexOf(w.meaning);
-
-  const choicesEl = document.getElementById('qz-choices-' + wKey);
-  if (!choicesEl) return;
-
-  const labels = ['A', 'B', 'C', 'D'];
-  choicesEl.innerHTML = choices.map((meaning, i) => `
-    <button class="choice-btn"
-            id="qz-choice-${wKey}-${i}"
-            onclick="answerQuiz('${wKey}',${i},${correctIdx})">
-      <span class="choice-label">${labels[i]}</span>${meaning}
-    </button>`).join('');
-}
-
-/* Public: handle a choice selection */
-function answerQuiz(wKey, chosenIdx, correctIdx) {
-  const st = qzState[wKey];
-  if (!st || st.answered) return;
-  st.answered = true;
-
-  const isCorrect = chosenIdx === correctIdx;
-  if (isCorrect) st.correct++; else st.wrong++;
-
-  // Colour feedback on all 4 buttons
-  for (let i = 0; i < 4; i++) {
-    const btn = document.getElementById(`qz-choice-${wKey}-${i}`);
-    if (!btn) continue;
-    btn.disabled = true;
-    if (i === correctIdx)     btn.classList.add('correct');
-    else if (i === chosenIdx) btn.classList.add('wrong');
-  }
-
-  // Play the correct word's mp3 as audio feedback
-  speakWord(st.queue[st.idx]);
-
-  setTimeout(() => _qzAdvance(wKey), 1400);
-}
-
-/* Advance to next question or show review */
-function _qzAdvance(wKey) {
-  const st = qzState[wKey];
-  if (!st) return;
-  st.idx++;
-  if (st.idx >= st.queue.length) _qzShowReview(wKey);
-  else _qzRenderQuestion(wKey);
-}
-
-/* Show review screen and persist best score */
-function _qzShowReview(wKey) {
-  const st    = qzState[wKey];
-  if (!st) return;
-  const total = st.queue.length;
-  const pct   = Math.round((st.correct / total) * 100);
-
-  const card   = document.getElementById('qz-card-'   + wKey);
-  const review = document.getElementById('qz-review-' + wKey);
-  if (card)   card.style.display   = 'none';
-  if (review) review.style.display = 'block';
-
-  const correctEl = document.getElementById('qz-correct-' + wKey);
-  const wrongEl   = document.getElementById('qz-wrong-'   + wKey);
-  const pctEl     = document.getElementById('qz-pct-'     + wKey);
-  const scoreEl   = document.getElementById('qz-score-'   + wKey);
-  const progEl    = document.getElementById('qz-prog-'    + wKey);
-  if (correctEl) correctEl.textContent = st.correct;
-  if (wrongEl)   wrongEl.textContent   = st.wrong;
-  if (pctEl)     pctEl.textContent     = pct + '%';
-  if (scoreEl)   scoreEl.textContent   = `${st.correct} / ${total}`;
-  if (progEl)    progEl.style.width    = '100%';
-
-  const emojiEl = review && review.querySelector('.review-emoji');
-  if (emojiEl) emojiEl.textContent = pct >= 90 ? '🏆' : pct >= 70 ? '🎉' : pct >= 50 ? '💪' : '📚';
-
-  /*
-    Persist to localStorage with canonical key format:
-    progress_Unit[N]_Part[N]  e.g. "progress_Unit1_Part2"
-    Value: "correct/total"    e.g. "18/20"
-  */
-  saveProgress(wKey, st.correct, total);
-}
-
-/* Return [correct + 3 distractors] shuffled */
-function _qzBuildChoices(correctWord, allWords) {
-  const correct     = correctWord.meaning;
-  const distractors = _shuffle(allWords.filter(w => w.meaning !== correct))
-                        .slice(0, 3).map(w => w.meaning);
-  return _shuffle([correct, ...distractors]);
-}
-
-/* ══════════════════════════════════════════════
-   STROKE ORDER — AnimCJK integration
-   AnimCJK is loaded from CDN above. We call its
-   API to animate SVG stroke paths inside each
-   .stroke-char-box element.
-══════════════════════════════════════════════ */
-
-/* Internal: store the currently-selected kanji string per wKey */
-const _strokeState = {};
-
-function selectStrokeWord(wKey, btnEl, kanji) {
-  document.querySelectorAll(`#stroke-chips-${wKey} .stroke-word-chip`)
-    .forEach(b => b.classList.remove('active'));
-  btnEl.classList.add('active');
-  _strokeState[wKey] = kanji;
-
-  // Re-render character boxes for the newly selected kanji
-  const display = document.getElementById('stroke-display-' + wKey);
-  if (!display) return;
-  display.innerHTML = [...kanji].map(ch => `
-    <div style="display:flex;flex-direction:column;align-items:center;gap:8px;">
-      <div class="stroke-char-box"
-           id="stroke-box-${wKey}-${escId(ch)}"
-           data-char="${escAttr(ch)}">${ch}</div>
-      <span class="stroke-char-label">${ch}</span>
-    </div>`).join('');
-}
-
-function animateStrokes(wKey) {
-  const kanji = _strokeState[wKey] || '';
-  if (!kanji) return;
-
-  [...kanji].forEach(ch => {
-    const boxId = `stroke-box-${wKey}-${escId(ch)}`;
-    const box   = document.getElementById(boxId);
-    if (!box) return;
-
-    // Clear static text so AnimCJK can fill in SVG
-    box.textContent = '';
-
-    // AnimCJK API: AnimCJK(element, character, options)
-    if (typeof AnimCJK !== 'undefined') {
-      try {
-        AnimCJK(box, ch, { autostart: true, speed: 1.2 });
-      } catch(e) {
-        box.textContent = ch; // fallback if character data missing
-      }
-    } else {
-      // AnimCJK CDN not loaded yet — show the character as static fallback
-      box.textContent = ch;
-    }
-  });
-}
-
-function resetStrokes(wKey) {
-  const kanji = _strokeState[wKey] || '';
-  if (!kanji) return;
-  [...kanji].forEach(ch => {
-    const box = document.getElementById(`stroke-box-${wKey}-${escId(ch)}`);
-    if (box) box.textContent = ch;
-  });
-}
-
-/* ══════════════════════════════════════════════
-   INIT
-══════════════════════════════════════════════ */
-document.addEventListener('DOMContentLoaded', () => {
-  if (typeof vocabularyData !== 'undefined') {
-    renderUnitTabs();
-    refreshAllBadges();
-    updateGlobalProgress();
+  
+  if (chosenAnswer === correctAnswer) {
+    btn.classList.add('correct');
+    quiz.correctCount++;
   } else {
-    const bar = document.getElementById('unit-tabs-bar');
-    if (bar) bar.innerHTML = `
-      <div style="padding:14px 18px;font-size:13px;color:var(--ink-mute)">
-        ⚠️ <strong>data.js not found.</strong>
-        Place data.js in the same folder as this HTML file and refresh.
-      </div>`;
-    updateGlobalProgress();
+    btn.classList.add('wrong');
+    quiz.wrongCount++;
+    // Hiển thị nút có đáp án chính xác cho học viên đối chiếu học tập
+    if (parent) {
+      parent.querySelectorAll('.choice-btn').forEach(b => {
+        if (b.textContent.includes(correctAnswer)) b.classList.add('correct');
+      });
+    }
   }
-});
+  
+  const liveScore = document.getElementById(`quiz-live-score-${partKey}`);
+  if (liveScore) liveScore.textContent = `Score: ${quiz.correctCount}`;
+  
+  // Chuyển sang câu hỏi kế tiếp sau 1.2 giây
+  setTimeout(() => {
+    quiz.currentIndex++;
+    if (quiz.currentIndex < quiz.questions.length) {
+      renderQuizQuestion(partKey);
+    } else {
+      finishQuiz(partKey);
+    }
+  }, 1200);
+}
+
+function finishQuiz(partKey) {
+  const quiz = state.quizState[partKey];
+  if (!quiz) return;
+  
+  const total = quiz.questions.length;
+  
+  // Lưu kết quả bài tập tối ưu an toàn vào bộ nhớ trình duyệt localStorage
+  localStorage.setItem(`quiz_${partKey}`, `${quiz.correctCount}/${total}`);
+  
+  const cardBox = document.getElementById(`quiz-card-box-${partKey}`);
+  if (cardBox) cardBox.style.display = 'none';
+  
+  const reviewScreen = document.getElementById(`quiz-review-${partKey}`);
+  if (reviewScreen) {
+    reviewScreen.style.display = 'block';
+    const fillProgress = document.getElementById(`quiz-progress-${partKey}`);
+    if (fillProgress) fillProgress.style.width = '100%';
+    
+    const txtCorrect = document.getElementById(`rev-correct-${partKey}`);
+    const txtWrong = document.getElementById(`rev-wrong-${partKey}`);
+    if (txtCorrect) txtCorrect.textContent = quiz.correctCount;
+    if (txtWrong) txtWrong.textContent = quiz.wrongCount;
+  }
+  
+  // Làm mới tiến độ hiển thị trực quan ở Accordion và thanh menu đầu trang
+  const [unit, part] = partKey.split('_');
+  updateGlobalProgress();
+  
+  // Cập nhật trực tiếp UI badge mà không cần re-render toàn bộ gây mất vị trí cuộn chuột
+  const accItem = document.getElementById(`acc-item-${partKey}`);
+  if (accItem) {
+    const meta = accItem.querySelector('.accordion-meta');
+    if (meta) {
+      let badgeStyle = "progress-badge in-progress";
+      let checkText = `${quiz.correctCount}/${total}`;
+      let partialClass = "progress-bar-mini-fill partial";
+      
+      if (quiz.correctCount === total) {
+        badgeStyle = "progress-badge complete";
+        checkText = `✓ Pass (${quiz.correctCount}/${total})`;
+        partialClass = "progress-bar-mini-fill";
+      }
+      
+      meta.innerHTML = `
+        <div class="${badgeStyle}">${checkText}</div>
+        <div class="progress-bar-mini">
+          <div class="${partialClass}" style="width: ${(quiz.correctCount/total)*100}%"></div>
+        </div>
+      `;
+    }
+  }
+}
+
+function updateGlobalProgress() {
+  const units = getUnits();
+  let totalParts = 0;
+  let completedParts = 0;
+  
+  units.forEach(u => {
+    const parts = getPartsForUnit(u);
+    totalParts += parts.length;
+    parts.forEach(p => {
+      const score = localStorage.getItem(`${u}_${p}`);
+      if (score !== null) {
+        const [correct, total] = score.split('/').map(Number);
+        if (correct === total && total > 0) completedParts++;
+      }
+    });
+  });
+  
+  const globalLbl = document.getElementById('global-progress');
+  if (globalLbl) {
+    globalLbl.innerHTML = `Tổng tiến độ: <strong>${completedParts}/${totalParts}</strong> phần hoàn hảo`;
+  }
+}
+
+// KANJI WRITING SYSTEM (INTEGRATION WITH ANIMCJK LIBRARY)
+function initStrokePanel(unit, part) {
+  const partKey = `${unit}_${part}`;
+  const words = getWords(unit, part);
+  const selector = document.getElementById(`stroke-select-${partKey}`);
+  if (!selector) return;
+  
+  // Lọc chỉ chọn những từ có chứa Hán tự thực sự (Kanji)
+  const kanjiWords = words.filter(w => w.kanji && w.kanji !== '—' && /[\u4e00-\u9faf]/.test(w.kanji));
+  
+  if (kanjiWords.length === 0) {
+    selector.innerHTML = '<span style="font-size:13px; color:var(--ink-mute)">Không tìm thấy Hán tự (Kanji) nào trong phần này để tập viết.</span>';
+    return;
+  }
+  
+  selector.innerHTML = kanjiWords.map(w => `
+    <button class="stroke-word-chip" onclick="displayKanjiStrokes(this, '${escAttr(partKey)}', '${escAttr(w.kanji)}')">${w.kanji}</button>
+  `).join('');
+}
+
+function displayKanjiStrokes(btn, partKey, kanjiStr) {
+  const parent = document.getElementById(`stroke-select-${partKey}`);
+  if (parent) {
+    parent.querySelectorAll('.stroke-word-chip').forEach(c => c.classList.remove('active'));
+  }
+  btn.classList.add('active');
+  
+  const container = document.getElementById(`stroke-kanji-container-${partKey}`);
+  const ctrls = document.getElementById(`stroke-ctrls-${partKey}`);
+  if (!container) return;
+  
+  container.innerHTML = '';
+  if (ctrls) ctrls.style.display = 'flex';
+  
+  // Tách chuỗi từ vựng thành từng ký tự Hán tự đơn lẻ
+  const characters = [...kanjiStr].filter(ch => /[\u4e00-\u9faf]/.test(ch));
+  
+  characters.forEach(char => {
+    const boxId = `char-${partKey}-${char.charCodeAt(0)}`;
+    const div = document.createElement('div');
+    div.className = 'stroke-char-box';
+    div.id = boxId;
+    div.setAttribute('data-char', char);
+    
+    const label = document.createElement('div');
+    label.className = 'stroke-char-label';
+    label.style.position = 'absolute';
+    label.style.bottom = '4px';
+    label.textContent = 'Chạm để viết';
+    
+    div.appendChild(label);
+    container.appendChild(div);
+    
+    // Khởi tạo hoạt ảnh nét chữ ban đầu thông qua AnimCJK CDN
+    try {
+      if (typeof AnimCJK !== 'undefined') {
+        div.innerHTML = ''; 
+        AnimCJK.insert(boxId, char, { width: 130, height: 130, sType: 'draw' });
+      } else {
+        div.textContent = char;
+      }
+    } catch(e) {
+      div.textContent = char;
+    }
+    
+    // Gắn sự kiện click vào ô vuông để tự động vẽ lại nét chữ
+    div.onclick = () => {
+      try {
+        if (typeof AnimCJK !== 'undefined') {
+          div.innerHTML = '';
+          AnimCJK.insert(boxId, char, { width: 130, height: 130, sType: 'draw' });
+        }
+      } catch(err) { console.log(err); }
+    };
+  });
+  
+  // Thiết lập sự kiện nút điều khiển phát toàn chuỗi chữ cái
+  const playBtn = document.getElementById(`btn-stroke-play-${partKey}`);
+  if (playBtn) {
+    playBtn.onclick = () => {
+      characters.forEach(char => {
+        const boxId = `char-${partKey}-${char.charCodeAt(0)}`;
+        const div = document.getElementById(boxId);
+        if (div && typeof AnimCJK !== 'undefined') {
+          div.innerHTML = '';
+          AnimCJK.insert(boxId, char, { width: 130, height: 130, sType: 'draw' });
+        }
+      });
+    };
+  }
+}
 </script>
 </body>
 </html>
