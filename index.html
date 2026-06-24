@@ -677,18 +677,18 @@ body {
   border: 1px solid var(--border);
 }
 
-.card-front .card-hint {
+/* .card-front .card-hint { */
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: rgba(255,255,255,0.35);
   margin-bottom: 4px;
-}
+}*/
 
 .card-front .card-kana {
   font-family: var(--font-ja);
-  font-size: 42px;
+  font-size: 22px;
   font-weight: 300;
   color: #fff;
   line-height: 1.2;
@@ -696,7 +696,7 @@ body {
 
 .card-front .card-kanji {
   font-family: var(--font-ja-serif);
-  font-size: 22px;
+  font-size: 42px;
   font-weight: 700;
   color: rgba(255,255,255,0.55);
 }
@@ -866,14 +866,14 @@ body {
 
 .quiz-word-kana {
   font-family: var(--font-ja);
-  font-size: 36px;
+  font-size: 20px;
   font-weight: 400;
   color: var(--ink);
 }
 
 .quiz-word-kanji {
   font-family: var(--font-ja-serif);
-  font-size: 20px;
+  font-size: 36px;
   color: var(--ink-mute);
   font-weight: 700;
 }
@@ -1379,7 +1379,7 @@ function renderUnitContent() {
               <button class="sub-tab ${curTab === 'study' ? 'active' : ''}" onclick="switchSubTab('${escAttr(partKey)}', 'study')">📖 Study & Listen</button>
               <button class="sub-tab ${curTab === 'card' ? 'active' : ''}" onclick="switchSubTab('${escAttr(partKey)}', 'card')">🎴 Flashcard</button>
               <button class="sub-tab ${curTab === 'quiz' ? 'active' : ''}" onclick="switchSubTab('${escAttr(partKey)}', 'quiz')">📝 Quiz</button>
-              <button class="sub-tab ${curTab === 'stroke' ? 'active' : ''}" onclick="switchSubTab('${escAttr(partKey)}', 'stroke')">✍️ Tập Viết</button>
+              <button class="sub-tab ${curTab === 'stroke' ? 'active' : ''}" onclick="switchSubTab('${escAttr(partKey)}', 'stroke')">✍️ Stroke Order</button>
             </div>
             <div class="sub-tab-panels" id="panels-${escAttr(partKey)}">
               ${renderSubPanels(unit, p, curTab)}
@@ -1482,14 +1482,14 @@ function renderSubPanels(unit, part, activeTab) {
           <div class="flashcard-counter">Thẻ số <span>${curCardIdx + 1}</span> / ${words.length}</div>
           <div class="flashcard-scene" onclick="this.classList.toggle('flipped')">
             <div class="flashcard-inner">
-              <div class="card-face card-front">
-                <div class="card-hint">KANA</div>
+              <div class="card-face card-">
+                // <div class="card-hint">KANA</div>
                 <div class="card-kanji">${s(activeWord.kanji)}</div>
                 <div class="card-kana">${s(activeWord.kana)}</div>
                 <div class="flip-hint" style="margin-top:20px; opacity:0.6;">Chạm để lật mặt sau 🔄</div>
               </div>
               <div class="card-face card-back">
-                <div class="card-label">Ý NGHĨA</div>
+                <div class="card-label">MEANING</div>
                 <div class="card-meaning">${s(activeWord.meaning)}</div>
                 <div class="card-kana-small">${s(activeWord.kana)}</div>
                 <button class="card-listen-btn" onclick="event.stopPropagation(); playSingleAudio(${activeWord.id}, '${buildAudioPath(activeWord)}')">🎵</button>
@@ -1517,12 +1517,12 @@ function renderSubPanels(unit, part, activeTab) {
             <div class="quiz-progress-fill" id="quiz-progress-${escAttr(partKey)}" style="width: 0%"></div>
           </div>
           <div class="quiz-score" id="quiz-live-score-${escAttr(partKey)}">Score: 0</div>
-          <button class="btn btn-outline" onclick="startQuiz('${escAttr(unit)}', '${escAttr(part)}')">🔄 Làm Lại Quiz</button>
+          <button class="btn btn-outline" onclick="startQuiz('${escAttr(unit)}', '${escAttr(part)}')">🔄 Retry</button>
         </div>
         
         <div class="quiz-card" id="quiz-card-box-${escAttr(partKey)}">
           <div style="text-align:center; padding: 20px 0;">
-            <button class="btn btn-primary" onclick="startQuiz('${escAttr(unit)}', '${escAttr(part)}')">🚀 Bắt Đầu Làm Bài Trắc Nghiệm</button>
+            <button class="btn btn-primary" onclick="startQuiz('${escAttr(unit)}', '${escAttr(part)}')">🚀 Start the Quiz</button>
           </div>
         </div>
       </div>
@@ -1546,24 +1546,24 @@ function renderSubPanels(unit, part, activeTab) {
     </div>
   `;
   
-  // TIER 4.4 — STROKE WRITING PANEL
+// TIER 4.4 — STROKE WRITING PANEL
   let strokeHtml = `
     <div class="sub-panel ${strokeActive}">
       <div class="stroke-area">
         <div class="stroke-toolbar">
-          <span style="font-size:13px; font-weight:600; color:var(--ink-soft)">Chọn từ tập viết:</span>
+          <span style="font-size:13px; font-weight:600; color:var(--ink-soft)">Choose Kanji:</span>
           <div class="stroke-word-selector" id="stroke-select-${escAttr(partKey)}"></div>
         </div>
         <div class="stroke-canvas-area">
           <div class="stroke-kanji-display" id="stroke-kanji-container-${escAttr(partKey)}">
-            <div class="stroke-placeholder-msg">Hãy chọn một từ vựng có Hán tự ở danh sách trên để luyện viết theo nét nét chữ chuẩn quy tắc.</div>
+            <div class="stroke-placeholder-msg">Select a Kanji from the selector above to practice its stroke order.</div>
           </div>
           <div class="stroke-controls" id="stroke-ctrls-${escAttr(partKey)}" style="display:none;">
-            <button class="btn btn-outline" id="btn-stroke-play-${escAttr(partKey)}">▶ Chạy Hoạt Ảnh</button>
+            <button class="btn btn-outline" id="btn-stroke-play-${escAttr(partKey)}" onclick="playStrokes('${escAttr(partKey)}')">▶ Play Animation</button>
           </div>
         </div>
       </div>
-    </div>
+    </div>`;
   `;
   
   return studyHtml + cardHtml + quizHtml + strokeHtml;
@@ -1720,13 +1720,13 @@ function renderQuizQuestion(partKey) {
   
   cardBox.innerHTML = `
     <div class="quiz-question-label">
-      <span class="quiz-q-number">CÂU HỎI ${quiz.currentIndex + 1} / ${total}</span> Nghĩa của từ này là gì?
+      <span class="quiz-q-number">QUESTION ${quiz.currentIndex + 1} / ${total}</span> Meaning?
     </div>
-    <div class="quiz-word-display">
-      <div class="quiz-word-kana">${s(currentWord.kana)}</div>
-      ${currentWord.kanji && currentWord.kanji !== '—' ? `<div class="quiz-word-kanji">${currentWord.kanji}</div>` : ''}
-      <button class="quiz-listen-btn" onclick="playSingleAudio(${currentWord.id}, '${buildAudioPath(currentWord)}')">🎵</button>
-    </div>
+     <div class="quiz-word-display">
+          ${currentWord.kanji && currentWord.kanji !== '—' ? `<div class="quiz-word-kanji">${currentWord.kanji}</div>` : ''}
+          <div class="quiz-word-kana">${s(currentWord.kana)}</div>
+          <button class="quiz-listen-btn" onclick="playSingleAudio(${currentWord.id}, '${buildAudioPath(currentWord)}')">🎵</button>
+        </div>
     <div class="quiz-choices">
       ${choices.map((choice, i) => {
         const labels = ['A', 'B', 'C', 'D'];
@@ -1865,7 +1865,7 @@ function initStrokePanel(unit, part) {
   const kanjiWords = words.filter(w => w.kanji && w.kanji !== '—' && /[\u4e00-\u9faf]/.test(w.kanji));
   
   if (kanjiWords.length === 0) {
-    selector.innerHTML = '<span style="font-size:13px; color:var(--ink-mute)">Không tìm thấy Hán tự (Kanji) nào trong phần này để tập viết.</span>';
+    selector.innerHTML = '<span style="font-size:13px; color:var(--ink-mute)">No found Kanji.</span>';
     return;
   }
   
