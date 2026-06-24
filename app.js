@@ -152,13 +152,19 @@ function renderUnitContent() {
   
   let html = `<div class="parts-container">`;
   
+// Chỉ dựng Workspace panel cho những bài nào đang thực sự được mở
   parts.forEach((p, idx) => {
     const partKey = `${unit}_${p}`;
-    const isOpen = (state.activeAccordion[unit] === p || (!state.activeAccordion[unit] && idx === 0));
     
-    if (isOpen && !state.activeAccordion[unit]) {
-      state.activeAccordion[unit] = p;
+    // ĐÃ SỬA: Chỉ mở nếu người dùng chủ động bấm chọn (mặc định ban đầu sẽ đóng hết)
+    const isOpen = (state.activeAccordion[unit] === p);
+    
+    if (isOpen) {
+      const curTab = state.activeSubTab[partKey] || 'study';
+      buildWorkspacePanels(partKey, curTab);
     }
+  });
+}
     
     const savedScore = localStorage.getItem(`quiz_${partKey}`);
     let badgeHtml = `<div class="progress-badge not-started">Not Started</div>`;
