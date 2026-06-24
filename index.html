@@ -28,7 +28,7 @@
   --sage-light: #e8f0ec;
   --gold:       #b8860b;
   --gold-light: #fdf3d7;
-  --border:     rgba(26, 31, 46, 0.1);
+  --border:      rgba(26, 31, 46, 0.1);
   --border-md:  rgba(26, 31, 46, 0.16);
   --shadow-sm:  0 1px 4px rgba(26,31,46,0.08);
   --shadow-md:  0 4px 16px rgba(26,31,46,0.10);
@@ -37,7 +37,7 @@
   --radius-md:  12px;
   --radius-lg:  18px;
   --font-sans:  'Inter', sans-serif;
-  --font-ja:    'Noto Sans JP', sans-serif;
+  --font-ja:     'Noto Sans JP', sans-serif;
   --font-ja-serif: 'Noto Serif JP', serif;
   --transition: 200ms cubic-bezier(0.4, 0, 0.2, 1);
 }
@@ -74,7 +74,7 @@ body {
 }
 
 /* ─────────────────────────────────────────────
-   TIER 1 — TOP NAVIGATION (Main Menu)
+    TIER 1 — TOP NAVIGATION (Main Menu)
 ───────────────────────────────────────────── */
 .app-header {
   background: var(--ink);
@@ -150,7 +150,7 @@ body {
   background: transparent;
   color: rgba(255,255,255,0.55);
   font-family: var(--font-sans);
-  font-size: 13.5px;
+  font-size: 13px;
   font-weight: 500;
   cursor: pointer;
   transition: color var(--transition), background var(--transition);
@@ -234,6 +234,33 @@ body {
 ───────────────────────────────────────────── */
 .section-panel { display: none; flex: 1; flex-direction: column; }
 .section-panel.active { display: flex; }
+
+.placeholder-panel {
+  padding: 60px 24px;
+  text-align: center;
+  max-width: 500px;
+  margin: 40px auto;
+  background: var(--paper-card);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-sm);
+}
+
+.placeholder-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+}
+
+.placeholder-panel h3 {
+  font-size: 18px;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.placeholder-panel p {
+  font-size: 14px;
+  color: var(--ink-mute);
+}
 
 /* ─────────────────────────────────────────────
    TIER 2 — UNIT TABS
@@ -482,7 +509,7 @@ body {
 
 .sub-tab .tab-icon { font-size: 14px; }
 
-.sub-tab-panels { position: relative; }
+.sub-tabs-panels { position: relative; }
 .sub-panel { display: none; }
 .sub-panel.active { display: block; }
 
@@ -583,18 +610,18 @@ body {
   width: 40px;
 }
 
-.word-table .cell-kana {
-  font-family: var(--font-ja);
-  font-size: 16px;
-  font-weight: 400;
-  color: var(--ink);
-}
-
 .word-table .cell-kanji {
   font-family: var(--font-ja-serif);
   font-size: 18px;
   color: var(--ink);
   font-weight: 700;
+}
+
+.word-table .cell-kana {
+  font-family: var(--font-ja);
+  font-size: 16px;
+  font-weight: 400;
+  color: var(--ink);
 }
 
 .word-table .cell-meaning {
@@ -677,28 +704,19 @@ body {
   border: 1px solid var(--border);
 }
 
-/* .card-front .card-hint { */
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: rgba(255,255,255,0.35);
-  margin-bottom: 4px;
-}*/
+.card-front .card-kanji {
+  font-family: var(--font-ja-serif);
+  font-size: 44px;
+  font-weight: 700;
+  color: #fff;
+}
 
 .card-front .card-kana {
   font-family: var(--font-ja);
-  font-size: 22px;
+  font-size: 20px;
   font-weight: 300;
-  color: #fff;
+  color: rgba(255,255,255,0.65);
   line-height: 1.2;
-}
-
-.card-front .card-kanji {
-  font-family: var(--font-ja-serif);
-  font-size: 42px;
-  font-weight: 700;
-  color: rgba(255,255,255,0.55);
 }
 
 .card-back .card-label {
@@ -864,18 +882,18 @@ body {
   margin-bottom: 22px;
 }
 
+.quiz-word-kanji {
+  font-family: var(--font-ja-serif);
+  font-size: 36px;
+  color: var(--ink);
+  font-weight: 700;
+}
+
 .quiz-word-kana {
   font-family: var(--font-ja);
   font-size: 20px;
   font-weight: 400;
-  color: var(--ink);
-}
-
-.quiz-word-kanji {
-  font-family: var(--font-ja-serif);
-  font-size: 36px;
   color: var(--ink-mute);
-  font-weight: 700;
 }
 
 .quiz-listen-btn {
@@ -1131,9 +1149,6 @@ body {
 </head>
 <body>
 
-<!-- ═══════════════════════════════════════
-     TIER 1 — MAIN NAVIGATION
-═══════════════════════════════════════ -->
 <header class="app-header">
   <div class="app-logo">
     <div class="logo-mark">語</div>
@@ -1162,20 +1177,13 @@ body {
   </div>
 </header>
 
-<!-- ═══════════════════════════════════════
-     APP BODY
-═══════════════════════════════════════ -->
 <div class="app-body">
 
-  <!-- VOCAB SECTION -->
   <div class="section-panel active" id="section-vocab">
-    <!-- TIER 2 — UNIT TABS -->
     <div class="unit-tabs-bar" id="unit-tabs-bar"></div>
-    <!-- UNIT CONTENT -->
     <div class="unit-content-wrap" id="unit-content-wrap"></div>
   </div>
 
-  <!-- PLACEHOLDERS -->
   <div class="section-panel" id="section-grammar">
     <div class="placeholder-panel">
       <div class="placeholder-icon">✍️</div>
@@ -1194,11 +1202,9 @@ body {
 
 </div>
 
-<!-- EXTERNAL LIBRARIES -->
 <script src="https://cdn.jsdelivr.net/npm/animcjk@latest/AnimCJK.js"></script>
 <script src="data.js"></script>
 
-<!-- CORE JAVASCRIPT -->
 <script>
 'use strict';
 
@@ -1206,15 +1212,17 @@ const state = {
   activeUnit: null,
   activeAccordion: {}, 
   activeSubTab: {},    
-  quizState: {},       // Theo dõi trạng thái Quiz của từng part
-  flashcardIndex: {},  // Chỉ mục từ vựng hiện tại của Flashcard từng part
-  currentAudio: null,  // Đối tượng Audio đang chơi độc lập
-  playlist: [],        // Danh sách phát tự động liên tục
+  quizState: {},       // Tracks current question index, pool, score
+  flashcardIndex: {},  // Tracks index per part
+  currentAudio: null,  
+  playlist: [],        
   playlistIndex: -1,
   isAutoplay: false
 };
 
-// Khởi tạo ứng dụng an toàn khi DOM sẵn sàng
+// Global state cache to hold extracted kanji structures for AnimCJK
+const _strokeState = {};
+
 document.addEventListener('DOMContentLoaded', () => {
   initApp();
 });
@@ -1254,6 +1262,10 @@ function escAttr(v) {
     .replace(/"/g, '&quot;');
 }
 
+function escId(str) {
+  return encodeURIComponent(str).replace(/%/g, '_');
+}
+
 function _shuffle(arr) {
   const a = [...arr];
   for (let i = a.length - 1; i > 0; i--) {
@@ -1269,6 +1281,7 @@ function _digits(str) {
 }
 
 function buildAudioPath(wordObj) {
+  if (wordObj.audio) return `audio/${wordObj.audio}`;
   const u = _digits(wordObj.unit);
   const p = _digits(wordObj.part);
   return `audio/u${u}_p${p}_word-${wordObj.id}.mp3`;
@@ -1291,7 +1304,6 @@ function getWords(unitName, partName) {
   return vocabularyData.filter(w => w.unit === unitName && w.part === partName);
 }
 
-// RENDER TIER 2 — UNIT TABS
 function renderUnitTabs(units) {
   const bar = document.getElementById('unit-tabs-bar');
   if (!bar) return;
@@ -1310,12 +1322,35 @@ function renderUnitTabs(units) {
 function selectUnit(unitName) {
   stopAllAudio();
   state.activeUnit = unitName;
-  document.querySelectorAll('.unit-tab').forEach(t => t.classList.remove('active'));
   renderUnitTabs(getUnits());
   renderUnitContent();
 }
 
-// RENDER TIER 3 & TIER 4 CONTENT
+function toggleAccordion(unit, part) {
+  const partKey = `${unit}_${part}`;
+  const el = document.getElementById(`acc-item-${partKey}`);
+  if (!el) return;
+  
+  if (el.classList.contains('open')) {
+    el.classList.remove('open');
+    if (state.activeAccordion[unit] === part) {
+      state.activeAccordion[unit] = null;
+    }
+  } else {
+    // Close previous open one in this unit
+    if (state.activeAccordion[unit]) {
+      const prev = document.getElementById(`acc-item-${unit}_${state.activeAccordion[unit]}`);
+      if (prev) prev.classList.remove('open');
+    }
+    el.classList.add('open');
+    state.activeAccordion[unit] = part;
+    
+    // Auto initialize panels if necessary
+    const curTab = state.activeSubTab[partKey] || 'study';
+    switchSubTab(partKey, curTab);
+  }
+}
+
 function renderUnitContent() {
   const wrap = document.getElementById('unit-content-wrap');
   if (!wrap) return;
@@ -1332,14 +1367,12 @@ function renderUnitContent() {
   
   parts.forEach((p, idx) => {
     const partKey = `${unit}_${p}`;
-    const words = getWords(unit, p);
     const isOpen = (state.activeAccordion[unit] === p || (!state.activeAccordion[unit] && idx === 0));
     
     if (isOpen && !state.activeAccordion[unit]) {
       state.activeAccordion[unit] = p;
     }
     
-    // Đọc điểm Quiz từ localStorage để hiển thị Badge tiến độ an toàn
     const savedScore = localStorage.getItem(`quiz_${partKey}`);
     let badgeHtml = `<div class="progress-badge not-started">Not Started</div>`;
     let fillWidth = '0%';
@@ -1350,7 +1383,7 @@ function renderUnitContent() {
       if (total > 0) {
         fillWidth = `${(score / total) * 100}%`;
         if (score === total) {
-          badgeHtml = `<div class="progress-badge complete">✓ Pass (${score}/${total})</div>`;
+          badgeHtml = `<div class="progress-badge complete">✓ Passed (${score}/${total})</div>`;
         } else {
           badgeHtml = `<div class="progress-badge in-progress">${score}/${total}</div>`;
           partialClass = 'partial';
@@ -1376,14 +1409,13 @@ function renderUnitContent() {
         <div class="accordion-body">
           <div class="workspace">
             <div class="sub-tabs-bar">
-              <button class="sub-tab ${curTab === 'study' ? 'active' : ''}" onclick="switchSubTab('${escAttr(partKey)}', 'study')">📖 Study & Listen</button>
-              <button class="sub-tab ${curTab === 'card' ? 'active' : ''}" onclick="switchSubTab('${escAttr(partKey)}', 'card')">🎴 Flashcard</button>
-              <button class="sub-tab ${curTab === 'quiz' ? 'active' : ''}" onclick="switchSubTab('${escAttr(partKey)}', 'quiz')">📝 Quiz</button>
-              <button class="sub-tab ${curTab === 'stroke' ? 'active' : ''}" onclick="switchSubTab('${escAttr(partKey)}', 'stroke')">✍️ Stroke Order</button>
+              <button class="sub-tab ${curTab === 'study' ? 'active' : ''}" id="tab-btn-${escAttr(partKey)}-study" onclick="switchSubTab('${escAttr(partKey)}', 'study')"><span class="tab-icon">📖</span> Study & Listen</button>
+              <button class="sub-tab ${curTab === 'card' ? 'active' : ''}" id="tab-btn-${escAttr(partKey)}-card" onclick="switchSubTab('${escAttr(partKey)}', 'card')"><span class="tab-icon">🎴</span> Flashcard</button>
+              <button class="sub-tab ${curTab === 'quiz' ? 'active' : ''}" id="tab-btn-${escAttr(partKey)}-quiz" onclick="switchSubTab('${escAttr(partKey)}', 'quiz')"><span class="tab-icon">📝</span> Quiz</button>
+              <button class="sub-tab ${curTab === 'stroke' ? 'active' : ''}" id="tab-btn-${escAttr(partKey)}-stroke" onclick="switchSubTab('${escAttr(partKey)}', 'stroke')"><span class="tab-icon">✍️</span> Stroke Order</button>
             </div>
-            <div class="sub-tab-panels" id="panels-${escAttr(partKey)}">
-              ${renderSubPanels(unit, p, curTab)}
-            </div>
+            <div class="sub-tabs-panels" id="panels-${escAttr(partKey)}">
+               </div>
           </div>
         </div>
       </div>
@@ -1392,558 +1424,593 @@ function renderUnitContent() {
   
   html += `</div>`;
   wrap.innerHTML = html;
-  
-  // Kích hoạt bổ trợ cấu trúc đặc thù như thư viện tập viết nét chữ sau khi chèn HTML
-  parts.forEach(p => {
+
+  // Initialize workspace templates for panels currently flagged open
+  parts.forEach((p, idx) => {
     const partKey = `${unit}_${p}`;
-    if (state.activeSubTab[partKey] === 'stroke') {
-      initStrokePanel(unit, p);
+    const isOpen = (state.activeAccordion[unit] === p);
+    if (isOpen) {
+      const curTab = state.activeSubTab[partKey] || 'study';
+      buildWorkspacePanels(partKey, curTab);
     }
   });
 }
 
-function toggleAccordion(unit, p) {
+function switchSubTab(partKey, tabName) {
   stopAllAudio();
-  const partKey = `${unit}_${p}`;
-  const currentActive = state.activeAccordion[unit];
+  state.activeSubTab[partKey] = tabName;
   
-  if (currentActive === p) {
-    state.activeAccordion[unit] = null;
-  } else {
-    state.activeAccordion[unit] = p;
-  }
-  renderUnitContent();
+  const container = document.getElementById(`panels-${partKey}`);
+  if (!container) return;
+  
+  // Highlight UI button states
+  [`study`, `card`, `quiz`, `stroke`].forEach(t => {
+    const btn = document.getElementById(`tab-btn-${partKey}-${t}`);
+    if (btn) btn.classList.toggle('active', t === tabName);
+  });
+
+  buildWorkspacePanels(partKey, tabName);
 }
 
-function switchSubTab(partKey, tabId) {
-  stopAllAudio();
-  state.activeSubTab[partKey] = tabId;
-  const [unit, part] = partKey.split('_');
-  renderUnitContent();
-}
-
-// RENDER WORKSPACE TIERS
-function renderSubPanels(unit, part, activeTab) {
-  const partKey = `${unit}_${part}`;
-  const words = getWords(unit, part);
+function buildWorkspacePanels(partKey, activeTab) {
+  const container = document.getElementById(`panels-${partKey}`);
+  if (!container) return;
+  
+  const [u, p] = partKey.split('_');
+  const words = getWords(u, p);
   
   let studyActive = activeTab === 'study' ? 'active' : '';
-  let cardActive = activeTab === 'card' ? 'active' : '';
-  let quizActive = activeTab === 'quiz' ? 'active' : '';
+  let cardActive  = activeTab === 'card' ? 'active' : '';
+  let quizActive  = activeTab === 'quiz' ? 'active' : '';
   let strokeActive = activeTab === 'stroke' ? 'active' : '';
-  
-  // TIER 4.1 — STUDY PANEL (STRICTLY 6 COLUMNS)
+
+  // 1. Study Table
+  let rowsHtml = words.map((w, index) => {
+    return `
+      <tr id="row-${partKey}-${w.id}">
+        <td class="cell-num">${index + 1}</td>
+        <td class="cell-kanji">${s(w.kanji)}</td>
+        <td class="cell-kana">${s(w.kana)}</td>
+        <td class="cell-meaning">
+          <div style="font-weight:600; color:var(--ink)">${s(w.meaning)}</div>
+          <div style="font-size:12px; color:var(--ink-mute); margin-top:2px;">${s(w.hanviet)}</div>
+        </td>
+        <td class="cell-example">${s(w.example)}</td>
+        <td class="cell-action">
+          <button class="quiz-listen-btn" style="width:32px; height:32px; font-size:13px;" onclick="playSingleAudio(${w.id}, '${buildAudioPath(w)}', '${partKey}')">🎵</button>
+        </td>
+      </tr>
+    `;
+  }).join('');
+
   let studyHtml = `
     <div class="sub-panel ${studyActive}">
       <div class="study-toolbar">
         <div class="study-toolbar-left">
-          <button class="btn btn-primary" id="btn-autoplay-${escAttr(partKey)}" onclick="toggleAutoplayAll('${escAttr(unit)}', '${escAttr(part)}')">▶ Nghe Toàn Bộ</button>
+          <button class="btn btn-primary" id="btn-autoplay-${partKey}" onclick="toggleAutoplay('${partKey}')">▶ Autoplay Audio</button>
         </div>
       </div>
       <table class="word-table">
         <thead>
           <tr>
-            <th class="cell-num">No.</th>
+            <th style="width:40px">#</th>
             <th>Kanji</th>
             <th>Kana</th>
             <th>Meaning</th>
             <th>Example</th>
-            <th class="cell-action">Listen</th>
+            <th style="width:48px; text-align:center">Audio</th>
           </tr>
         </thead>
-        <tbody>
-          ${words.map((w, index) => `
-            <tr id="row-${partKey}-${w.id}">
-              <td class="cell-num">${index + 1}</td>
-              <td class="cell-kanji">${s(w.kanji)}</td>
-              <td class="cell-kana">${s(w.kana)}</td>
-              <td class="cell-meaning">${s(w.meaning)}</td>
-              <td class="cell-example">${s(w.example)}</td>
-              <td class="cell-action">
-                <button class="btn-icon" id="btn-audio-${w.id}" onclick="playSingleAudio(${w.id}, '${buildAudioPath(w)}')">🎵</button>
-              </td>
-            </tr>
-          `).join('')}
-        </tbody>
+        <tbody>${rowsHtml}</tbody>
       </table>
     </div>
   `;
-  
-  // TIER 4.2 — FLASHCARD PANEL
-  if (!state.flashcardIndex[partKey]) state.flashcardIndex[partKey] = 0;
-  const curCardIdx = state.flashcardIndex[partKey];
-  const activeWord = words[curCardIdx] || words[0];
-  const progressPercent = words.length ? ((curCardIdx + 1) / words.length) * 100 : 0;
-  
+
+  // 2. Flashcard Engine Area
   let cardHtml = `
     <div class="sub-panel ${cardActive}">
-      ${words.length ? `
-        <div class="flashcard-area">
-          <div class="flashcard-counter">Thẻ số <span>${curCardIdx + 1}</span> / ${words.length}</div>
-          <div class="flashcard-scene" onclick="this.classList.toggle('flipped')">
-            <div class="flashcard-inner">
-              <div class="card-face card-">
-                // <div class="card-hint">KANA</div>
-                <div class="card-kanji">${s(activeWord.kanji)}</div>
-                <div class="card-kana">${s(activeWord.kana)}</div>
-                <div class="flip-hint" style="margin-top:20px; opacity:0.6;">Chạm để lật mặt sau 🔄</div>
-              </div>
-              <div class="card-face card-back">
-                <div class="card-label">MEANING</div>
-                <div class="card-meaning">${s(activeWord.meaning)}</div>
-                <div class="card-kana-small">${s(activeWord.kana)}</div>
-                <button class="card-listen-btn" onclick="event.stopPropagation(); playSingleAudio(${activeWord.id}, '${buildAudioPath(activeWord)}')">🎵</button>
-              </div>
-            </div>
-          </div>
-          <div class="flashcard-nav">
-            <button class="nav-arrow" onclick="moveFlashcard('${escAttr(partKey)}', -1)">◀</button>
-            <div class="flashcard-progress-bar">
-              <div class="flashcard-progress-fill" style="width: ${progressPercent}%"></div>
-            </div>
-            <button class="nav-arrow" onclick="moveFlashcard('${escAttr(partKey)}', 1)">▶</button>
-          </div>
-        </div>
-      ` : '<div class="empty-state">No cards available.</div>'}
+      <div class="flashcard-area" id="flashcard-zone-${partKey}">
+         </div>
     </div>
   `;
-  
-  // TIER 4.3 — QUIZ PANEL
+
+  // 3. Quiz Module Layout
   let quizHtml = `
-    <div class="sub-panel ${quizActive}" id="quiz-workspace-${escAttr(partKey)}">
-      <div class="quiz-area">
-        <div class="quiz-header">
-          <div class="quiz-progress-track">
-            <div class="quiz-progress-fill" id="quiz-progress-${escAttr(partKey)}" style="width: 0%"></div>
-          </div>
-          <div class="quiz-score" id="quiz-live-score-${escAttr(partKey)}">Score: 0</div>
-          <button class="btn btn-outline" onclick="startQuiz('${escAttr(unit)}', '${escAttr(part)}')">🔄 Retry</button>
-        </div>
-        
-        <div class="quiz-card" id="quiz-card-box-${escAttr(partKey)}">
-          <div style="text-align:center; padding: 20px 0;">
-            <button class="btn btn-primary" onclick="startQuiz('${escAttr(unit)}', '${escAttr(part)}')">🚀 Start the Quiz</button>
-          </div>
-        </div>
-      </div>
-      
-      <div class="quiz-review-screen" id="quiz-review-${escAttr(partKey)}">
-        <div class="review-emoji">🎉</div>
-        <div class="review-title">Hoàn Thành Bài Học!</div>
-        <div class="review-sub">Tiến độ của bạn đã được ghi nhận tự động vào hệ thống.</div>
-        <div class="review-stats">
-          <div class="review-stat">
-            <span class="review-stat-val green" id="rev-correct-${escAttr(partKey)}">0</span>
-            <span class="review-stat-label">Đúng</span>
-          </div>
-          <div class="review-stat">
-            <span class="review-stat-val red" id="rev-wrong-${escAttr(partKey)}">0</span>
-            <span class="review-stat-label">Sai</span>
-          </div>
-        </div>
-        <button class="btn btn-primary" onclick="startQuiz('${escAttr(unit)}', '${escAttr(part)}')">Thử Thách Lại</button>
-      </div>
+    <div class="sub-panel ${quizActive}">
+      <div class="quiz-area" id="quiz-zone-${partKey}">
+         </div>
+      <div class="quiz-review-screen" id="quiz-review-${partKey}">
+         </div>
     </div>
   `;
-  
-// TIER 4.4 — STROKE WRITING PANEL
+
+  // 4. Stroke Control Order Board
   let strokeHtml = `
     <div class="sub-panel ${strokeActive}">
       <div class="stroke-area">
         <div class="stroke-toolbar">
           <span style="font-size:13px; font-weight:600; color:var(--ink-soft)">Choose Kanji:</span>
-          <div class="stroke-word-selector" id="stroke-select-${escAttr(partKey)}"></div>
+          <div class="stroke-word-selector" id="stroke-select-${partKey}"></div>
         </div>
         <div class="stroke-canvas-area">
-          <div class="stroke-kanji-display" id="stroke-kanji-container-${escAttr(partKey)}">
+          <div class="stroke-kanji-display" id="stroke-kanji-container-${partKey}">
             <div class="stroke-placeholder-msg">Select a Kanji from the selector above to practice its stroke order.</div>
           </div>
-          <div class="stroke-controls" id="stroke-ctrls-${escAttr(partKey)}" style="display:none;">
-            <button class="btn btn-outline" id="btn-stroke-play-${escAttr(partKey)}" onclick="playStrokes('${escAttr(partKey)}')">▶ Play Animation</button>
+          <div class="stroke-controls" id="stroke-ctrls-${partKey}" style="display:none;">
+            <button class="btn btn-outline" id="btn-stroke-play-${partKey}" onclick="playStrokes('${partKey}')">▶ Play Animation</button>
           </div>
         </div>
       </div>
-    </div>`;
+    </div>
   `;
-  
-  return studyHtml + cardHtml + quizHtml + strokeHtml;
+
+  container.innerHTML = studyHtml + cardHtml + quizHtml + strokeHtml;
+
+  // Fire engine initializers for active tabs
+  if (activeTab === 'card') initFlashcardEngine(partKey);
+  if (activeTab === 'quiz') initQuizEngine(partKey);
+  if (activeTab === 'stroke') initStrokeEngine(partKey);
 }
 
-// AUDIO ENGINE
-function playSingleAudio(id, path) {
-  stopAllAudio();
-  const btn = document.getElementById(`btn-audio-${id}`);
-  if (btn) btn.classList.add('btn-playing');
-  
-  state.currentAudio = new Audio(path);
-  state.currentAudio.play().catch(err => console.log("Audio file missing:", path));
-  
-  state.currentAudio.onended = () => {
-    if (btn) btn.classList.remove('btn-playing');
-    state.currentAudio = null;
-  };
-}
-
+/* ══════════════════════════════════════════════
+   CORE ENGINE 1: AUDIO STREAM MANAGER
+══════════════════════════════════════════════ */
 function stopAllAudio() {
+  state.isAutoplay = false;
+  document.querySelectorAll("[id^='btn-autoplay-']").forEach(b => b.textContent = '▶ Autoplay Audio');
+  document.querySelectorAll('.word-table tbody tr').forEach(r => r.classList.remove('playing'));
   if (state.currentAudio) {
     state.currentAudio.pause();
     state.currentAudio = null;
   }
-  state.isAutoplay = false;
-  state.playlist = [];
-  state.playlistIndex = -1;
-  document.querySelectorAll('.btn-icon').forEach(b => b.classList.remove('btn-playing'));
-  document.querySelectorAll('.btn-primary').forEach(b => {
-    if (b.id && b.id.startsWith('btn-autoplay-')) b.textContent = '▶ Nghe Toàn Bộ';
-  });
-  document.querySelectorAll('.word-table tbody tr').forEach(tr => tr.classList.remove('playing'));
 }
 
-function toggleAutoplayAll(unit, part) {
-  const partKey = `${unit}_${part}`;
-  const masterBtn = document.getElementById(`btn-autoplay-${partKey}`);
+function playSingleAudio(wordId, path, partKey) {
+  if (state.isAutoplay) stopAllAudio();
   
+  document.querySelectorAll('.word-table tbody tr').forEach(r => r.classList.remove('playing'));
+  const row = document.getElementById(`row-${partKey}-${wordId}`);
+  if (row) row.classList.add('playing');
+
+  if (state.currentAudio) state.currentAudio.pause();
+  
+  state.currentAudio = new Audio(path);
+  state.currentAudio.onended = () => {
+    if (row) row.classList.remove('playing');
+  };
+  state.currentAudio.onerror = () => {
+    if (row) row.classList.remove('playing');
+  };
+  state.currentAudio.play().catch(e => console.log("Audio play deferred or failed: ", e));
+}
+
+function toggleAutoplay(partKey) {
   if (state.isAutoplay) {
     stopAllAudio();
-    if (masterBtn) masterBtn.textContent = '▶ Nghe Toàn Bộ';
     return;
   }
   
-  stopAllAudio();
-  state.isAutoplay = true;
-  if (masterBtn) masterBtn.textContent = '⏹ Dừng Phát';
+  if (state.currentAudio) state.currentAudio.pause();
   
-  state.playlist = getWords(unit, part);
+  state.isAutoplay = true;
+  const btn = document.getElementById(`btn-autoplay-${partKey}`);
+  if (btn) btn.textContent = '⏹ Stop Autoplay';
+
+  const [u, p] = partKey.split('_');
+  const words = getWords(u, p);
+  
+  state.playlist = words.map(w => ({ id: w.id, path: buildAudioPath(w) }));
   state.playlistIndex = 0;
-  playNextInPlaylist(partKey);
+  
+  runAutoplayCycle(partKey);
 }
 
-function playNextInPlaylist(partKey) {
+function runAutoplayCycle(partKey) {
   if (!state.isAutoplay || state.playlistIndex >= state.playlist.length) {
     stopAllAudio();
     return;
   }
-  
-  document.querySelectorAll('.word-table tbody tr').forEach(tr => tr.classList.remove('playing'));
-  
-  const word = state.playlist[state.playlistIndex];
-  const row = document.getElementById(`row-${partKey}-${word.id}`);
+
+  document.querySelectorAll('.word-table tbody tr').forEach(r => r.classList.remove('playing'));
+  const targetItem = state.playlist[state.playlistIndex];
+  const row = document.getElementById(`row-${partKey}-${targetItem.id}`);
   if (row) {
     row.classList.add('playing');
-    row.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    row.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  state.currentAudio = new Audio(targetItem.path);
+  state.currentAudio.onended = () => {
+    if (row) row.classList.remove('playing');
+    state.playlistIndex++;
+    setTimeout(() => runAutoplayCycle(partKey), 800);
+  };
+  state.currentAudio.onerror = () => {
+    if (row) row.classList.remove('playing');
+    state.playlistIndex++;
+    runAutoplayCycle(partKey);
+  };
+  state.currentAudio.play().catch(() => {
+    state.playlistIndex++;
+    runAutoplayCycle(partKey);
+  });
+}
+
+/* ══════════════════════════════════════════════
+   CORE ENGINE 2: FLASHCARD VIEWPORTS
+══════════════════════════════════════════════ */
+function initFlashcardEngine(partKey) {
+  const zone = document.getElementById(`flashcard-zone-${partKey}`);
+  if (!zone) return;
+  
+  if (state.flashcardIndex[partKey] === undefined) {
+    state.flashcardIndex[partKey] = 0;
   }
   
-  const path = buildAudioPath(word);
-  state.currentAudio = new Audio(path);
-  state.currentAudio.play().catch(e => {
-    console.log("Missing audio path:", path);
-    setTimeout(() => {
-      state.playlistIndex++;
-      playNextInPlaylist(partKey);
-    }, 1000);
-  });
-  
-  state.currentAudio.onended = () => {
-    state.playlistIndex++;
-    setTimeout(() => {
-      playNextInPlaylist(partKey);
-    }, 800); 
-  };
+  renderFlashcard(partKey);
 }
 
-// FLASHCARD ENGINE
-function moveFlashcard(partKey, steps) {
-  const [unit, part] = partKey.split('_');
-  const words = getWords(unit, part);
-  if (!words.length) return;
-  
-  let currentIdx = state.flashcardIndex[partKey] || 0;
-  currentIdx += steps;
-  
-  if (currentIdx < 0) currentIdx = words.length - 1;
-  if (currentIdx >= words.length) currentIdx = 0;
-  
-  state.flashcardIndex[partKey] = currentIdx;
-  
-  renderUnitContent();
-}
+function renderFlashcard(partKey) {
+  const zone = document.getElementById(`flashcard-zone-${partKey}`);
+  if (!zone) return;
 
-// QUIZ SYSTEM LOGIC
-function startQuiz(unit, part) {
-  const partKey = `${unit}_${part}`;
-  const words = getWords(unit, part);
-  if (words.length < 1) return;
+  const [u, p] = partKey.split('_');
+  const words = getWords(u, p);
+  const total = words.length;
   
-  // Trộn câu hỏi ngẫu nhiên bằng Thuật toán Fisher-Yates
-  const shuffledQuestions = _shuffle(words);
-  
-  state.quizState[partKey] = {
-    questions: shuffledQuestions,
-    currentIndex: 0,
-    correctCount: 0,
-    wrongCount: 0
-  };
-  
-  // Ẩn bảng kết quả cũ nếu đang hiển thị
-  const reviewScreen = document.getElementById(`quiz-review-${partKey}`);
-  if (reviewScreen) reviewScreen.style.display = 'none';
-  
-  const cardBox = document.getElementById(`quiz-card-box-${partKey}`);
-  if (cardBox) cardBox.style.display = 'block';
-  
-  renderQuizQuestion(partKey);
-}
+  if (total === 0) {
+    zone.innerHTML = `<div class="empty-state">No flashcards available.</div>`;
+    return;
+  }
 
-function renderQuizQuestion(partKey) {
-  const quiz = state.quizState[partKey];
-  if (!quiz) return;
-  
-  const total = quiz.questions.length;
-  const currentWord = quiz.questions[quiz.currentIndex];
-  
-  // Cập nhật thanh tiến độ câu hỏi trắc nghiệm
-  const progressFill = document.getElementById(`quiz-progress-${partKey}`);
-  if (progressFill) progressFill.style.width = `${(quiz.currentIndex / total) * 100}%`;
-  
-  const liveScore = document.getElementById(`quiz-live-score-${partKey}`);
-  if (liveScore) liveScore.style.setContent = `Score: ${quiz.correctCount}`;
-  
-  // Sinh 3 đáp án sai từ vựng cùng Part ngẫu nhiên
-  const pool = vocabularyData.filter(w => w.meaning !== currentWord.meaning);
-  const shuffledPool = _shuffle(pool);
-  const distractors = shuffledPool.slice(0, 3).map(w => w.meaning);
-  
-  const choices = _shuffle([currentWord.meaning, ...distractors]);
-  const cardBox = document.getElementById(`quiz-card-box-${partKey}`);
-  
-  if (!cardBox) return;
-  
-  cardBox.innerHTML = `
-    <div class="quiz-question-label">
-      <span class="quiz-q-number">QUESTION ${quiz.currentIndex + 1} / ${total}</span> Meaning?
-    </div>
-     <div class="quiz-word-display">
-          ${currentWord.kanji && currentWord.kanji !== '—' ? `<div class="quiz-word-kanji">${currentWord.kanji}</div>` : ''}
-          <div class="quiz-word-kana">${s(currentWord.kana)}</div>
-          <button class="quiz-listen-btn" onclick="playSingleAudio(${currentWord.id}, '${buildAudioPath(currentWord)}')">🎵</button>
+  let idx = state.flashcardIndex[partKey];
+  if (idx >= total) idx = total - 1;
+  if (idx < 0) idx = 0;
+  state.flashcardIndex[partKey] = idx;
+
+  const currentWord = words[idx];
+  const progressPct = ((idx + 1) / total) * 100;
+
+  zone.innerHTML = `
+    <div class="flashcard-counter">Card <span>${idx + 1}</span> of <span>${total}</span></div>
+    
+    <div class="flashcard-scene" id="card-scene-${partKey}" onclick="this.classList.toggle('flipped')">
+      <div class="flashcard-inner">
+        <div class="card-face card-front">
+          ${currentWord.kanji && currentWord.kanji !== '—' ? `<div class="card-kanji">${currentWord.kanji}</div>` : ''}
+          <div class="card-kana">${s(currentWord.kana)}</div>
+          <div class="flip-hint" style="color:rgba(255,255,255,0.3); margin-top:20px;">Click to reveal translation</div>
         </div>
-    <div class="quiz-choices">
-      ${choices.map((choice, i) => {
-        const labels = ['A', 'B', 'C', 'D'];
-        return `
-          <button class="choice-btn" onclick="submitQuizAnswer(this, '${escAttr(partKey)}', '${escAttr(choice)}', '${escAttr(currentWord.meaning)}')">
-            <span class="choice-label">${labels[i]}</span> ${s(choice)}
-          </button>
-        `;
-      }).join('')}
+        <div class="card-face card-back" onclick="event.stopPropagation();">
+          <span class="card-label">Meaning</span>
+          <div class="card-meaning">${s(currentWord.meaning)}</div>
+          <div class="card-kana-small">${s(currentWord.kana)} ${currentWord.hanviet ? `(${currentWord.hanviet})` : ''}</div>
+          <button class="card-listen-btn" onclick="playSingleAudio(${currentWord.id}, '${buildAudioPath(currentWord)}', '${partKey}')">🎵</button>
+          <div class="flip-hint" style="margin-top:20px;" onclick="document.getElementById('card-scene-${partKey}').classList.toggle('flipped')">Click card to turn back</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="flashcard-nav">
+      <button class="nav-arrow" onclick="moveFlashcard('${partKey}', -1)">◀</button>
+      <div class="flashcard-progress-bar">
+        <div class="flashcard-progress-fill" style="width: ${progressPct}%"></div>
+      </div>
+      <button class="nav-arrow" onclick="moveFlashcard('${partKey}', 1)">▶</button>
     </div>
   `;
 }
 
-function submitQuizAnswer(btn, partKey, chosenAnswer, correctAnswer) {
+function moveFlashcard(partKey, direction) {
+  const [u, p] = partKey.split('_');
+  const total = getWords(u, p).length;
+  if (total === 0) return;
+
+  let currentIdx = state.flashcardIndex[partKey] || 0;
+  currentIdx += direction;
+  
+  if (currentIdx >= total) currentIdx = 0;
+  if (currentIdx < 0) currentIdx = total - 1;
+  
+  state.flashcardIndex[partKey] = currentIdx;
+  renderFlashcard(partKey);
+}
+
+/* ══════════════════════════════════════════════
+   CORE ENGINE 3: QUIZ SIMULATOR METER
+══════════════════════════════════════════════ */
+function initQuizEngine(partKey) {
+  const [u, p] = partKey.split('_');
+  const words = getWords(u, p);
+  
+  // Set tracking blueprints
+  state.quizState[partKey] = {
+    index: 0,
+    score: 0,
+    questions: words.map(w => {
+      // Build options using meaning strings
+      const distractors = _shuffle(vocabularyData.filter(item => item.meaning !== w.meaning))
+                            .slice(0, 3)
+                            .map(item => item.meaning);
+      const choices = _shuffle([w.meaning, ...distractors]);
+      return { word: w, choices: choices, selected: null, status: 'unanswered' };
+    })
+  };
+
+  document.getElementById(`quiz-zone-${partKey}`).style.display = 'flex';
+  document.getElementById(`quiz-review-${partKey}`).style.display = 'none';
+
+  renderQuizQuestion(partKey);
+}
+
+function renderQuizQuestion(partKey) {
+  const zone = document.getElementById(`quiz-zone-${partKey}`);
   const quiz = state.quizState[partKey];
-  if (!quiz) return;
-  
-  // Vô hiệu hóa tất cả các nút đáp án khác sau khi đã chọn
-  const parent = btn.parentElement;
-  if (parent) {
-    parent.querySelectorAll('.choice-btn').forEach(b => b.disabled = true);
-  }
-  
-  if (chosenAnswer === correctAnswer) {
-    btn.classList.add('correct');
-    quiz.correctCount++;
-  } else {
-    btn.classList.add('wrong');
-    quiz.wrongCount++;
-    // Hiển thị nút có đáp án chính xác cho học viên đối chiếu học tập
-    if (parent) {
-      parent.querySelectorAll('.choice-btn').forEach(b => {
-        if (b.textContent.includes(correctAnswer)) b.classList.add('correct');
-      });
-    }
-  }
-  
-  const liveScore = document.getElementById(`quiz-live-score-${partKey}`);
-  if (liveScore) liveScore.textContent = `Score: ${quiz.correctCount}`;
-  
-  // Chuyển sang câu hỏi kế tiếp sau 1.2 giây
-  setTimeout(() => {
-    quiz.currentIndex++;
-    if (quiz.currentIndex < quiz.questions.length) {
-      renderQuizQuestion(partKey);
-    } else {
-      finishQuiz(partKey);
-    }
-  }, 1200);
-}
+  if (!zone || !quiz) return;
 
-function finishQuiz(partKey) {
-  const quiz = state.quizState[partKey];
-  if (!quiz) return;
-  
-  const total = quiz.questions.length;
-  
-  // Lưu kết quả bài tập tối ưu an toàn vào bộ nhớ trình duyệt localStorage
-  localStorage.setItem(`quiz_${partKey}`, `${quiz.correctCount}/${total}`);
-  
-  const cardBox = document.getElementById(`quiz-card-box-${partKey}`);
-  if (cardBox) cardBox.style.display = 'none';
-  
-  const reviewScreen = document.getElementById(`quiz-review-${partKey}`);
-  if (reviewScreen) {
-    reviewScreen.style.display = 'block';
-    const fillProgress = document.getElementById(`quiz-progress-${partKey}`);
-    if (fillProgress) fillProgress.style.width = '100%';
-    
-    const txtCorrect = document.getElementById(`rev-correct-${partKey}`);
-    const txtWrong = document.getElementById(`rev-wrong-${partKey}`);
-    if (txtCorrect) txtCorrect.textContent = quiz.correctCount;
-    if (txtWrong) txtWrong.textContent = quiz.wrongCount;
-  }
-  
-  // Làm mới tiến độ hiển thị trực quan ở Accordion và thanh menu đầu trang
-  const [unit, part] = partKey.split('_');
-  updateGlobalProgress();
-  
-  // Cập nhật trực tiếp UI badge mà không cần re-render toàn bộ gây mất vị trí cuộn chuột
-  const accItem = document.getElementById(`acc-item-${partKey}`);
-  if (accItem) {
-    const meta = accItem.querySelector('.accordion-meta');
-    if (meta) {
-      let badgeStyle = "progress-badge in-progress";
-      let checkText = `${quiz.correctCount}/${total}`;
-      let partialClass = "progress-bar-mini-fill partial";
-      
-      if (quiz.correctCount === total) {
-        badgeStyle = "progress-badge complete";
-        checkText = `✓ Pass (${quiz.correctCount}/${total})`;
-        partialClass = "progress-bar-mini-fill";
-      }
-      
-      meta.innerHTML = `
-        <div class="${badgeStyle}">${checkText}</div>
-        <div class="progress-bar-mini">
-          <div class="${partialClass}" style="width: ${(quiz.correctCount/total)*100}%"></div>
-        </div>
-      `;
-    }
-  }
-}
-
-function updateGlobalProgress() {
-  const units = getUnits();
-  let totalParts = 0;
-  let completedParts = 0;
-  
-  units.forEach(u => {
-    const parts = getPartsForUnit(u);
-    totalParts += parts.length;
-    parts.forEach(p => {
-      const score = localStorage.getItem(`${u}_${p}`);
-      if (score !== null) {
-        const [correct, total] = score.split('/').map(Number);
-        if (correct === total && total > 0) completedParts++;
-      }
-    });
-  });
-  
-  const globalLbl = document.getElementById('global-progress');
-  if (globalLbl) {
-    globalLbl.innerHTML = `Tổng tiến độ: <strong>${completedParts}/${totalParts}</strong> phần hoàn hảo`;
-  }
-}
-
-// KANJI WRITING SYSTEM (INTEGRATION WITH ANIMCJK LIBRARY)
-function initStrokePanel(unit, part) {
-  const partKey = `${unit}_${part}`;
-  const words = getWords(unit, part);
-  const selector = document.getElementById(`stroke-select-${partKey}`);
-  if (!selector) return;
-  
-  // Lọc chỉ chọn những từ có chứa Hán tự thực sự (Kanji)
-  const kanjiWords = words.filter(w => w.kanji && w.kanji !== '—' && /[\u4e00-\u9faf]/.test(w.kanji));
-  
-  if (kanjiWords.length === 0) {
-    selector.innerHTML = '<span style="font-size:13px; color:var(--ink-mute)">No found Kanji.</span>';
+  if (quiz.questions.length === 0) {
+    zone.innerHTML = `<div class="empty-state">No question sets found.</div>`;
     return;
   }
-  
-  selector.innerHTML = kanjiWords.map(w => `
-    <button class="stroke-word-chip" onclick="displayKanjiStrokes(this, '${escAttr(partKey)}', '${escAttr(w.kanji)}')">${w.kanji}</button>
-  `).join('');
+
+  const q = quiz.questions[quiz.index];
+  const progressPct = (quiz.index / quiz.questions.length) * 100;
+  const labels = ['A', 'B', 'C', 'D'];
+
+  zone.innerHTML = `
+    <div class="quiz-header">
+      <div class="quiz-progress-track">
+        <div class="quiz-progress-fill" style="width: ${progressPct}%"></div>
+      </div>
+      <div class="quiz-score">Score: ${quiz.score}/${quiz.questions.length}</div>
+    </div>
+
+    <div class="quiz-card">
+      <div class="quiz-question-label">
+        <span class="quiz-q-number">Q${quiz.index + 1}</span> Multiple Choice Question
+      </div>
+      
+      <div class="quiz-word-display">
+        <div>
+          ${q.word.kanji && q.word.kanji !== '—' ? `<div class="quiz-word-kanji">${q.word.kanji}</div>` : ''}
+          <div class="quiz-word-kana">${s(q.word.kana)}</div>
+        </div>
+        <button class="quiz-listen-btn" onclick="playSingleAudio(${q.word.id}, '${buildAudioPath(q.word)}', '${partKey}')">🎵</button>
+      </div>
+
+      <div class="quiz-choices">
+        ${q.choices.map((c, i) => {
+          let btnClass = '';
+          if (q.status !== 'unanswered') {
+            if (c === q.word.meaning) btnClass = 'correct';
+            else if (c === q.selected) btnClass = 'wrong';
+          }
+          const isDisabled = q.status !== 'unanswered' ? 'disabled' : '';
+          return `
+            <button class="choice-btn ${btnClass}" ${isDisabled} onclick="submitQuizAnswer('${partKey}', '${escAttr(c)}')">
+              <span class="choice-label">${labels[i]}</span> ${s(c)}
+            </button>
+          `;
+        }).join('')}
+      </div>
+
+      ${q.status !== 'unanswered' ? `
+        <div style="margin-top:20px; display:flex; justify-content:flex-end;">
+          <button class="btn btn-primary" onclick="nextQuizQuestion('${partKey}')">
+            ${quiz.index + 1 === quiz.questions.length ? 'Finish Quiz' : 'Next Question ➜'}
+          </button>
+        </div>
+      ` : ''}
+    </div>
+  `;
 }
 
-function displayKanjiStrokes(btn, partKey, kanjiStr) {
-  const parent = document.getElementById(`stroke-select-${partKey}`);
-  if (parent) {
-    parent.querySelectorAll('.stroke-word-chip').forEach(c => c.classList.remove('active'));
+function submitQuizAnswer(partKey, answerStr) {
+  const quiz = state.quizState[partKey];
+  if (!quiz) return;
+  
+  const q = quiz.questions[quiz.index];
+  if (q.status !== 'unanswered') return;
+
+  q.selected = answerStr;
+  if (answerStr === q.word.meaning) {
+    q.status = 'correct';
+    quiz.score++;
+  } else {
+    q.status = 'wrong';
   }
-  btn.classList.add('active');
+
+  renderQuizQuestion(partKey);
+}
+
+function nextQuizQuestion(partKey) {
+  const quiz = state.quizState[partKey];
+  if (!quiz) return;
+
+  if (quiz.index + 1 < quiz.questions.length) {
+    quiz.index++;
+    renderQuizQuestion(partKey);
+  } else {
+    evaluateQuizEnd(partKey);
+  }
+}
+
+function evaluateQuizEnd(partKey) {
+  document.getElementById(`quiz-zone-${partKey}`).style.display = 'none';
+  const review = document.getElementById(`quiz-review-${partKey}`);
+  if (!review) return;
   
-  const container = document.getElementById(`stroke-kanji-container-${partKey}`);
-  const ctrls = document.getElementById(`stroke-ctrls-${partKey}`);
-  if (!container) return;
-  
-  container.innerHTML = '';
-  if (ctrls) ctrls.style.display = 'flex';
-  
-  // Tách chuỗi từ vựng thành từng ký tự Hán tự đơn lẻ
-  const characters = [...kanjiStr].filter(ch => /[\u4e00-\u9faf]/.test(ch));
-  
-  characters.forEach(char => {
-    const boxId = `char-${partKey}-${char.charCodeAt(0)}`;
-    const div = document.createElement('div');
-    div.className = 'stroke-char-box';
-    div.id = boxId;
-    div.setAttribute('data-char', char);
+  const quiz = state.quizState[partKey];
+  const total = quiz.questions.length;
+  const score = quiz.score;
+  const pct = total > 0 ? Math.round((score / total) * 100) : 0;
+
+  localStorage.setItem(`quiz_${partKey}`, `${score}/${total}`);
+  updateGlobalProgress();
+  refreshBadgeOnAccordion(partKey, score, total);
+
+  let emoji = '🎉';
+  let title = 'Excellent Work!';
+  if (pct < 50) { digits = '🩹'; title = 'Keep Practicing!'; }
+  else if (pct < 80) { emoji = '👍'; title = 'Good Effort!'; }
+
+  review.style.display = 'block';
+  review.innerHTML = `
+    <div class="review-emoji">${emoji}</div>
+    <div class="review-title">${title}</div>
+    <div class="review-sub">You finished the quiz for this section!</div>
     
-    const label = document.createElement('div');
-    label.className = 'stroke-char-label';
-    label.style.position = 'absolute';
-    label.style.bottom = '4px';
-    label.textContent = 'Chạm để viết';
-    
-    div.appendChild(label);
-    container.appendChild(div);
-    
-    // Khởi tạo hoạt ảnh nét chữ ban đầu thông qua AnimCJK CDN
-    try {
-      if (typeof AnimCJK !== 'undefined') {
-        div.innerHTML = ''; 
-        AnimCJK.insert(boxId, char, { width: 130, height: 130, sType: 'draw' });
-      } else {
-        div.textContent = char;
-      }
-    } catch(e) {
-      div.textContent = char;
-    }
-    
-    // Gắn sự kiện click vào ô vuông để tự động vẽ lại nét chữ
-    div.onclick = () => {
-      try {
-        if (typeof AnimCJK !== 'undefined') {
-          div.innerHTML = '';
-          AnimCJK.insert(boxId, char, { width: 130, height: 130, sType: 'draw' });
-        }
-      } catch(err) { console.log(err); }
-    };
-  });
+    <div class="review-stats">
+      <div class="review-stat">
+        <span class="review-stat-val green">${score}</span>
+        <span class="review-stat-label">Correct</span>
+      </div>
+      <div class="review-stat">
+        <span class="review-stat-val red">${total - score}</span>
+        <span class="review-stat-label">Wrong</span>
+      </div>
+      <div class="review-stat">
+        <span class="review-stat-val" style="color:var(--ink)">${pct}%</span>
+        <span class="review-stat-label">Accuracy</span>
+      </div>
+    </div>
+
+    <button class="btn btn-outline" onclick="initQuizEngine('${partKey}')">🔄 Retry Quiz</button>
+  `;
+}
+
+function refreshBadgeOnAccordion(partKey, score, total) {
+  const item = document.getElementById(`acc-item-${partKey}`);
+  if (!item) return;
   
-  // Thiết lập sự kiện nút điều khiển phát toàn chuỗi chữ cái
-  const playBtn = document.getElementById(`btn-stroke-play-${partKey}`);
-  if (playBtn) {
-    playBtn.onclick = () => {
-      characters.forEach(char => {
-        const boxId = `char-${partKey}-${char.charCodeAt(0)}`;
-        const div = document.getElementById(boxId);
-        if (div && typeof AnimCJK !== 'undefined') {
-          div.innerHTML = '';
-          AnimCJK.insert(boxId, char, { width: 130, height: 130, sType: 'draw' });
+  const meta = item.querySelector('.accordion-meta');
+  if (!meta) return;
+
+  const width = `${(score / total) * 100}%`;
+  let badgeClass = 'in-progress';
+  let partialClass = 'partial';
+  let label = `${score}/${total}`;
+  
+  if (score === total) {
+    badgeClass = 'complete';
+    partialClass = '';
+    label = `✓ Passed (${score}/${total})`;
+  }
+
+  meta.innerHTML = `
+    <div class="progress-badge ${badgeClass}">${label}</div>
+    <div class="progress-bar-mini">
+      <div class="progress-bar-mini-fill ${partialClass}" style="width: ${width}"></div>
+    </div>
+  `;
+}
+
+/* ══════════════════════════════════════════════
+   CORE ENGINE 4: KANJI STROKE ORDER EXPERT
+══════════════════════════════════════════════ */
+function initStrokeEngine(partKey) {
+  const bar = document.getElementById(`stroke-select-${partKey}`);
+  if (!bar) return;
+
+  const [u, p] = partKey.split('_');
+  const words = getWords(u, p);
+  
+  // Isolate distinct kanji characters
+  const kanjiSet = new Set();
+  words.forEach(w => {
+    if (w.kanji && w.kanji !== '—') {
+      [...w.kanji].forEach(ch => {
+        // Regex logic matching standard CJK Unified Ideographs blocks
+        if (ch.match(/[\u4e00-\u9faf\u3400-\u4dbf]/)) {
+          kanjiSet.add(ch);
         }
       });
-    };
+    }
+  });
+
+  const kanjiList = [...kanjiSet];
+  if (kanjiList.length === 0) {
+    bar.innerHTML = `<span style="font-size:12px; color:var(--ink-mute)">No Kanji words found in this section.</span>`;
+    return;
   }
+
+  bar.innerHTML = kanjiList.map(k => {
+    return `<button class="stroke-word-chip" id="chip-${partKey}-${escId(k)}" onclick="selectKanjiStroke('${partKey}', '${escAttr(k)}')">${k}</button>`;
+  }).join('');
+}
+
+function selectKanjiStroke(partKey, kanjiChar) {
+  document.querySelectorAll(`#stroke-select-${partKey} .stroke-word-chip`).forEach(c => c.classList.remove('active'));
+  
+  const chip = document.getElementById(`chip-${partKey}-${escId(kanjiChar)}`);
+  if (chip) chip.classList.add('active');
+
+  const container = document.getElementById(`stroke-kanji-container-${partKey}`);
+  const ctrlBox = document.getElementById(`stroke-ctrls-${partKey}`);
+  if (!container) return;
+
+  // Cache string targeted explicitly for specific panel reference
+  _strokeState[partKey] = kanjiChar;
+
+  container.innerHTML = `
+    <div>
+      <div class="stroke-char-box" id="stroke-box-${partKey}-${escId(kanjiChar)}">${kanjiChar}</div>
+      <div class="stroke-char-label" style="margin-top:8px;">${kanjiChar}</div>
+    </div>
+  `;
+
+  if (ctrlBox) ctrlBox.style.display = 'flex';
+  
+  // Fire animation immediately on load
+  playStrokes(partKey);
+}
+
+function playStrokes(partKey) {
+  const kanjiChar = _strokeState[partKey] || '';
+  if (!kanjiChar) return;
+  
+  const boxId = `stroke-box-${partKey}-${escId(kanjiChar)}`;
+  const box = document.getElementById(boxId);
+  if (!box) return;
+
+  // Wipe current character content to load pure vectors
+  box.textContent = '';
+
+  if (typeof AnimCJK !== 'undefined') {
+    try {
+      // Kích hoạt thư viện vẽ nét AnimCJK
+      AnimCJK(box, kanjiChar, { autostart: true, speed: 1.2 });
+    } catch(e) {
+      box.textContent = kanjiChar; // Hồi đáp chữ tĩnh nếu lỗi
+    }
+  } else {
+    box.textContent = kanjiChar;
+  }
+}
+
+/* ══════════════════════════════════════════════
+   GLOBAL METRIC SUMMARY PROGRESS
+══════════════════════════════════════════════ */
+function updateGlobalProgress() {
+  const el = document.getElementById('global-progress');
+  if (!el || typeof vocabularyData === 'undefined') return;
+
+  const totalUnits = getUnits().length;
+  // Dynamic extraction calculation from LocalStorage progress trackers
+  let passedCount = 0;
+  
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key.startsWith('quiz_')) {
+      const val = localStorage.getItem(key);
+      if (val) {
+        const [score, total] = val.split('/').map(Number);
+        if (score === total && total > 0) passedCount++;
+      }
+    }
+  }
+
+  el.innerHTML = `Total Progress: <strong>${passedCount}</strong> Section(s) Passed`;
 }
 </script>
 </body>
