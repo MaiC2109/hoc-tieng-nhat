@@ -155,7 +155,7 @@ function renderUnitContent() {
   parts.forEach((p, idx) => {
     const partKey = `${unit}_${p}`;
     
-    // Chỉ mở nếu người dùng chủ động bấm chọn (mặc định ban đầu sẽ đóng hết)
+    // Mặc định ban đầu sẽ đóng hết, chỉ mở khi người dùng chủ động click
     const isOpen = (state.activeAccordion[unit] === p);
     
     const savedScore = localStorage.getItem(`quiz_${partKey}`);
@@ -218,82 +218,6 @@ function renderUnitContent() {
     }
   });
 }
-  
-  let html = `<div class="parts-container">`;
-  
-// Chỉ dựng Workspace panel cho những bài nào đang thực sự được mở
-  parts.forEach((p, idx) => {
-    const partKey = `${unit}_${p}`;
-    
-    // ĐÃ SỬA: Chỉ mở nếu người dùng chủ động bấm chọn (mặc định ban đầu sẽ đóng hết)
-    const isOpen = (state.activeAccordion[unit] === p);
-    
-    if (isOpen) {
-      const curTab = state.activeSubTab[partKey] || 'study';
-      buildWorkspacePanels(partKey, curTab);
-    }
-  });
-}
-    
-    const savedScore = localStorage.getItem(`quiz_${partKey}`);
-    let badgeHtml = `<div class="progress-badge not-started">Not Started</div>`;
-    let fillWidth = '0%';
-    let partialClass = '';
-    
-    if (savedScore !== null) {
-      const [score, total] = savedScore.split('/').map(Number);
-      if (total > 0) {
-        fillWidth = `${(score / total) * 100}%`;
-        if (score === total) {
-          badgeHtml = `<div class="progress-badge complete">✓ Passed (${score}/${total})</div>`;
-        } else {
-          badgeHtml = `<div class="progress-badge in-progress">${score}/${total}</div>`;
-          partialClass = 'partial';
-        }
-      }
-    }
-    
-    const curTab = state.activeSubTab[partKey] || 'study';
-    
-    html += `
-      <div class="accordion-item ${isOpen ? 'open' : ''}" id="acc-item-${escAttr(partKey)}">
-        <button class="accordion-header" onclick="toggleAccordion('${escAttr(unit)}', '${escAttr(p)}')">
-          <span class="accordion-chevron">▶</span>
-          <span class="accordion-part-label">${p}</span>
-          <div class="accordion-meta">
-            ${badgeHtml}
-            <div class="progress-bar-mini">
-              <div class="progress-bar-mini-fill ${partialClass}" style="width: ${fillWidth}"></div>
-            </div>
-          </div>
-        </button>
-        <div class="accordion-body">
-          <div class="workspace">
-            <div class="sub-tabs-bar">
-              <button class="sub-tab ${curTab === 'study' ? 'active' : ''}" id="tab-btn-${escAttr(partKey)}-study" onclick="switchSubTab('${escAttr(partKey)}', 'study')"><span class="tab-icon">📖</span> Study & Listen</button>
-              <button class="sub-tab ${curTab === 'card' ? 'active' : ''}" id="tab-btn-${escAttr(partKey)}-card" onclick="switchSubTab('${escAttr(partKey)}', 'card')"><span class="tab-icon">🎴</span> Flashcard</button>
-              <button class="sub-tab ${curTab === 'quiz' ? 'active' : ''}" id="tab-btn-${escAttr(partKey)}-quiz" onclick="switchSubTab('${escAttr(partKey)}', 'quiz')"><span class="tab-icon">📝</span> Quiz</button>
-            </div>
-            <div class="sub-tabs-panels" id="panels-${escAttr(partKey)}">
-            </div>
-          </div>
-        </div>
-      </div>
-    `;
-  });
-  
-  html += `</div>`;
-  wrap.innerHTML = html;
-
-  parts.forEach((p, idx) => {
-    const partKey = `${unit}_${p}`;
-    const isOpen = (state.activeAccordion[unit] === p);
-    if (isOpen) {
-      const curTab = state.activeSubTab[partKey] || 'study';
-      buildWorkspacePanels(partKey, curTab);
-    }
-  });
-}
 
 function switchSubTab(partKey, tabName) {
   stopAllAudio();
@@ -321,7 +245,6 @@ function buildWorkspacePanels(partKey, activeTab) {
   let cardActive  = activeTab === 'card' ? 'active' : '';
   let quizActive  = activeTab === 'quiz' ? 'active' : '';
 
-  // 1. Study Table
   let rowsHtml = words.map((w, index) => {
     return `
       <tr id="row-${partKey}-${w.id}">
@@ -363,14 +286,12 @@ function buildWorkspacePanels(partKey, activeTab) {
     </div>
   `;
 
-  // 2. Flashcard Layout
   let cardHtml = `
     <div class="sub-panel ${cardActive}">
       <div class="flashcard-area" id="flashcard-zone-${partKey}"></div>
     </div>
   `;
 
-  // 3. Quiz Layout
   let quizHtml = `
     <div class="sub-panel ${quizActive}">
       <div class="quiz-mode-selector">
@@ -389,9 +310,6 @@ function buildWorkspacePanels(partKey, activeTab) {
   if (activeTab === 'quiz') initQuizEngine(partKey);
 }
 
-/* ══════════════════════════════════════════════
-   AUDIO LOGIC MANAGER
-══════════════════════════════════════════════ */
 function stopAllAudio() {
   state.isAutoplay = false;
   document.querySelectorAll("[id^='btn-autoplay-']").forEach(b => b.textContent = '▶ Autoplay Audio');
@@ -462,9 +380,6 @@ function runAutoplayCycle(partKey) {
   });
 }
 
-/* ══════════════════════════════════════════════
-   FLASHCARD LOGIC ENGINE
-══════════════════════════════════════════════ */
 function initFlashcardEngine(partKey) {
   const [u, p] = partKey.split('_');
   const words = _shuffle(getWords(u, p)).slice(0, 20); 
@@ -590,9 +505,6 @@ function renderFlashcardReport(partKey) {
   `;
 }
 
-/* ══════════════════════════════════════════════
-   QUIZ LOGIC ENGINE
-══════════════════════════════════════════════ */
 function changeQuizMode(partKey, newMode) {
   [`k2m`, `f2k`, `m2k`].forEach(m => {
     const btn = document.getElementById(`mode-btn-${partKey}-${m}`);
