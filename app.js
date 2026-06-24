@@ -14,7 +14,6 @@ const state = {
 
 // CẤU HÌNH QUẢN LÝ CHO HỌC VIÊN (Đặt ngay tại đây)
 const STUDENT_CONFIG = {
-  studentName: "Học viên A", // Thay tên học viên của bạn vào đây
   googleScriptUrl: "https://script.google.com/macros/s/AKfycbxDCDzDn2ZcBRAlE5M_OEMWNnB3J36ofdFb0VMzdBEPLURNaarOHYb6G4VG_0F1KnIPzQ/exec" 
 };
 
@@ -672,7 +671,6 @@ function evaluateQuizEnd(partKey) {
   // ─── ĐOẠN CODE TỰ ĐỘNG GỬI ĐIỂM LÊN GOOGLE SHEETS ĐƯỢC CHÈN VÀO ĐÂY ───
   if (STUDENT_CONFIG.googleScriptUrl && STUDENT_CONFIG.googleScriptUrl !== "") {
     const payload = {
-      studentName: STUDENT_CONFIG.studentName,
       partKey: partKey, 
       quizMode: quiz.quizMode === 'k2m' ? 'Kanji -> Meaning' : (quiz.quizMode === 'f2k' ? 'Kana -> Kanji' : 'Meaning -> Kanji'),
       scoreText: `${score}/${total}`,
