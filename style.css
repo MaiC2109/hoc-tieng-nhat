@@ -479,6 +479,13 @@ body {
 .sub-tab .tab-icon { font-size: 14px; }
 .sub-tabs-panels { position: relative; }
 
+/* Thêm đoạn này để ẩn các tab không active và chỉ hiện tab được chọn */
+.sub-panel {
+  display: none;
+}
+.sub-panel.active {
+  display: block;
+}
 /* ─────────────────────────────────────────────
    SUB PANEL 1: STUDY & LISTEN
 ───────────────────────────────────────────── */
