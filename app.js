@@ -22,53 +22,21 @@ document.addEventListener('DOMContentLoaded', initApp);
 
 async function initApp() {
   const progressEl = document.getElementById('global-progress');
-  if (progressEl) progressEl.textContent = 'Đang tải dữ liệu...';
-
   try {
     const response = await fetch(STUDENT_CONFIG.dataScriptUrl);
     const data = await response.json();
     
-    console.log("Dữ liệu gốc nhận được:", data);
+    // ĐÂY LÀ CHÌA KHÓA: In ra kiểu dữ liệu và nội dung thực tế
+    console.log("KIỂU DỮ LIỆU:", typeof data);
+    console.log("NỘI DUNG DỮ LIỆU:", data);
+    console.log("CÁC KEY CỦA OBJECT:", Object.keys(data));
 
-    // TỰ ĐỘNG TÌM MẢNG: 
-    // Nếu data là Object, nó sẽ tìm thuộc tính đầu tiên là mảng.
-    let arrayData = Array.isArray(data) ? data : null;
-    if (!arrayData) {
-      for (let key in data) {
-        if (Array.isArray(data[key])) {
-          arrayData = data[key];
-          break;
-        }
-      }
-    }
-
-    if (!arrayData) {
-      throw new Error("Không tìm thấy mảng dữ liệu trong kết quả trả về!");
-    }
-
-    // CHUYỂN ĐỔI: Nếu phần tử đầu tiên là mảng (dòng dữ liệu), ta map nó sang Object
-    if (arrayData.length > 0 && Array.isArray(arrayData[0])) {
-       window.vocabularyData = arrayData.map(row => {
-          let obj = {};
-          HEADERS.forEach((h, i) => { obj[h] = row[i]; });
-          return obj;
-       }).filter(item => item.id);
-    } else {
-       window.vocabularyData = arrayData;
-    }
-
-    console.log("Dữ liệu sau khi xử lý thành công:", window.vocabularyData);
-
-    const units = getUnits();
-    if (units.length > 0) {
-      state.activeUnit = units[0];
-      renderUnitTabs(units);
-      renderUnitContent();
-      if (progressEl) progressEl.textContent = 'Đã tải xong';
-    }
+    // Dừng tại đây để bạn kiểm tra Console
+    throw new Error("Đang debug, xem Console để thấy cấu trúc!");
+    
   } catch (err) {
     console.error("Lỗi:", err);
-    if (progressEl) progressEl.textContent = 'Lỗi dữ liệu!';
+    if (progressEl) progressEl.textContent = 'Đã lấy dữ liệu, xem Console!';
   }
 }
 
