@@ -22,20 +22,38 @@ document.addEventListener('DOMContentLoaded', initApp);
 
 async function initApp() {
   const progressEl = document.getElementById('global-progress');
+  if (progressEl) progressEl.textContent = 'Đang xử lý dữ liệu...';
+
   try {
     const response = await fetch(STUDENT_CONFIG.dataScriptUrl);
     const data = await response.json();
     
-    // ĐÂY LÀ CHÌA KHÓA: In ra kiểu dữ liệu và nội dung thực tế
-    console.log("KIỂU DỮ LIỆU:", typeof data);
-    console.log("NỘI DUNG DỮ LIỆU:", data);
-    console.log("CÁC KEY CỦA OBJECT:", Object.keys(data));
+    // ĐỊNH NGHĨA THỨ TỰ CỘT (Phải khớp với file Google Sheet của bạn)
+    const headers = ["id", "unit", "part", "kanji", "kana", "romaji", "hanviet", "meaning", "example", "audio"];
 
-    // Dừng tại đây để bạn kiểm tra Console
-    
+    // CHUYỂN ĐỔI: Biến object {0: [...], 1: [...]} thành mảng chuẩn
+    window.vocabularyData = Object.keys(data).map(key => {
+        let row = data[key];
+        let obj = {};
+        headers.forEach((h, i) => { obj[h] = row[i]; });
+        return obj;
+    }).filter(item => item.id); // Loại bỏ dòng không có ID
+
+    console.log("Dữ liệu sau khi map:", window.vocabularyData);
+
+    // Render giao diện
+    const units = getUnits();
+    if (units.length > 0) {
+      state.activeUnit = units[0];
+      renderUnitTabs(units);
+      renderUnitContent();
+      if (progressEl) progressEl.textContent = 'Đã tải xong';
+    } else {
+      if (progressEl) progressEl.textContent = 'Không có dữ liệu!';
+    }
   } catch (err) {
     console.error("Lỗi:", err);
-    if (progressEl) progressEl.textContent = 'Đã lấy dữ liệu, xem Console!';
+    if (progressEl) progressEl.textContent = 'Lỗi xử lý dữ liệu!';
   }
 }
 
