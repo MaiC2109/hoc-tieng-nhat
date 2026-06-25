@@ -97,9 +97,14 @@ function buildAudioPath(wordObj) {
 }
 
 function getUnits() {
-  if (typeof vocabularyData === 'undefined') return [];
-  const units = [...new Set(vocabularyData.map(w => w.unit))];
-  return units.sort((a, b) => String(a).localeCompare(String(b), undefined, {numeric: true, sensitivity: 'base'}));
+  if (typeof window.vocabularyData === 'undefined') return [];
+  
+  // Lấy danh sách Unit, sau đó dùng .filter để loại bỏ những tên rác
+  const units = [...new Set(window.vocabularyData.map(w => w.unit))];
+  
+  return units
+    .filter(u => u && u !== "unit" && u !== "Unit") // Dòng này sẽ loại bỏ cái tên "unit" thừa
+    .sort((a, b) => String(a).localeCompare(String(b), undefined, {numeric: true, sensitivity: 'base'}));
 }
 
 function getPartsForUnit(unitName) {
