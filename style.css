@@ -48,6 +48,22 @@
 }
 @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
+.progress-container {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+#sync-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 16px;
+  transition: transform 0.3s ease;
+}
+#sync-btn:hover { color: var(--vermillion); }
+.rotating { animation: spin 1s linear infinite; }
+@keyframes spin { 100% { transform: rotate(360deg); } }
+
 .word-table tbody tr.playing {
   background: var(--verm-glow);
   outline: 1px solid rgba(192,57,43,0.25);

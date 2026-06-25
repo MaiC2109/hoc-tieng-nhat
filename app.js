@@ -1,5 +1,5 @@
 'use strict';
-
+console.log = function() {};
 // 1. Khởi tạo trạng thái ứng dụng
 const state = {
   activeUnit: null,
@@ -785,4 +785,22 @@ function updateGlobalProgress() {
     }
   }
   el.innerHTML = `Total Progress: <strong>${passedCount}</strong> Section(s) Passed`;
+}
+
+function syncData() {
+  const btn = document.getElementById('sync-btn');
+  btn.classList.add('rotating'); // Bắt đầu hiệu ứng xoay
+  
+  // Thông báo cho người dùng
+  const progressEl = document.getElementById('global-progress');
+  if (progressEl) progressEl.textContent = 'Đang đồng bộ lại dữ liệu...';
+
+  // Xóa bộ nhớ đệm
+  localStorage.removeItem('vocab_cache');
+  localStorage.removeItem('vocab_cache_time');
+
+  // Gọi lại hàm initApp để tải mới hoàn toàn
+  initApp().then(() => {
+    btn.classList.remove('rotating'); // Dừng xoay khi xong
+  });
 }
