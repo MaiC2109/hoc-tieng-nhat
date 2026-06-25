@@ -1,64 +1,39 @@
 'use strict';
 
-const state = {
-  activeUnit: null,
-  activeAccordion: {},
-  activeSubTab: {}
-};
+const state = { activeUnit: null };
 
-// Thay thế đoạn cấu hình trong app.js bằng đoạn này
-const STUDENT_CONFIG = {
-  studentName: "Học viên A",
-  // Thử dùng link gốc, bỏ tham số ?tab=Vocabulary xem có hết lỗi 404 không
-  dataScriptUrl: "https://script.google.com/macros/s/AKfycbwIAqL_cJKsHgDBWdaRrpUwTBAvGzs4rnDaVVsmSzaHMkvH19ODlduBzlDfkdq9dwaw7g/exec",
-  scoreScriptUrl: "https://script.google.com/macros/s/AKfycbxDCDzDn2ZcBRAlE5M_OEMWNnB3J36ofdFb0VMzdBEPLURNaarOHYb6G4VG_0F1KnIPzQ/exec"
-};
+// SỬA URL NÀY THÀNH LINK MỚI NHẤT CỦA BẠN (sau khi đã Deploy Anyone)
+const DATA_URL = "https://script.google.com/macros/s/AKfycbwIAqL_cJKsHgDBWdaRrpUwTBAvGzs4rnDaVVsmSzaHMkvH19ODlduBzlDfkdq9dwaw7g/exec";
 
-// 1. ĐỊNH NGHĨA CẤU TRÚC CỘT (Khớp với dữ liệu bạn thấy trong console)
-const COLUMNS = ["id", "unit", "part", "kanji", "kana", "romaji", "hanviet", "meaning", "example"];
-
-function transformData(rawData) {
-  // Bỏ qua dòng header nếu có, chuyển mảng con thành object
-  return rawData.map(row => {
-    let obj = {};
-    COLUMNS.forEach((col, index) => { obj[col] = row[index]; });
-    return obj;
-  }).filter(item => item.id); // Lọc bỏ dòng trống
+// Hàm chuyển đổi mảng thô thành Object để không bị lỗi undefined
+function parseData(rawData) {
+    if (!Array.isArray(rawData)) return [];
+    const headers = ["id", "unit", "part", "kanji", "kana", "romaji", "hanviet", "meaning", "example"];
+    return rawData.map(row => {
+        let obj = {};
+        headers.forEach((h, i) => obj[h] = row[i]);
+        return obj;
+    }).filter(o => o.id); // Lọc bỏ dòng tiêu đề nếu bị lẫn vào
 }
 
-// 2. CÁC HÀM RENDER ĐẶT LÊN TRÊN ĐỂ TRÁNH LỖI REFERENCE
-function renderUnitTabs(units) {
-  const bar = document.getElementById('unit-tabs-bar');
-  if (!bar) return;
-  bar.innerHTML = units.map(u => `
-    <button class="unit-tab ${u === state.activeUnit ? 'active' : ''}" onclick="selectUnit('${u}')">
-      ${u}
-    </button>`).join('');
-}
+async function initApp() {
+    console.log("Đang tải dữ liệu...");
+    try {
+        const response = await fetch(DATA_URL);
+        const rawData = await response.json();
+        
+        // Chuyển đổi dữ liệu
+        window.vocabularyData = parseData(rawData);
+        console.log("Dữ liệu đã nhận:", window.vocabularyData);
 
-function selectUnit(unitName) {
-  state.activeUnit = unitName;
-  renderUnitTabs([...new Set(window.vocabularyData.map(w => w.unit))]);
-  console.log("Đã chọn unit:", unitName);
-}
-
-// 3. KHỞI TẠO CHÍNH
-function initApp() {
-console.log("Đang gọi đến URL:", STUDENT_CONFIG.dataScriptUrl);
-  fetch(STUDENT_CONFIG.dataScriptUrl)
-    .then(response => response.json())
-    .then(data => {
-      // Chuyển đổi dữ liệu thô thành mảng object
-      window.vocabularyData = transformData(data);
-      console.log("Dữ liệu đã ánh xạ thành công:", window.vocabularyData);
-
-      const units = [...new Set(window.vocabularyData.map(w => w.unit))].sort();
-      if (units.length > 0) {
-        state.activeUnit = units[0];
-        renderUnitTabs(units);
-      }
-    })
-    .catch(err => console.error("Lỗi:", err));
+        // Hiển thị nội dung
+        const appContainer = document.getElementById('unit-tabs-bar');
+        if (appContainer) {
+            appContainer.innerHTML = "Dữ liệu đã tải thành công! (Check Console để xem)";
+        }
+    } catch (err) {
+        console.error("Lỗi khi tải:", err);
+    }
 }
 
 document.addEventListener('DOMContentLoaded', initApp);
