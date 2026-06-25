@@ -1,45 +1,61 @@
 'use strict';
 
+// 1. Khởi tạo trạng thái ứng dụng
 const state = {
   activeUnit: null,
-  activeAccordion: {}, 
-  activeSubTab: {},    
-  quizState: {},       
-  flashcardState: {},  
-  currentAudio: null,  
-  playlist: [],        
-  playlistIndex: -1,
-  isAutoplay: false
+  activeAccordion: {},
+  activeSubTab: {},
+  quizState: {},
+  flashcardState: {},
+  currentAudio: null
 };
 
-// CẤU HÌNH QUẢN LÝ CHO HỌC VIÊN (Đặt ngay tại đây)
+// 2. Cấu hình đường dẫn
 const STUDENT_CONFIG = {
-  studentName: "Ẩn danh", // Thay tên học viên của bạn vào đây
-  googleScriptUrl: "https://script.google.com/macros/s/AKfycbzwmTFWowwaAVQ-ZLmk3cveLH8l9Bi7rJZk6TDE2ikNnjlwB36Rn0a5An0PgmQu1Rag2w/exec" 
+  dataScriptUrl: "https://script.google.com/macros/s/AKfycbwIAqL_cJKsHgDBWdaRrpUwTBAvGzs4rnDaVVsmSzaHMkvH19ODlduBzlDfkdq9dwaw7g/exec?tab=Vocabulary",
+  googleScriptUrl: "https://script.google.com/macros/s/AKfycbzwmTFWowwaAVQ-ZLmk3cveLH8l9Bi7rJZk6TDE2ikNnjlwB36Rn0a5An0PgmQu1Rag2w/exec"
 };
 
-document.addEventListener('DOMContentLoaded', () => {
-  initApp();
-});
+const HEADERS = ["id", "unit", "part", "kanji", "kana", "romaji", "hanviet", "meaning", "example", "audio"];
 
-document.addEventListener('DOMContentLoaded', () => {
-  initApp();
-});
+// 3. Hàm nạp dữ liệu từ Google Sheet (Thay thế cho file data.js cũ)
+async function initApp() {
+  try {
+    const response = await fetch(STUDENT_CONFIG.dataScriptUrl);
+  const progressEl = document.getElementById('global-progress');
+  if (progressEl) progressEl.textContent = 'Đang tải dữ liệu...';
 
-function initApp() {
-  if (typeof vocabularyData === 'undefined' || !Array.isArray(vocabularyData)) {
-    document.getElementById('global-progress').textContent = 'No data';
-    return;
+  try {
+    const response = await fetch(STUDENT_CONFIG.dataScriptUrl);
+    const rawData = await response.json();
+    
+    // Chuyển đổi dữ liệu Google Sheet về dạng mảng mà các hàm cũ của bạn cần
+    window.vocabularyData = Object.keys(rawData).map(key => {
+        let row = rawData[key];
+        let obj = {};
+        HEADERS.forEach((h, i) => { obj[h] = row[i]; });
+        return obj;
+    }).filter(item => item.id);
+
+    // Sau khi nạp xong, mới chạy các hàm giao diện cũ
+    const units = getUnits();
+    if (units.length > 0) {
+      state.activeUnit = units[0];
+      renderUnitTabs(units);
+      renderUnitContent();
+      updateGlobalProgress();
+    }
+  } catch (err) {
+    console.error("Lỗi:", err);
   }
-  
-  const units = getUnits();
-  if (units.length > 0) {
-    state.activeUnit = units[0];
-    renderUnitTabs(units);
-    renderUnitContent();
-    updateGlobalProgress();
+document.getElementById('loading-overlay').style.display = 'none';
+  } catch (err) {
+    document.getElementById('loading-overlay').innerHTML = "Lỗi kết nối, hãy tải lại trang!";
   }
 }
+
+// Kích hoạt khi trang web tải xong
+document.addEventListener('DOMContentLoaded', initApp);
 
 function switchMainSection(sectionId) {
   document.querySelectorAll('.section-panel').forEach(p => p.classList.remove('active'));
@@ -87,9 +103,14 @@ function buildAudioPath(wordObj) {
 }
 
 function getUnits() {
-  if (typeof vocabularyData === 'undefined') return [];
-  const units = [...new Set(vocabularyData.map(w => w.unit))];
-  return units.sort((a, b) => String(a).localeCompare(String(b), undefined, {numeric: true, sensitivity: 'base'}));
+  if (typeof window.vocabularyData === 'undefined') return [];
+  
+  // Lấy danh sách Unit, sau đó dùng .filter để loại bỏ những tên rác
+  const units = [...new Set(window.vocabularyData.map(w => w.unit))];
+  
+  return units
+    .filter(u => u && u !== "unit" && u !== "Unit") // Dòng này sẽ loại bỏ cái tên "unit" thừa
+    .sort((a, b) => String(a).localeCompare(String(b), undefined, {numeric: true, sensitivity: 'base'}));
 }
 
 function getPartsForUnit(unitName) {
@@ -127,27 +148,30 @@ function selectUnit(unitName) {
 
 function toggleAccordion(unit, part) {
   const partKey = `${unit}_${part}`;
-  const el = document.getElementById(`acc-item-${partKey}`);
+  const el = document.getElementById(`acc-item-${escAttr(partKey)}`);
   if (!el) return;
   
+  // Nếu đã mở thì đóng lại
   if (el.classList.contains('open')) {
     el.classList.remove('open');
     if (state.activeAccordion[unit] === part) {
       state.activeAccordion[unit] = null;
     }
   } else {
+    // Đóng các item khác trong cùng unit
     if (state.activeAccordion[unit]) {
-      const prev = document.getElementById(`acc-item-${unit}_${state.activeAccordion[unit]}`);
+      const prev = document.getElementById(`acc-item-${escId(unit)}_${escId(state.activeAccordion[unit])}`);
       if (prev) prev.classList.remove('open');
     }
+    
+    // Mở item được chọn
     el.classList.add('open');
     state.activeAccordion[unit] = part;
     
     const curTab = state.activeSubTab[partKey] || 'study';
-    switchSubTab(partKey, curTab);
+    buildWorkspacePanels(partKey, curTab);
   }
 }
-
 function renderUnitContent() {
   const wrap = document.getElementById('unit-content-wrap');
   if (!wrap) return;
