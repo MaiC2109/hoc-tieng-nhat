@@ -30,39 +30,34 @@ function initApp() {
   if (progressEl) progressEl.textContent = 'Đang tải dữ liệu...';
 
   fetch(STUDENT_CONFIG.dataScriptUrl)
-    .then(response => {
-      if (!response.ok) throw new Error("Không thể kết nối đến Google Sheets!");
-      return response.json();
-    })
+    .then(response => response.json())
     .then(data => {
-      // KIỂM TRA DỮ LIỆU ĐANG LÀ CÁI GÌ
-      console.log("Dữ liệu thô từ Sheet:", data); 
+      // FIX LỖI OBJECT: 
+      // Nếu dữ liệu trả về là Object { "Vocabulary": [...] }, lấy mảng bên trong
+      // Nếu là mảng rồi thì giữ nguyên
+      window.vocabularyData = Array.isArray(data) ? data : (data.Vocabulary || Object.values(data)[0]);
       
-      // Nếu dữ liệu không phải mảng, hãy báo lỗi trong console
-      if (!Array.isArray(data)) {
-        console.error("Dữ liệu trả về không phải mảng! Nó là:", typeof data);
-        if (progressEl) progressEl.textContent = 'Lỗi định dạng dữ liệu!';
+      console.log("Dữ liệu đã xử lý:", window.vocabularyData); 
+      
+      if (!Array.isArray(window.vocabularyData)) {
+        console.error("Dữ liệu vẫn không phải là mảng, kiểm tra cấu trúc:", data);
+        if (progressEl) progressEl.textContent = 'Lỗi cấu trúc dữ liệu!';
         return;
       }
 
-      window.vocabularyData = data; 
-      
       const units = getUnits();
       if (units.length > 0) {
         state.activeUnit = units[0];
         renderUnitTabs(units);
         renderUnitContent();
         updateGlobalProgress();
-      } else {
-        if(progressEl) progressEl.textContent = 'Dữ liệu trống!';
       }
     })
     .catch(err => {
-      console.error("Lỗi chi tiết:", err);
-      if (progressEl) progressEl.textContent = 'Lỗi: ' + err.message;
+      console.error("Lỗi:", err);
+      if (progressEl) progressEl.textContent = 'Lỗi kết nối database!';
     });
 }
-
 
 // CÁC HÀM XỬ LÝ LOGIC
 function switchMainSection(sectionId) {
