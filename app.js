@@ -2,7 +2,7 @@
 
 const state = {
   activeUnit: null,
-  activeAccordion: {},
+  activeAccordion: {}, // Lưu trạng thái đóng/mở của các Part
   activeSubTab: {},
   quizState: {},
   flashcardState: {},
@@ -15,7 +15,6 @@ const STUDENT_CONFIG = {
   dataScriptUrl: "https://script.google.com/macros/s/AKfycbwIAqL_cJKsHgDBWdaRrpUwTBAvGzs4rnDaVVsmSzaHMkvH19ODlduBzlDfkdq9dwaw7g/exec?tab=Vocabulary"
 };
 
-// Định nghĩa thứ tự cột của Google Sheet
 const HEADERS = ["id", "unit", "part", "kanji", "kana", "romaji", "hanviet", "meaning", "example", "audio"];
 
 document.addEventListener('DOMContentLoaded', initApp);
@@ -28,28 +27,22 @@ async function initApp() {
     const response = await fetch(STUDENT_CONFIG.dataScriptUrl);
     const data = await response.json();
     
-    // ĐỊNH NGHĨA THỨ TỰ CỘT (Phải khớp với file Google Sheet của bạn)
-    const headers = ["id", "unit", "part", "kanji", "kana", "romaji", "hanviet", "meaning", "example", "audio"];
-
-    // CHUYỂN ĐỔI: Biến object {0: [...], 1: [...]} thành mảng chuẩn
+    // LOGIC NẠP DỮ LIỆU ĐÃ CHẠY ĐÚNG (Giữ nguyên)
     window.vocabularyData = Object.keys(data).map(key => {
         let row = data[key];
         let obj = {};
-        headers.forEach((h, i) => { obj[h] = row[i]; });
+        HEADERS.forEach((h, i) => { obj[h] = row[i]; });
         return obj;
-    }).filter(item => item.id); // Loại bỏ dòng không có ID
+    }).filter(item => item.id);
 
     console.log("Dữ liệu sau khi map:", window.vocabularyData);
 
-    // Render giao diện
     const units = getUnits();
     if (units.length > 0) {
       state.activeUnit = units[0];
       renderUnitTabs(units);
       renderUnitContent();
       if (progressEl) progressEl.textContent = 'Đã tải xong';
-    } else {
-      if (progressEl) progressEl.textContent = 'Không có dữ liệu!';
     }
   } catch (err) {
     console.error("Lỗi:", err);
@@ -57,7 +50,7 @@ async function initApp() {
   }
 }
 
-// CÁC HÀM XỬ LÝ LOGIC (Giữ nguyên các hàm của bạn)
+// CÁC HÀM LOGIC HỖ TRỢ (Giữ nguyên)
 function s(v) { return (v !== undefined && v !== null && v !== '') ? String(v) : '—'; }
 function getUnits() { return [...new Set(vocabularyData.map(w => w.unit))].sort(); }
 function getPartsForUnit(unit) { return [...new Set(vocabularyData.filter(w => w.unit === unit).map(w => w.part))].sort(); }
@@ -78,28 +71,61 @@ function selectUnit(unitName) {
   renderUnitContent();
 }
 
-// Hàm render content (sửa lại để dùng với dữ liệu dạng Object)
+// HÀM RENDER ĐÃ ĐƯỢC CHỈNH SỬA ĐỂ KHỚP CẤU TRÚC ACCORDION CỦA CSS
 function renderUnitContent() {
   const wrap = document.getElementById('unit-content-wrap');
   if (!wrap) return;
   
   const parts = getPartsForUnit(state.activeUnit);
-  wrap.innerHTML = parts.map(p => `
-    <div class="part-section">
-      <h3>${p}</h3>
-      <table class="word-table">
-        ${getWords(state.activeUnit, p).map(w => `
-          <tr>
-            <td>${s(w.kanji)}</td>
-            <td>${s(w.kana)}</td>
-            <td>${s(w.meaning)}</td>
-          </tr>`).join('')}
-      </table>
+  
+  wrap.innerHTML = `
+    <div class="parts-container">
+      ${parts.map((p, index) => {
+        const partKey = `${state.activeUnit}_${p}`;
+        const isOpen = state.activeAccordion[partKey] ? 'open' : '';
+        const words = getWords(state.activeUnit, p);
+        
+        return `
+          <div class="accordion-item ${isOpen}">
+            <button class="accordion-header" onclick="togglePart('${partKey}')">
+              <div class="accordion-chevron">▶</div>
+              <div class="accordion-part-label">${p}</div>
+              <div class="accordion-meta">
+                <span class="progress-badge not-started">${words.length} từ</span>
+              </div>
+            </button>
+            <div class="accordion-body">
+              <div class="workspace">
+                 <table class="word-table">
+                   <thead>
+                     <tr><th>STT</th><th>Kanji</th><th>Kana</th><th>Meaning</th></tr>
+                   </thead>
+                   <tbody>
+                     ${words.map((w, i) => `
+                       <tr>
+                         <td class="cell-num">${i + 1}</td>
+                         <td class="cell-kanji">${s(w.kanji)}</td>
+                         <td class="cell-kana">${s(w.kana)}</td>
+                         <td class="cell-meaning">${s(w.meaning)}</td>
+                       </tr>
+                     `).join('')}
+                   </tbody>
+                 </table>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('')}
     </div>
-  `).join('');
+  `;
 }
 
-// Hàm gửi điểm (để bạn dùng cho Quiz)
+// HÀM ĐÓNG/MỞ ACCORDION
+function togglePart(partKey) {
+  state.activeAccordion[partKey] = !state.activeAccordion[partKey];
+  renderUnitContent();
+}
+
 async function sendScoreToSheet(partKey, score, total) {
   await fetch(STUDENT_CONFIG.scoreScriptUrl, {
     method: 'POST',
