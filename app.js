@@ -2,27 +2,30 @@
 
 const state = {
   activeUnit: null,
-  activeAccordion: {},
-  activeSubTab: {},
-  quizState: {},
-  flashcardState: {},
-  currentAudio: null,
-  playlist: [],
+  activeAccordion: {}, 
+  activeSubTab: {},    
+  quizState: {},       
+  flashcardState: {},  
+  currentAudio: null,  
+  playlist: [],        
   playlistIndex: -1,
   isAutoplay: false
 };
 
+// CẤU HÌNH QUẢN LÝ
 const STUDENT_CONFIG = {
-  studentName: "Học viên A",
+  studentName: "Ẩn danh",
+  // URL lấy dữ liệu từ Google Sheet (đã map vào biến window.vocabularyData)
   dataScriptUrl: "https://script.google.com/macros/s/AKfycbwIAqL_cJKsHgDBWdaRrpUwTBAvGzs4rnDaVVsmSzaHMkvH19ODlduBzlDfkdq9dwaw7g/exec?tab=Vocabulary",
-  googleScriptUrl: "https://script.google.com/macros/s/AKfycbzwmTFWowwaAVQ-ZLmk3cveLH8l9Bi7rJZk6TDE2ikNnjlwB36Rn0a5An0PgmQu1Rag2w/exec"
+  // URL gửi điểm
+  googleScriptUrl: "https://script.google.com/macros/s/AKfycbzwmTFWowwaAVQ-ZLmk3cveLH8l9Bi7rJZk6TDE2ikNnjlwB36Rn0a5An0PgmQu1Rag2w/exec" 
 };
 
 const HEADERS = ["id", "unit", "part", "kanji", "kana", "romaji", "hanviet", "meaning", "example", "audio"];
 
 document.addEventListener('DOMContentLoaded', initApp);
 
-// --- 1. LOGIC NẠP DỮ LIỆU (TỪ GOOGLE SHEETS) ---
+// --- LOGIC LẤY DATA TỪ GG SHEET (Từ app-now02.js) ---
 async function initApp() {
   const progressEl = document.getElementById('global-progress');
   if (progressEl) progressEl.textContent = 'Đang đồng bộ dữ liệu...';
@@ -31,7 +34,7 @@ async function initApp() {
     const response = await fetch(STUDENT_CONFIG.dataScriptUrl);
     const rawData = await response.json();
     
-    // Ánh xạ dữ liệu Object {0: [...]} sang Mảng Object chuẩn
+    // Convert object {0: [...], 1: [...]} sang array object chuẩn
     window.vocabularyData = Object.keys(rawData).map(key => {
         let row = rawData[key];
         let obj = {};
@@ -39,9 +42,9 @@ async function initApp() {
         return obj;
     }).filter(item => item.id);
 
-    console.log("Dữ liệu đã sẵn sàng:", window.vocabularyData);
+    console.log("Data loaded:", window.vocabularyData);
     
-    // Sau khi nạp xong, khởi chạy các logic cũ
+    // Khởi chạy giao diện sau khi có data
     const units = getUnits();
     if (units.length > 0) {
       state.activeUnit = units[0];
@@ -51,33 +54,49 @@ async function initApp() {
     }
   } catch (err) {
     console.error("Lỗi:", err);
-    if (progressEl) progressEl.textContent = 'Lỗi hệ thống!';
+    if (progressEl) progressEl.textContent = 'Lỗi tải dữ liệu!';
   }
 }
 
-// --- 2. LOGIC CƠ BẢN (Giữ nguyên) ---
-function s(v) { return (v !== undefined && v !== null && v !== '') ? String(v) : '—'; }
-function getUnits() { return [...new Set(vocabularyData.map(w => w.unit))].sort(); }
-function getPartsForUnit(unit) { return [...new Set(vocabularyData.filter(w => w.unit === unit).map(w => w.part))].sort(); }
-function getWords(unit, part) { return vocabularyData.filter(w => w.unit === unit && w.part === part); }
-
-// --- 3. CÁC TÍNH NĂNG CŨ (Quiz, Flashcard, Audio...) ---
-// Bạn hãy copy toàn bộ các hàm render, quizEngine, flashcard, v.v. từ file "app-dúng.js" 
-// dán tiếp vào dưới đây.
-// Vì `window.vocabularyData` đã ở định dạng mảng object chuẩn, các hàm cũ sẽ chạy bình thường.
-
-// Ví dụ hàm render đã cập nhật để khớp với accordion cũ:
-function renderUnitContent() {
-  const wrap = document.getElementById('unit-content-wrap');
-  if (!wrap) return;
-  const parts = getPartsForUnit(state.activeUnit);
-  
-  wrap.innerHTML = parts.map(p => `
-    <div class="accordion-item" id="acc-item-${state.activeUnit}_${p}">
-       <button class="accordion-header" onclick="togglePart('${state.activeUnit}_${p}')">
-         ${p} <span class="accordion-meta"></span>
-       </button>
-       <div class="accordion-body" id="body-${state.activeUnit}_${p}"></div>
-    </div>
-  `).join('');
+// --- CÁC LOGIC CHỨC NĂNG (Giữ nguyên từ file bạn cung cấp) ---
+function switchMainSection(sectionId) {
+  document.querySelectorAll('.section-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.main-nav-btn').forEach(b => b.classList.remove('active'));
+  const panel = document.getElementById('section-' + sectionId);
+  if (panel) panel.classList.add('active');
+  document.querySelectorAll('.main-nav-btn').forEach(b => {
+    if (b.textContent.trim().toLowerCase().includes(sectionId.toLowerCase()))
+      b.classList.add('active');
+  });
 }
+
+function s(v) { return (v !== undefined && v !== null && v !== '') ? String(v) : '—'; }
+function escAttr(v) { return String(v === undefined || v === null ? '' : v).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;'); }
+function _shuffle(arr) { const a = [...arr]; for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+function _digits(str) { const m = String(str || '').match(/\d+/); return m ? m[0] : '0'; }
+
+function buildAudioPath(wordObj) {
+  if (wordObj.audio) return `audio/${wordObj.audio}`;
+  const u = _digits(wordObj.unit);
+  const p = _digits(wordObj.part);
+  return `audio/u${u}_p${p}_word-${wordObj.id}.mp3`;
+}
+
+function getUnits() { 
+  if (typeof vocabularyData === 'undefined') return [];
+  const units = [...new Set(vocabularyData.map(w => w.unit))];
+  return units.sort((a, b) => String(a).localeCompare(String(b), undefined, {numeric: true, sensitivity: 'base'}));
+}
+
+function getPartsForUnit(unitName) { 
+  if (typeof vocabularyData === 'undefined') return [];
+  const filtered = vocabularyData.filter(w => w.unit === unitName);
+  const parts = [...new Set(filtered.map(w => w.part))];
+  return parts.sort((a, b) => String(a).localeCompare(String(b), undefined, {numeric: true, sensitivity: 'base'}));
+}
+
+function getWords(unitName, partName) { return vocabularyData.filter(w => w.unit === unitName && w.part === partName); }
+
+// (BẠN GIỮ NGUYÊN TOÀN BỘ CÁC HÀM RENDER, QUIZ, FLASHCARD, AUDIO... TỪ FILE CŨ CỦA BẠN DÁN TIẾP VÀO ĐÂY)
+// Các hàm renderUnitTabs, selectUnit, toggleAccordion, renderUnitContent, switchSubTab, buildWorkspacePanels... 
+// ...dán toàn bộ phần còn lại từ file cũ vào đây.
