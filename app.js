@@ -6,9 +6,11 @@ const state = {
   activeSubTab: {}
 };
 
+// Thay thế đoạn cấu hình trong app.js bằng đoạn này
 const STUDENT_CONFIG = {
   studentName: "Học viên A",
-  dataScriptUrl: "https://script.google.com/macros/s/AKfycbwIAqL_cJKsHgDBWdaRrpUwTBAvGzs4rnDaVVsmSzaHMkvH19ODlduBzlDfkdq9dwaw7g/exec?tab=Vocabulary",
+  // Thử dùng link gốc, bỏ tham số ?tab=Vocabulary xem có hết lỗi 404 không
+  dataScriptUrl: "https://script.google.com/macros/s/AKfycbwIAqL_cJKsHgDBWdaRrpUwTBAvGzs4rnDaVVsmSzaHMkvH19ODlduBzlDfkdq9dwaw7g/exec",
   scoreScriptUrl: "https://script.google.com/macros/s/AKfycbxDCDzDn2ZcBRAlE5M_OEMWNnB3J36ofdFb0VMzdBEPLURNaarOHYb6G4VG_0F1KnIPzQ/exec"
 };
 
@@ -42,6 +44,7 @@ function selectUnit(unitName) {
 
 // 3. KHỞI TẠO CHÍNH
 function initApp() {
+console.log("Đang gọi đến URL:", STUDENT_CONFIG.dataScriptUrl);
   fetch(STUDENT_CONFIG.dataScriptUrl)
     .then(response => response.json())
     .then(data => {
