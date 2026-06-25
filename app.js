@@ -12,9 +12,13 @@ const state = {
   isAutoplay: false
 };
 
-// CẤU HÌNH QUẢN LÝ CHO HỌC VIÊN (Đặt ngay tại đây)
+// CẤU HÌNH QUẢN LÝ CHO HỌC VIÊN
 const STUDENT_CONFIG = {
-  googleScriptUrl: "https://script.google.com/macros/s/AKfycbxDCDzDn2ZcBRAlE5M_OEMWNnB3J36ofdFb0VMzdBEPLURNaarOHYb6G4VG_0F1KnIPzQ/exec" 
+  studentName: "Học viên A",
+  // URL để GỬI ĐIỂM (của bạn)
+  scoreScriptUrl: "https://script.google.com/macros/s/AKfycbzwmTFWowwaAVQ-ZLmk3cveLH8l9Bi7rJZk6TDE2ikNnjlwB36Rn0a5An0PgmQu1Rag2w/exec",
+  // URL để TẢI DỮ LIỆU (của bạn đã thêm ?tab=Vocabulary)
+  dataScriptUrl: "https://script.google.com/macros/s/AKfycbxDCDzDn2ZcBRAlE5M_OEMWNnB3J36ofdFb0VMzdBEPLURNaarOHYb6G4VG_0F1KnIPzQ/exec?tab=Vocabulary"
 };
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -22,10 +26,28 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function initApp() {
-  if (typeof vocabularyData === 'undefined' || !Array.isArray(vocabularyData)) {
-    document.getElementById('global-progress').textContent = 'No data';
-    return;
-  }
+  const progressEl = document.getElementById('global-progress');
+  if (progressEl) progressEl.textContent = 'Đang tải dữ liệu từ server...';
+
+  fetch(STUDENT_CONFIG.dataScriptUrl)
+    .then(response => response.json())
+    .then(data => {
+      // Gán dữ liệu vào biến toàn cục để hệ thống sử dụng
+      window.vocabularyData = data; 
+      
+      const units = getUnits();
+      if (units.length > 0) {
+        state.activeUnit = units[0];
+        renderUnitTabs(units);
+        renderUnitContent();
+        updateGlobalProgress();
+      }
+    })
+    .catch(err => {
+      console.error("Lỗi khi tải dữ liệu:", err);
+      if (progressEl) progressEl.textContent = 'Lỗi kết nối database!';
+    });
+}
   
   const units = getUnits();
   if (units.length > 0) {
