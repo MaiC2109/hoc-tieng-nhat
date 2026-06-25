@@ -20,6 +20,8 @@ const HEADERS = ["id", "unit", "part", "kanji", "kana", "romaji", "hanviet", "me
 
 // 3. Hàm nạp dữ liệu từ Google Sheet (Thay thế cho file data.js cũ)
 async function initApp() {
+  try {
+    const response = await fetch(STUDENT_CONFIG.dataScriptUrl);
   const progressEl = document.getElementById('global-progress');
   if (progressEl) progressEl.textContent = 'Đang tải dữ liệu...';
 
@@ -45,6 +47,10 @@ async function initApp() {
     }
   } catch (err) {
     console.error("Lỗi:", err);
+  }
+document.getElementById('loading-overlay').style.display = 'none';
+  } catch (err) {
+    document.getElementById('loading-overlay').innerHTML = "Lỗi kết nối, hãy tải lại trang!";
   }
 }
 
@@ -145,21 +151,27 @@ function toggleAccordion(unit, part) {
   const el = document.getElementById(`acc-item-${partKey}`);
   if (!el) return;
   
+  // Kiểm tra nếu đang mở thì đóng lại
   if (el.classList.contains('open')) {
     el.classList.remove('open');
-    if (state.activeAccordion[unit] === part) {
-      state.activeAccordion[unit] = null;
-    }
+    state.activeAccordion[unit] = null;
   } else {
-    if (state.activeAccordion[unit]) {
-      const prev = document.getElementById(`acc-item-${unit}_${state.activeAccordion[unit]}`);
-      if (prev) prev.classList.remove('open');
+    // Đóng các item khác trong cùng unit (để accordion gọn gàng)
+    const activePart = state.activeAccordion[unit];
+    if (activePart) {
+      document.getElementById(`acc-item-${unit}_${activePart}`)?.classList.remove('open');
     }
+    
+    // Mở item được chọn
     el.classList.add('open');
     state.activeAccordion[unit] = part;
     
-    const curTab = state.activeSubTab[partKey] || 'study';
-    switchSubTab(partKey, curTab);
+    // Chỉ build nội dung nếu nó chưa có dữ liệu (Lazy loading)
+    const body = el.querySelector('.accordion-body');
+    if (body && body.innerHTML.trim() === "") {
+        const curTab = state.activeSubTab[partKey] || 'study';
+        buildWorkspacePanels(partKey, curTab);
+    }
   }
 }
 

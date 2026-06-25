@@ -31,6 +31,23 @@
   --transition: 200ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+.loading-overlay {
+  position: fixed;
+  top: 0; left: 0; width: 100%; height: 100%;
+  background: var(--paper);
+  display: flex; flex-direction: column;
+  justify-content: center; align-items: center;
+  z-index: 9999;
+}
+.spinner {
+  width: 40px; height: 40px;
+  border: 4px solid var(--border-md);
+  border-top: 4px solid var(--vermillion);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
 .word-table tbody tr.playing {
   background: var(--verm-glow);
   outline: 1px solid rgba(192,57,43,0.25);
