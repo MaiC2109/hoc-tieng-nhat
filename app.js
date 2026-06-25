@@ -2,103 +2,60 @@
 
 const state = {
   activeUnit: null,
-  activeAccordion: {}, 
-  activeSubTab: {},    
-  quizState: {},        
-  flashcardState: {},  
-  currentAudio: null,  
-  playlist: [],        
-  playlistIndex: -1,
-  isAutoplay: false
+  activeAccordion: {},
+  activeSubTab: {}
 };
 
-// CẤU HÌNH QUẢN LÝ
 const STUDENT_CONFIG = {
   studentName: "Học viên A",
-  // URL để TẢI DỮ LIỆU
   dataScriptUrl: "https://script.google.com/macros/s/AKfycbwIAqL_cJKsHgDBWdaRrpUwTBAvGzs4rnDaVVsmSzaHMkvH19ODlduBzlDfkdq9dwaw7g/exec?tab=Vocabulary",
-  // URL để GỬI ĐIỂM
   scoreScriptUrl: "https://script.google.com/macros/s/AKfycbxDCDzDn2ZcBRAlE5M_OEMWNnB3J36ofdFb0VMzdBEPLURNaarOHYb6G4VG_0F1KnIPzQ/exec"
 };
 
-document.addEventListener('DOMContentLoaded', () => {
-  initApp();
-});
+// 1. ĐỊNH NGHĨA CẤU TRÚC CỘT (Khớp với dữ liệu bạn thấy trong console)
+const COLUMNS = ["id", "unit", "part", "kanji", "kana", "romaji", "hanviet", "meaning", "example"];
 
+function transformData(rawData) {
+  // Bỏ qua dòng header nếu có, chuyển mảng con thành object
+  return rawData.map(row => {
+    let obj = {};
+    COLUMNS.forEach((col, index) => { obj[col] = row[index]; });
+    return obj;
+  }).filter(item => item.id); // Lọc bỏ dòng trống
+}
+
+// 2. CÁC HÀM RENDER ĐẶT LÊN TRÊN ĐỂ TRÁNH LỖI REFERENCE
+function renderUnitTabs(units) {
+  const bar = document.getElementById('unit-tabs-bar');
+  if (!bar) return;
+  bar.innerHTML = units.map(u => `
+    <button class="unit-tab ${u === state.activeUnit ? 'active' : ''}" onclick="selectUnit('${u}')">
+      ${u}
+    </button>`).join('');
+}
+
+function selectUnit(unitName) {
+  state.activeUnit = unitName;
+  renderUnitTabs([...new Set(window.vocabularyData.map(w => w.unit))]);
+  console.log("Đã chọn unit:", unitName);
+}
+
+// 3. KHỞI TẠO CHÍNH
 function initApp() {
-  const progressEl = document.getElementById('global-progress');
-  if (progressEl) progressEl.textContent = 'Đang tải dữ liệu...';
-
   fetch(STUDENT_CONFIG.dataScriptUrl)
     .then(response => response.json())
     .then(data => {
-      // Xử lý dữ liệu linh hoạt hơn
-      window.vocabularyData = Array.isArray(data) ? data : (data.Vocabulary || Object.values(data)[0] || []);
-      
-      console.log("Dữ liệu đã nạp:", window.vocabularyData); 
-      
-      if (!Array.isArray(window.vocabularyData) || window.vocabularyData.length === 0) {
-        if (progressEl) progressEl.textContent = 'Không có dữ liệu hoặc lỗi cấu trúc!';
-        return;
-      }
+      // Chuyển đổi dữ liệu thô thành mảng object
+      window.vocabularyData = transformData(data);
+      console.log("Dữ liệu đã ánh xạ thành công:", window.vocabularyData);
 
-      const units = getUnits();
+      const units = [...new Set(window.vocabularyData.map(w => w.unit))].sort();
       if (units.length > 0) {
         state.activeUnit = units[0];
         renderUnitTabs(units);
-        renderUnitContent();
-        updateGlobalProgress();
       }
     })
-    .catch(err => {
-      console.error("Lỗi tải dữ liệu:", err);
-      if (progressEl) progressEl.textContent = 'Lỗi kết nối database!';
-    });
+    .catch(err => console.error("Lỗi:", err));
 }
 
-// HÀM GỬI ĐIỂM LÊN GOOGLE SHEET
-async function sendScoreToSheet(partKey, score, total) {
-  try {
-    const response = await fetch(STUDENT_CONFIG.scoreScriptUrl, {
-      method: 'POST',
-      mode: 'no-cors',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        student: STUDENT_CONFIG.studentName,
-        part: partKey,
-        score: `${score}/${total}`,
-        timestamp: new Date().toLocaleString()
-      })
-    });
-    console.log("Đã lưu điểm cho:", partKey);
-  } catch (err) {
-    console.error("Không thể lưu điểm:", err);
-  }
-}
-
-// CÁC HÀM XỬ LÝ LOGIC (Giữ nguyên các hàm cũ của bạn)
-function switchMainSection(sectionId) {
-  document.querySelectorAll('.section-panel').forEach(p => p.classList.remove('active'));
-  document.querySelectorAll('.main-nav-btn').forEach(b => b.classList.remove('active'));
-  const panel = document.getElementById('section-' + sectionId);
-  if (panel) panel.classList.add('active');
-}
-
-function s(v) { return (v !== undefined && v !== null && v !== '') ? String(v) : '—'; }
-function escAttr(v) { return String(v === undefined || v === null ? '' : v).replace(/'/g, "\\'"); }
-
-function getUnits() {
-  if (typeof vocabularyData === 'undefined') return [];
-  return [...new Set(vocabularyData.map(w => w.unit))].sort((a, b) => String(a).localeCompare(String(b), undefined, {numeric: true}));
-}
-
-function getPartsForUnit(unitName) {
-  return [...new Set(vocabularyData.filter(w => w.unit === unitName).map(w => w.part))].sort((a, b) => String(a).localeCompare(String(b), undefined, {numeric: true}));
-}
-
-function getWords(unitName, partName) {
-  return vocabularyData.filter(w => w.unit === unitName && w.part === partName);
-}
-
-// Giữ lại các hàm render và logic khác của bạn tại đây...
-// (Vì file cũ của bạn cắt đoạn cuối, hãy đảm bảo bạn paste phần còn thiếu nếu có)
+document.addEventListener('DOMContentLoaded', initApp);
