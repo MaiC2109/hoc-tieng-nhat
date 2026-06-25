@@ -12,7 +12,7 @@ const state = {
 const STUDENT_CONFIG = {
   studentName: "Học viên A",
   scoreScriptUrl: "https://script.google.com/macros/s/AKfycbzwmTFWowwaAVQ-ZLmk3cveLH8l9Bi7rJZk6TDE2ikNnjlwB36Rn0a5An0PgmQu1Rag2w/exec",
-  dataScriptUrl: "https://script.google.com/macros/s/AKfycbxDCDzDn2ZcBRAlE5M_OEMWNnB3J36ofdFb0VMzdBEPLURNaarOHYb6G4VG_0F1KnIPzQ/exec?tab=Vocabulary"
+  dataScriptUrl: "https://script.google.com/macros/s/AKfycbwIAqL_cJKsHgDBWdaRrpUwTBAvGzs4rnDaVVsmSzaHMkvH19ODlduBzlDfkdq9dwaw7g/exec?tab=Vocabulary"
 };
 
 // Định nghĩa thứ tự cột của Google Sheet
@@ -32,7 +32,6 @@ async function initApp() {
     console.log("CÁC KEY CỦA OBJECT:", Object.keys(data));
 
     // Dừng tại đây để bạn kiểm tra Console
-    throw new Error("Đang debug, xem Console để thấy cấu trúc!");
     
   } catch (err) {
     console.error("Lỗi:", err);
