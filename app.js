@@ -20,16 +20,27 @@ const HEADERS = ["id", "unit", "part", "kanji", "kana", "romaji", "hanviet", "me
 
 // 3. Hàm nạp dữ liệu từ Google Sheet (Thay thế cho file data.js cũ)
 async function initApp() {
-  try {
-    const response = await fetch(STUDENT_CONFIG.dataScriptUrl);
   const progressEl = document.getElementById('global-progress');
-  if (progressEl) progressEl.textContent = 'Đang tải dữ liệu...';
+  if (progressEl) progressEl.textContent = 'Đang đồng bộ...';
 
+  // 1. KIỂM TRA CACHE
+  const cachedData = localStorage.getItem('vocab_cache');
+  const cacheTime = localStorage.getItem('vocab_cache_time');
+  const ONE_HOUR = 3600000; // 1 giờ tính bằng mili giây
+
+  // Nếu đã có dữ liệu và chưa quá 1 giờ
+  if (cachedData && cacheTime && (Date.now() - parseInt(cacheTime) < ONE_HOUR)) {
+    console.log("Đang dùng dữ liệu từ bộ nhớ đệm (Cache)...");
+    window.vocabularyData = JSON.parse(cachedData);
+    startUI(); // Hàm hiển thị giao diện
+    return;
+  }
+
+  // 2. NẾU CHƯA CÓ CACHE HOẶC ĐÃ CŨ: Tải từ Google
   try {
     const response = await fetch(STUDENT_CONFIG.dataScriptUrl);
     const rawData = await response.json();
     
-    // Chuyển đổi dữ liệu Google Sheet về dạng mảng mà các hàm cũ của bạn cần
     window.vocabularyData = Object.keys(rawData).map(key => {
         let row = rawData[key];
         let obj = {};
@@ -37,23 +48,31 @@ async function initApp() {
         return obj;
     }).filter(item => item.id);
 
-    // Sau khi nạp xong, mới chạy các hàm giao diện cũ
-    const units = getUnits();
-    if (units.length > 0) {
-      state.activeUnit = units[0];
-      renderUnitTabs(units);
-      renderUnitContent();
-      updateGlobalProgress();
-    }
+    // Lưu vào LocalStorage
+    localStorage.setItem('vocab_cache', JSON.stringify(window.vocabularyData));
+    localStorage.setItem('vocab_cache_time', Date.now().toString());
+
+    console.log("Đã tải dữ liệu mới từ Google Sheet");
+    startUI();
   } catch (err) {
-    console.error("Lỗi:", err);
-  }
-document.getElementById('loading-overlay').style.display = 'none';
-  } catch (err) {
-    document.getElementById('loading-overlay').innerHTML = "Lỗi kết nối, hãy tải lại trang!";
+    console.error("Lỗi tải:", err);
+    if (progressEl) progressEl.textContent = 'Lỗi mạng!';
   }
 }
 
+// Hàm này để tách biệt việc khởi tạo giao diện
+function startUI() {
+  const units = getUnits();
+  if (units.length > 0) {
+    state.activeUnit = units[0];
+    renderUnitTabs(units);
+    renderUnitContent();
+    updateGlobalProgress();
+    // Ẩn loading nếu bạn có dùng overlay
+    const overlay = document.getElementById('loading-overlay');
+    if (overlay) overlay.style.display = 'none';
+  }
+}
 // Kích hoạt khi trang web tải xong
 document.addEventListener('DOMContentLoaded', initApp);
 
