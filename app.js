@@ -28,21 +28,25 @@ async function initApp() {
     const response = await fetch(STUDENT_CONFIG.dataScriptUrl);
     const data = await response.json();
     
-    // LOG ĐỂ KIỂM TRA CẤU TRÚC THẬT SỰ TRƯỚC KHI MAP
-    console.log("Dữ liệu gốc từ server:", data);
+    console.log("Dữ liệu gốc nhận được:", data);
 
-    // XỬ LÝ ĐA DẠNG CẤU TRÚC:
-    // 1. Nếu data là object có chứa key "Vocabulary" hoặc key bất kỳ
-    // 2. Nếu data là mảng thì dùng trực tiếp
-    let arrayData = Array.isArray(data) ? data : (data.Vocabulary || Object.values(data)[0]);
-
-    // Kiểm tra lại lần nữa
-    if (!Array.isArray(arrayData)) {
-      throw new Error("Dữ liệu nhận về không phải là mảng!");
+    // TỰ ĐỘNG TÌM MẢNG: 
+    // Nếu data là Object, nó sẽ tìm thuộc tính đầu tiên là mảng.
+    let arrayData = Array.isArray(data) ? data : null;
+    if (!arrayData) {
+      for (let key in data) {
+        if (Array.isArray(data[key])) {
+          arrayData = data[key];
+          break;
+        }
+      }
     }
 
-    // CHUYỂN ĐỔI: Nếu phần tử đầu tiên là mảng (dạng bảng 2D), ta map nó
-    // Nếu phần tử đầu tiên là object (dạng JSON chuẩn), ta dùng luôn
+    if (!arrayData) {
+      throw new Error("Không tìm thấy mảng dữ liệu trong kết quả trả về!");
+    }
+
+    // CHUYỂN ĐỔI: Nếu phần tử đầu tiên là mảng (dòng dữ liệu), ta map nó sang Object
     if (arrayData.length > 0 && Array.isArray(arrayData[0])) {
        window.vocabularyData = arrayData.map(row => {
           let obj = {};
@@ -53,7 +57,7 @@ async function initApp() {
        window.vocabularyData = arrayData;
     }
 
-    console.log("Dữ liệu sau xử lý:", window.vocabularyData);
+    console.log("Dữ liệu sau khi xử lý thành công:", window.vocabularyData);
 
     const units = getUnits();
     if (units.length > 0) {
