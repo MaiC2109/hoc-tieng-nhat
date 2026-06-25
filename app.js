@@ -26,16 +26,34 @@ async function initApp() {
 
   try {
     const response = await fetch(STUDENT_CONFIG.dataScriptUrl);
-    const rawData = await response.json();
+    const data = await response.json();
+    
+    // LOG ĐỂ KIỂM TRA CẤU TRÚC THẬT SỰ TRƯỚC KHI MAP
+    console.log("Dữ liệu gốc từ server:", data);
 
-    // Chuyển mảng giá trị thô thành mảng Object
-    window.vocabularyData = rawData.map(row => {
-      let obj = {};
-      HEADERS.forEach((h, i) => { obj[h] = row[i]; });
-      return obj;
-    }).filter(item => item.id); // Bỏ dòng rỗng
+    // XỬ LÝ ĐA DẠNG CẤU TRÚC:
+    // 1. Nếu data là object có chứa key "Vocabulary" hoặc key bất kỳ
+    // 2. Nếu data là mảng thì dùng trực tiếp
+    let arrayData = Array.isArray(data) ? data : (data.Vocabulary || Object.values(data)[0]);
 
-    console.log("Dữ liệu đã nạp:", window.vocabularyData);
+    // Kiểm tra lại lần nữa
+    if (!Array.isArray(arrayData)) {
+      throw new Error("Dữ liệu nhận về không phải là mảng!");
+    }
+
+    // CHUYỂN ĐỔI: Nếu phần tử đầu tiên là mảng (dạng bảng 2D), ta map nó
+    // Nếu phần tử đầu tiên là object (dạng JSON chuẩn), ta dùng luôn
+    if (arrayData.length > 0 && Array.isArray(arrayData[0])) {
+       window.vocabularyData = arrayData.map(row => {
+          let obj = {};
+          HEADERS.forEach((h, i) => { obj[h] = row[i]; });
+          return obj;
+       }).filter(item => item.id);
+    } else {
+       window.vocabularyData = arrayData;
+    }
+
+    console.log("Dữ liệu sau xử lý:", window.vocabularyData);
 
     const units = getUnits();
     if (units.length > 0) {
@@ -46,7 +64,7 @@ async function initApp() {
     }
   } catch (err) {
     console.error("Lỗi:", err);
-    if (progressEl) progressEl.textContent = 'Lỗi kết nối database!';
+    if (progressEl) progressEl.textContent = 'Lỗi dữ liệu!';
   }
 }
 
