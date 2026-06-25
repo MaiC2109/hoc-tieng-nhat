@@ -27,20 +27,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
 function initApp() {
   const progressEl = document.getElementById('global-progress');
-  if (progressEl) progressEl.textContent = 'Đang tải dữ liệu từ server...';
+  if (progressEl) progressEl.textContent = 'Đang tải dữ liệu...';
 
   fetch(STUDENT_CONFIG.dataScriptUrl)
     .then(response => response.json())
     .then(data => {
-      // Gán dữ liệu vào biến toàn cục
-      window.vocabularyData = data; 
+      // ÉP KIỂU: Nếu data không phải mảng, hãy đảm bảo nó là mảng
+      window.vocabularyData = Array.isArray(data) ? data : (data.values || []);
       
+      console.log("Dữ liệu nhận được:", window.vocabularyData); // Kiểm tra trong Console
+
       const units = getUnits();
       if (units.length > 0) {
         state.activeUnit = units[0];
         renderUnitTabs(units);
         renderUnitContent();
         updateGlobalProgress();
+      } else {
+        if(progressEl) progressEl.textContent = 'Không tìm thấy dữ liệu từ vựng!';
       }
     })
     .catch(err => {
@@ -48,7 +52,6 @@ function initApp() {
       if (progressEl) progressEl.textContent = 'Lỗi kết nối database!';
     });
 }
-
 // CÁC HÀM XỬ LÝ LOGIC
 function switchMainSection(sectionId) {
   document.querySelectorAll('.section-panel').forEach(p => p.classList.remove('active'));
