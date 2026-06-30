@@ -188,6 +188,118 @@ async function initApp() {
 }
 
 // Hàm này để tách biệt việc khởi tạo giao diện
+// ============================================================
+//  DEBUG PANEL — công cụ test Spaced Repetition NGAY TRONG APP
+//  Kích hoạt: thêm ?debug=sr vào cuối URL, ví dụ:
+//  https://your-site.vercel.app/?debug=sr
+//  Học viên bình thường không thấy gì cả vì không ai gõ tham số này.
+// ============================================================
+function isDebugMode() {
+  return new URLSearchParams(window.location.search).get('debug') === 'sr';
+}
+
+function renderDebugPanel() {
+  if (!isDebugMode()) return; // không làm gì nếu không bật debug
+
+  const panel = document.createElement('div');
+  panel.id = 'sr-debug-panel';
+  panel.style.cssText = `
+    position: fixed; bottom: 16px; right: 16px; z-index: 9999;
+    background: var(--paper-card, #fff); border: 1px solid var(--line, #ddd);
+    border-radius: 12px; padding: 14px; width: 280px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.15); font-family: var(--font-ui, sans-serif);
+    font-size: 12.5px; color: var(--ink, #222); max-height: 80vh; overflow-y: auto;
+  `;
+  panel.innerHTML = `
+    <div style="font-weight:700; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;">
+      🧪 SR Debug Panel
+      <button onclick="document.getElementById('sr-debug-panel').remove()" style="border:none;background:none;cursor:pointer;font-size:14px;">✕</button>
+    </div>
+    <div style="display:flex; flex-direction:column; gap:6px;">
+      <button class="sr-debug-btn" onclick="srDebugForceAllDueToday()">⏩ Ép tất cả từ về "đến hạn hôm nay"</button>
+      <button class="sr-debug-btn" onclick="srDebugSimulateDaysPassed()">📅 Giả lập trôi qua N ngày</button>
+      <button class="sr-debug-btn" onclick="srDebugRunFullTest()">🧪 Chạy bộ test đầy đủ (xem Console)</button>
+      <button class="sr-debug-btn" onclick="srDebugInspect()">🔍 Xem dữ liệu sr_vocab hiện tại</button>
+      <button class="sr-debug-btn" style="color:#c0392b;" onclick="srDebugClearAll()">🗑️ Xóa toàn bộ sr_vocab (reset sạch)</button>
+    </div>
+    <div id="sr-debug-output" style="margin-top:10px; padding-top:10px; border-top:1px dashed var(--line,#ddd); white-space:pre-wrap; max-height:240px; overflow-y:auto; font-family:monospace; font-size:11px;"></div>
+  `;
+  document.body.appendChild(panel);
+
+  // Style nhanh cho nút trong panel, không cần đụng vào style.css chính
+  const style = document.createElement('style');
+  style.textContent = `
+    .sr-debug-btn {
+      padding: 7px 10px; border-radius: 7px; border: 1px solid var(--line, #ddd);
+      background: var(--paper-soft, #f7f7f5); cursor: pointer; text-align: left; font-size: 12px;
+    }
+    .sr-debug-btn:hover { background: var(--paper-card, #fff); }
+  `;
+  document.head.appendChild(style);
+}
+
+function _srDebugLog(msg) {
+  const out = document.getElementById('sr-debug-output');
+  if (out) out.textContent = msg;
+  console.log(msg);
+}
+
+// Nút 1: ép toàn bộ từ đã học về due = hôm nay, để vào "Ôn tập" thấy ngay
+function srDebugForceAllDueToday() {
+  const data = _srGetAll();
+  const today = _srToday();
+  const count = Object.keys(data).length;
+  Object.keys(data).forEach(id => { data[id].dueDate = today; });
+  _srSaveAll(data);
+  updateReviewBadge();
+  _srDebugLog(`✅ Đã ép ${count} từ về dueDate = ${today}.\nBấm "Ôn tập hôm nay" trên nav để kiểm tra.`);
+}
+
+// Nút 2: giả lập N ngày trôi qua (đẩy lùi dueDate của toàn bộ từ về quá khứ)
+function srDebugSimulateDaysPassed() {
+  const n = parseInt(prompt('Giả lập đã trôi qua bao nhiêu ngày?', '7'), 10);
+  if (isNaN(n)) return;
+  const data = _srGetAll();
+  Object.keys(data).forEach(id => {
+    const d = new Date(data[id].dueDate);
+    d.setDate(d.getDate() - n);
+    data[id].dueDate = d.toISOString().split('T')[0];
+  });
+  _srSaveAll(data);
+  updateReviewBadge();
+  _srDebugLog(`✅ Đã đẩy lùi dueDate của toàn bộ từ về sớm hơn ${n} ngày.\nSố từ đến hạn ngay bây giờ: ${srCountDueWords()}`);
+}
+
+// Nút 3: chạy bộ test logic đầy đủ — in kết quả ra Console (giữ chi tiết ở đó vì khá dài)
+function srDebugRunFullTest() {
+  if (typeof srRunFullTestSuite !== 'function') {
+    _srDebugLog('⚠️ Chưa nạp bộ test đầy đủ. Hãy chắc rằng file sr_test_script.js đã được include, hoặc dùng 3 nút còn lại để test nhanh.');
+    return;
+  }
+  _srDebugLog('🧪 Đang chạy... xem chi tiết trong tab Console (F12).');
+  srRunFullTestSuite();
+}
+
+// Nút 4: xem nhanh dữ liệu hiện có, không cần mở Console
+function srDebugInspect() {
+  const data = _srGetAll();
+  const today = _srToday();
+  const lines = Object.entries(data).map(([id, st]) => {
+    const isDue = st.dueDate <= today ? '🔴 ĐẾN HẠN' : '⚪ chưa';
+    return `${id}: interval=${st.interval} reps=${st.reps} due=${st.dueDate} ${isDue}`;
+  });
+  _srDebugLog(lines.length ? lines.join('\n') : '(chưa có từ nào trong sr_vocab)');
+}
+
+// Nút 5: dọn sạch để test lại từ đầu
+function srDebugClearAll() {
+  if (!confirm('Xóa toàn bộ dữ liệu Spaced Repetition? (chỉ ảnh hưởng máy/trình duyệt này)')) return;
+  localStorage.removeItem(SR_STORAGE_KEY);
+  updateReviewBadge();
+  _srDebugLog('🗑️ Đã xóa sạch sr_vocab.');
+}
+
+
 function startUI() {
   const units = getUnits();
   if (units.length > 0) {
@@ -197,6 +309,7 @@ function startUI() {
     updateGlobalProgress();
     updateReviewBadge(); // hiện số từ cần ôn hôm nay (Spaced Repetition), an toàn nếu badge chưa có trong HTML
     switchMainSection('vocab'); // panel mặc định khi mở app — thay cho class "active" viết cứng trong HTML
+    renderDebugPanel(); // chỉ hiện khi URL có ?debug=sr, không ảnh hưởng học viên bình thường
     // Ẩn loading nếu bạn có dùng overlay
     const overlay = document.getElementById('loading-overlay');
     if (overlay) overlay.style.display = 'none';
@@ -243,6 +356,20 @@ function _shuffle(arr) {
 function _digits(str) {
   const m = String(str || '').match(/\d+/);
   return m ? m[0] : '0';
+}
+
+// Helper dùng chung cho mặt trước Flashcard (cả Vocab thường lẫn Ôn tập):
+// Nếu từ có Kanji -> hiện Kanji như bình thường.
+// Nếu từ KHÔNG có Kanji (chỉ tồn tại ở dạng kana, vd: けが) -> hiện
+// chính chữ Kana đó thay vì hiển thị placeholder text "Kana Only".
+function getFrontCardDisplay(word) {
+  const hasKanji = word.kanji && word.kanji !== '—';
+  if (hasKanji) {
+    return `<div class="card-kanji">${word.kanji}</div>`;
+  }
+  // Không có kanji: dùng kana làm chữ chính, giữ cỡ chữ to như kanji
+  // để bố cục card không bị lệch trọng tâm giữa các từ có/không có kanji.
+  return `<div class="card-kanji">${s(word.kana)}</div>`;
 }
 
 function buildAudioPath(wordObj) {
@@ -609,7 +736,7 @@ function renderFlashcard(partKey) {
     <div class="flashcard-scene" id="card-scene-${partKey}" onclick="this.classList.toggle('flipped')">
       <div class="flashcard-inner">
         <div class="card-face card-front">
-          ${currentWord.kanji && currentWord.kanji !== '—' ? `<div class="card-kanji">${currentWord.kanji}</div>` : `<div class="card-kanji" style="font-size:28px; font-family:var(--font-ja); color:var(--ink-mute); ">Kana Only</div>`}
+          ${getFrontCardDisplay(currentWord)}
           <div class="card-example">${s(currentWord.example)}</div>
           <div style="margin-top: 12px;" onclick="event.stopPropagation();">
              <button class="card-listen-btn-front" style="background:#fff; color:var(--ink); border-color:#fff;" onclick="playSingleAudio(${currentWord.id}, '${buildAudioPath(currentWord)}', '${partKey}')">🎵</button>
@@ -1021,7 +1148,7 @@ function renderReviewFlashcard() {
     <div class="flashcard-scene" id="review-card-scene" onclick="this.classList.toggle('flipped')">
       <div class="flashcard-inner">
         <div class="card-face card-front">
-          ${currentWord.kanji && currentWord.kanji !== '—' ? `<div class="card-kanji">${currentWord.kanji}</div>` : `<div class="card-kanji" style="font-size:28px; font-family:var(--font-ja); color:var(--ink-mute);">Kana Only</div>`}
+          ${getFrontCardDisplay(currentWord)}
           <div class="card-example">${s(currentWord.example)}</div>
           <div style="margin-top: 12px;" onclick="event.stopPropagation();">
              <button class="card-listen-btn-front" style="background:#fff; color:var(--ink); border-color:#fff;" onclick="playSingleAudio(${currentWord.id}, '${buildAudioPath(currentWord)}', 'review')">🎵</button>
