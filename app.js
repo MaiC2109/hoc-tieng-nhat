@@ -1,5 +1,5 @@
 'use strict';
-
+console.log = function() {};
 // 1. Khởi tạo trạng thái ứng dụng
 const state = {
   activeUnit: null,
@@ -7,29 +7,167 @@ const state = {
   activeSubTab: {},
   quizState: {},
   flashcardState: {},
-  currentAudio: null
+  currentAudio: null,
+  reviewFlashcardState: null // trạng thái riêng cho phiên Ôn tập (Spaced Repetition)
 };
+
+// ============================================================
+//  SPACED REPETITION MODULE (SM-2 rút gọn, lưu localStorage)
+//  Key lưu: 'sr_vocab' -> { [wordId]: { interval, reps, dueDate } }
+// ============================================================
+const SR_STORAGE_KEY = 'sr_vocab';
+const SR_STEPS_DAYS = [1, 3, 7]; // 3 lần ôn đầu cố định, sau đó nhân hệ số
+const SR_GROWTH_FACTOR = 2.2;
+
+function _srToday() {
+  return new Date().toISOString().split('T')[0]; // 'YYYY-MM-DD'
+}
+
+function _srGetAll() {
+  try {
+    return JSON.parse(localStorage.getItem(SR_STORAGE_KEY) || '{}');
+  } catch (e) {
+    console.error('Lỗi đọc sr_vocab:', e);
+    return {};
+  }
+}
+
+function _srSaveAll(data) {
+  localStorage.setItem(SR_STORAGE_KEY, JSON.stringify(data));
+}
+
+// Đánh dấu một danh sách từ (vd: cả 1 Part) là "đã học lần đầu",
+// chỉ áp dụng cho những từ CHƯA có trong sr_vocab — không ghi đè từ đã có lịch sử ôn.
+function srMarkWordsAsLearned(words) {
+  const data = _srGetAll();
+  let changed = false;
+  words.forEach(w => {
+    const id = String(w.id);
+    if (!data[id]) {
+      const due = new Date();
+      due.setDate(due.getDate() + SR_STEPS_DAYS[0]); // ôn lại sau 1 ngày
+      data[id] = { interval: SR_STEPS_DAYS[0], reps: 0, dueDate: due.toISOString().split('T')[0] };
+      changed = true;
+    }
+  });
+  if (changed) _srSaveAll(data);
+}
+
+// Cập nhật trạng thái ôn tập của 1 từ sau khi học viên trả lời (Đã thuộc / Chưa thuộc)
+function srUpdateWordState(wordId, isCorrect) {
+  const data = _srGetAll();
+  const id = String(wordId);
+  const st = data[id] || { interval: 0, reps: 0 };
+
+  if (isCorrect) {
+    st.interval = st.reps < SR_STEPS_DAYS.length
+      ? SR_STEPS_DAYS[st.reps]
+      : Math.round(st.interval * SR_GROWTH_FACTOR);
+    st.reps += 1;
+  } else {
+    st.interval = 1;
+    st.reps = Math.max(0, st.reps - 1);
+  }
+
+  const due = new Date();
+  due.setDate(due.getDate() + st.interval);
+  st.dueDate = due.toISOString().split('T')[0];
+
+  data[id] = st;
+  _srSaveAll(data);
+}
+
+// Lấy danh sách từ đến hạn ôn hôm nay, từ toàn bộ vocabularyData đã load
+function srGetDueWords() {
+  if (typeof window.vocabularyData === 'undefined') return [];
+  const data = _srGetAll();
+  const today = _srToday();
+
+  return window.vocabularyData.filter(w => {
+    const st = data[String(w.id)];
+    if (!st || !st.dueDate) return false; // chưa từng học -> không tính vào "ôn tập"
+    return st.dueDate <= today;
+  });
+}
+
+// Đếm nhanh số từ đến hạn hôm nay (dùng để hiện badge trên nav)
+function srCountDueWords() {
+  return srGetDueWords().length;
+}
+
+// ============================================================
+//  DEVICE LOGGING (âm thầm ghi nhận loại thiết bị học viên dùng)
+//  Mục đích: quan sát hành vi đa thiết bị trước khi quyết định
+//  có cần xây sync qua Supabase ở giai đoạn sau hay không.
+// ============================================================
+function logDeviceVisit() {
+  try {
+    const ua = navigator.userAgent || '';
+    const isMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(ua);
+    const deviceType = isMobile ? 'mobile' : 'desktop';
+
+    const payload = {
+      deviceType,
+      platform: navigator.platform || '',
+      screenWidth: window.screen ? window.screen.width : null,
+      timestamp: new Date().toISOString()
+    };
+
+    // Lưu local 1 bản ghi nhẹ để debug nếu cần
+    const log = JSON.parse(localStorage.getItem('device_log') || '[]');
+    log.push(payload);
+    if (log.length > 50) log.shift(); // giữ tối đa 50 bản ghi gần nhất
+    localStorage.setItem('device_log', JSON.stringify(log));
+
+    // Nếu đã có endpoint backend (vd: /api/log-device trên Vercel/Supabase),
+    // gửi kèm lên server. Để trống an toàn nếu chưa dựng endpoint này.
+    if (STUDENT_CONFIG.deviceLogUrl) {
+      fetch(STUDENT_CONFIG.deviceLogUrl, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      }).catch(() => {}); // im lặng bỏ qua lỗi mạng
+    }
+  } catch (e) {
+    console.error('Lỗi log thiết bị:', e);
+  }
+}
 
 // 2. Cấu hình đường dẫn
 const STUDENT_CONFIG = {
-  dataScriptUrl: "https://script.google.com/macros/s/AKfycbwIAqL_cJKsHgDBWdaRrpUwTBAvGzs4rnDaVVsmSzaHMkvH19ODlduBzlDfkdq9dwaw7g/exec?tab=Vocabulary",
-  googleScriptUrl: "https://script.google.com/macros/s/AKfycbzwmTFWowwaAVQ-ZLmk3cveLH8l9Bi7rJZk6TDE2ikNnjlwB36Rn0a5An0PgmQu1Rag2w/exec"
+  dataScriptUrl: "/api/data",
+  googleScriptUrl: "https://script.google.com/macros/s/AKfycbzwmTFWowwaAVQ-ZLmk3cveLH8l9Bi7rJZk6TDE2ikNnjlwB36Rn0a5An0PgmQu1Rag2w/exec",
+  // Để trống cho tới khi bạn dựng endpoint log thiết bị trên Vercel/Supabase.
+  // Khi có, chỉ cần điền URL vào đây, không cần sửa gì thêm ở logDeviceVisit().
+  deviceLogUrl: ""
 };
 
 const HEADERS = ["id", "unit", "part", "kanji", "kana", "romaji", "hanviet", "meaning", "example", "audio"];
 
 // 3. Hàm nạp dữ liệu từ Google Sheet (Thay thế cho file data.js cũ)
 async function initApp() {
-  try {
-    const response = await fetch(STUDENT_CONFIG.dataScriptUrl);
   const progressEl = document.getElementById('global-progress');
-  if (progressEl) progressEl.textContent = 'Đang tải dữ liệu...';
+  if (progressEl) progressEl.textContent = 'Đang đồng bộ...';
 
+  // 1. KIỂM TRA CACHE
+  const cachedData = localStorage.getItem('vocab_cache');
+  const cacheTime = localStorage.getItem('vocab_cache_time');
+  const ONE_HOUR = 3600000; // 1 giờ tính bằng mili giây
+
+  // Nếu đã có dữ liệu và chưa quá 1 giờ
+  if (cachedData && cacheTime && (Date.now() - parseInt(cacheTime) < ONE_HOUR)) {
+    console.log("Đang dùng dữ liệu từ bộ nhớ đệm (Cache)...");
+    window.vocabularyData = JSON.parse(cachedData);
+    startUI(); // Hàm hiển thị giao diện
+    return;
+  }
+
+  // 2. NẾU CHƯA CÓ CACHE HOẶC ĐÃ CŨ: Tải từ Google
   try {
     const response = await fetch(STUDENT_CONFIG.dataScriptUrl);
     const rawData = await response.json();
     
-    // Chuyển đổi dữ liệu Google Sheet về dạng mảng mà các hàm cũ của bạn cần
     window.vocabularyData = Object.keys(rawData).map(key => {
         let row = rawData[key];
         let obj = {};
@@ -37,25 +175,38 @@ async function initApp() {
         return obj;
     }).filter(item => item.id);
 
-    // Sau khi nạp xong, mới chạy các hàm giao diện cũ
-    const units = getUnits();
-    if (units.length > 0) {
-      state.activeUnit = units[0];
-      renderUnitTabs(units);
-      renderUnitContent();
-      updateGlobalProgress();
-    }
+    // Lưu vào LocalStorage
+    localStorage.setItem('vocab_cache', JSON.stringify(window.vocabularyData));
+    localStorage.setItem('vocab_cache_time', Date.now().toString());
+
+    console.log("Đã tải dữ liệu mới từ Google Sheet");
+    startUI();
   } catch (err) {
-    console.error("Lỗi:", err);
-  }
-document.getElementById('loading-overlay').style.display = 'none';
-  } catch (err) {
-    document.getElementById('loading-overlay').innerHTML = "Lỗi kết nối, hãy tải lại trang!";
+    console.error("Lỗi tải:", err);
+    if (progressEl) progressEl.textContent = 'Lỗi mạng!';
   }
 }
 
+// Hàm này để tách biệt việc khởi tạo giao diện
+function startUI() {
+  const units = getUnits();
+  if (units.length > 0) {
+    state.activeUnit = units[0];
+    renderUnitTabs(units);
+    renderUnitContent();
+    updateGlobalProgress();
+    updateReviewBadge(); // hiện số từ cần ôn hôm nay (Spaced Repetition), an toàn nếu badge chưa có trong HTML
+    switchMainSection('vocab'); // panel mặc định khi mở app — thay cho class "active" viết cứng trong HTML
+    // Ẩn loading nếu bạn có dùng overlay
+    const overlay = document.getElementById('loading-overlay');
+    if (overlay) overlay.style.display = 'none';
+  }
+}
 // Kích hoạt khi trang web tải xong
-document.addEventListener('DOMContentLoaded', initApp);
+document.addEventListener('DOMContentLoaded', () => {
+  logDeviceVisit(); // ghi nhận thiết bị mỗi lần học viên mở app — không chặn luồng chính
+  initApp();
+});
 
 function switchMainSection(sectionId) {
   document.querySelectorAll('.section-panel').forEach(p => p.classList.remove('active'));
@@ -63,8 +214,7 @@ function switchMainSection(sectionId) {
   const panel = document.getElementById('section-' + sectionId);
   if (panel) panel.classList.add('active');
   document.querySelectorAll('.main-nav-btn').forEach(b => {
-    if (b.textContent.trim().toLowerCase().includes(sectionId.toLowerCase()))
-      b.classList.add('active');
+    if (b.dataset.section === sectionId) b.classList.add('active');
   });
 }
 
@@ -427,6 +577,10 @@ function initFlashcardEngine(partKey) {
     isFinished: false
   };
 
+  // Spaced Repetition: đánh dấu các từ trong Part này là "đã học lần đầu"
+  // (chỉ áp dụng cho từ chưa từng có trong sr_vocab, không ghi đè lịch sử ôn cũ)
+  srMarkWordsAsLearned(words);
+
   renderFlashcard(partKey);
 }
 
@@ -491,6 +645,9 @@ function evaluateFlashcard(partKey, isRemembered) {
 
   const currentWord = fState.cards[fState.index];
   if (isRemembered) { fState.remembered++; } else { fState.notYet++; fState.notYetList.push(currentWord); }
+
+  // Spaced Repetition: ghi nhận kết quả để tính lại lịch ôn tiếp theo cho từ này
+  srUpdateWordState(currentWord.id, isRemembered);
 
   if (fState.index + 1 < fState.cards.length) {
     fState.index++;
@@ -767,3 +924,209 @@ function updateGlobalProgress() {
   }
   el.innerHTML = `Total Progress: <strong>${passedCount}</strong> Section(s) Passed`;
 }
+
+function syncData() {
+  const btn = document.getElementById('sync-btn');
+  btn.classList.add('rotating'); // Bắt đầu hiệu ứng xoay
+  
+  // Thông báo cho người dùng
+  const progressEl = document.getElementById('global-progress');
+  if (progressEl) progressEl.textContent = 'Đang đồng bộ lại dữ liệu...';
+
+  // Xóa bộ nhớ đệm
+  localStorage.removeItem('vocab_cache');
+  localStorage.removeItem('vocab_cache_time');
+
+  // Gọi lại hàm initApp để tải mới hoàn toàn
+  initApp().then(() => {
+    btn.classList.remove('rotating'); // Dừng xoay khi xong
+  });
+}
+
+// ============================================================
+//  TRANG "ÔN TẬP HÔM NAY" (Spaced Repetition Review)
+//  Tái sử dụng giao diện flashcard hiện có, khác ở nguồn dữ liệu:
+//  thay vì lấy theo Part, lấy theo danh sách từ ĐẾN HẠN ôn hôm nay.
+//  Yêu cầu HTML: 1 nút/khu vực gọi openReviewToday() và 1 container
+//  rỗng có id="review-zone" để render vào (xem ghi chú cuối file).
+// ============================================================
+
+// Cập nhật badge số từ cần ôn hôm nay — gọi hàm này ở bất cứ đâu
+// bạn muốn hiển thị con số (vd: trên nav bar, sau khi initApp xong).
+function updateReviewBadge() {
+  const badge = document.getElementById('review-due-badge');
+  if (!badge) return; // an toàn nếu HTML chưa có phần tử này
+  const count = srCountDueWords();
+  if (count > 0) {
+    badge.textContent = count;
+    badge.style.display = 'inline-flex';
+  } else {
+    badge.style.display = 'none';
+  }
+}
+
+// Mở phiên Ôn tập hôm nay — gọi từ nút nav "Ôn tập hôm nay" trong index.html
+function openReviewToday() {
+  const zone = document.getElementById('review-zone');
+  if (!zone) {
+    console.error('Không tìm thấy #review-zone trong HTML. Cần thêm 1 container rỗng với id này.');
+    return;
+  }
+
+  stopAllAudio();
+  switchMainSection('review'); // chuyển panel + active đúng nút nav nhờ data-section="review"
+
+  const dueWords = _shuffle(srGetDueWords());
+
+  state.reviewFlashcardState = {
+    index: 0,
+    cards: dueWords,
+    remembered: 0,
+    notYet: 0,
+    notYetList: [],
+    isFinished: dueWords.length === 0
+  };
+
+  renderReviewFlashcard();
+}
+
+function renderReviewFlashcard() {
+  const zone = document.getElementById('review-zone');
+  if (!zone) return;
+
+  const rState = state.reviewFlashcardState;
+  if (!rState || rState.cards.length === 0) {
+    zone.innerHTML = `
+      <div class="empty-state" style="text-align:center; padding:40px 20px;">
+        <div style="font-size:40px; margin-bottom:10px;">🎉</div>
+        <div style="font-weight:600; color:var(--ink);">Không có từ nào cần ôn hôm nay!</div>
+        <div style="color:var(--ink-mute); margin-top:6px; font-size:13px;">Quay lại vào buổi học tiếp theo nhé.</div>
+      </div>
+    `;
+    return;
+  }
+
+  if (rState.isFinished) {
+    renderReviewReport();
+    return;
+  }
+
+  const idx = rState.index;
+  const currentWord = rState.cards[idx];
+  const progressPct = (idx / rState.cards.length) * 100;
+
+  zone.innerHTML = `
+    <div class="flashcard-counter">Ôn tập <span>${idx + 1}</span> / <span>${rState.cards.length}</span></div>
+
+    <div class="flashcard-scene" id="review-card-scene" onclick="this.classList.toggle('flipped')">
+      <div class="flashcard-inner">
+        <div class="card-face card-front">
+          ${currentWord.kanji && currentWord.kanji !== '—' ? `<div class="card-kanji">${currentWord.kanji}</div>` : `<div class="card-kanji" style="font-size:28px; font-family:var(--font-ja); color:var(--ink-mute);">Kana Only</div>`}
+          <div class="card-example">${s(currentWord.example)}</div>
+          <div style="margin-top: 12px;" onclick="event.stopPropagation();">
+             <button class="card-listen-btn-front" style="background:#fff; color:var(--ink); border-color:#fff;" onclick="playSingleAudio(${currentWord.id}, '${buildAudioPath(currentWord)}', 'review')">🎵</button>
+          </div>
+          <div class="flip-hint" style="color:rgba(255,255,255,0.3); margin-top:16px;">Click card to flip</div>
+        </div>
+
+        <div class="card-face card-back" onclick="event.stopPropagation();">
+          <div class="card-kana-big">${s(currentWord.kana)}</div>
+          <div class="card-hanviet">${s(currentWord.hanviet)}</div>
+          <div class="card-meaning">${s(currentWord.meaning)}</div>
+          <div class="flip-hint" style="margin-top:16px;" onclick="document.getElementById('review-card-scene').classList.toggle('flipped')">Click to turn back</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="flashcard-actions">
+      <button class="btn btn-action-notyet" onclick="evaluateReviewFlashcard(false)">❌ Chưa thuộc</button>
+      <button class="btn btn-action-remember" onclick="evaluateReviewFlashcard(true)">✓ Đã thuộc</button>
+    </div>
+
+    <div class="flashcard-nav" style="margin-top:5px;">
+      <div class="flashcard-progress-bar" style="width: 260px;">
+        <div class="flashcard-progress-fill" style="width: ${progressPct}%"></div>
+      </div>
+    </div>
+  `;
+}
+
+function evaluateReviewFlashcard(isRemembered) {
+  const rState = state.reviewFlashcardState;
+  if (!rState) return;
+
+  const currentWord = rState.cards[rState.index];
+  if (isRemembered) { rState.remembered++; } else { rState.notYet++; rState.notYetList.push(currentWord); }
+
+  // Đây là bước quan trọng nhất: cập nhật lại lịch ôn tiếp theo cho từ này
+  srUpdateWordState(currentWord.id, isRemembered);
+
+  if (rState.index + 1 < rState.cards.length) {
+    rState.index++;
+    renderReviewFlashcard();
+  } else {
+    rState.isFinished = true;
+    renderReviewReport();
+  }
+
+  // Cập nhật lại badge số từ còn lại đến hạn (vd: trên nav)
+  updateReviewBadge();
+}
+
+function renderReviewReport() {
+  const zone = document.getElementById('review-zone');
+  if (!zone) return;
+  const rState = state.reviewFlashcardState;
+
+  let listItemsHtml = rState.notYetList.map(w => `
+    <div class="notyet-item">
+      <span><strong>${w.kanji !== '—' ? w.kanji : w.kana}</strong> (${w.kana})</span>
+      <span style="color:var(--vermillion); text-align:right;">${w.meaning}</span>
+    </div>
+  `).join('');
+
+  if (rState.notYetList.length === 0) {
+    listItemsHtml = `<div class="empty-state" style="padding:15px;">🎉 Tuyệt vời! Bạn đã ôn xong toàn bộ từ hôm nay!</div>`;
+  }
+
+  zone.innerHTML = `
+    <div class="flashcard-report">
+      <h3 style="text-align:center; font-size:18px; color:var(--ink);">📊 KẾT QUẢ ÔN TẬP HÔM NAY</h3>
+      <div class="report-grid">
+        <div class="report-box remembered">
+          <span class="report-num">${rState.remembered}</span>
+          <span class="report-title">Đã thuộc</span>
+        </div>
+        <div class="report-box notyet">
+          <span class="report-num">${rState.notYet}</span>
+          <span class="report-title">Chưa thuộc</span>
+        </div>
+      </div>
+      <h4 style="font-size:13px; margin-top:15px; color:var(--ink-soft);">📝 Từ chưa thuộc, sẽ được nhắc lại sớm hơn:</h4>
+      <div class="notyet-list">${listItemsHtml}</div>
+      <div style="margin-top:20px; text-align:center;">
+        <button class="btn btn-outline" style="width:100%; justify-content:center;" onclick="openReviewToday()">🔄 Ôn lại từ đầu</button>
+      </div>
+    </div>
+  `;
+}
+
+/*
+  ─────────────────────────────────────────────────────────────────
+  GHI CHÚ TÍCH HỢP HTML (đã áp dụng sẵn trong index.html mới):
+
+  1) Mỗi nút trong .main-nav cần có thuộc tính data-section khớp với
+     id của panel tương ứng (id="section-XXX" -> data-section="XXX").
+     switchMainSection() dựa vào thuộc tính này để active đúng nút,
+     không còn dò theo nội dung chữ trên nút như bản cũ.
+
+  2) Nút "Ôn tập hôm nay" gọi openReviewToday() thay vì
+     switchMainSection() trực tiếp — vì cần khởi tạo lại
+     state.reviewFlashcardState mỗi lần mở. Hàm này tự gọi
+     switchMainSection('review') ở bên trong.
+
+  3) Panel "Vocab" không còn gắn class "active" cứng trong HTML —
+     startUI() gọi switchMainSection('vocab') ngay khi app load xong,
+     đảm bảo đúng 1 nguồn sự thật duy nhất cho việc panel nào active.
+  ─────────────────────────────────────────────────────────────────
+*/

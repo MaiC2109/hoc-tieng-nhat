@@ -48,6 +48,22 @@
 }
 @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
+.progress-container {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+#sync-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 16px;
+  transition: transform 0.3s ease;
+}
+#sync-btn:hover { color: var(--vermillion); }
+.rotating { animation: spin 1s linear infinite; }
+@keyframes spin { 100% { transform: rotate(360deg); } }
+
 .word-table tbody tr.playing {
   background: var(--verm-glow);
   outline: 1px solid rgba(192,57,43,0.25);
@@ -679,4 +695,73 @@ body {
   .unit-tabs-bar { padding: 0 14px; }
   .logo-text { display: none; }
   .main-nav-btn { padding: 0 12px; font-size: 13px; }
+}
+
+/* ─────────────────────────────────────────────
+   ÔN TẬP HÔM NAY (Spaced Repetition Review)
+   Tái dùng các token + class flashcard sẵn có
+   (.flashcard-scene, .card-face, .flashcard-report...)
+───────────────────────────────────────────── */
+
+/* Badge số từ đến hạn, đặt cạnh nhãn nút nav "Ôn tập hôm nay" */
+.nav-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 20px;
+  background: var(--vermillion);
+  color: #fff;
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 1;
+  margin-left: 2px;
+}
+
+.review-page-wrap {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 28px 24px 40px;
+  max-width: 700px;
+  width: 100%;
+  align-self: center;
+}
+
+.review-page-header {
+  text-align: center;
+  margin-bottom: 22px;
+}
+
+.review-page-header h2 {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--ink);
+  margin-bottom: 6px;
+}
+
+.review-page-header p {
+  font-size: 13.5px;
+  color: var(--ink-mute);
+}
+
+/* review-zone tái sử dụng .flashcard-area, .flashcard-report, .empty-state
+   đã có sẵn trong app.js (render trực tiếp các class này) — không cần
+   định nghĩa thêm, chỉ cần đảm bảo #review-zone không giới hạn width
+   để các class đó canh giữa đúng như ở tab Flashcard hiện tại. */
+#review-zone {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 10px 0 20px;
+  gap: 20px;
+}
+
+@media (max-width: 640px) {
+  .review-page-wrap { padding: 20px 14px 32px; }
+  .review-page-header h2 { font-size: 17px; }
 }
