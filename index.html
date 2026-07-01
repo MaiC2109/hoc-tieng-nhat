@@ -27,14 +27,18 @@
     </div>
 
     <nav class="main-nav">
-      <button class="main-nav-btn active" onclick="switchMainSection('vocab')">
+      <button class="main-nav-btn" data-section="vocab" onclick="switchMainSection('vocab')">
         <span class="nav-icon">📖</span> Vocab
       </button>
-      <button class="main-nav-btn" disabled>
+      <button class="main-nav-btn" data-section="review" onclick="openReviewToday()">
+        <span class="nav-icon">🔁</span> Ôn tập hôm nay
+        <span id="review-due-badge" class="nav-badge" style="display:none;"></span>
+      </button>
+      <button class="main-nav-btn" data-section="grammar" disabled>
         <span class="nav-icon">✍️</span> Grammar
         <span class="badge-soon">Soon</span>
       </button>
-      <button class="main-nav-btn" disabled>
+      <button class="main-nav-btn" data-section="kanji" disabled>
         <span class="nav-icon">漢</span> Kanji
         <span class="badge-soon">Soon</span>
       </button>
@@ -49,9 +53,19 @@
   </header>
 
   <div class="app-body">
-    <div class="section-panel active" id="section-vocab">
+    <div class="section-panel active" id="section-vocab" >
       <div class="unit-tabs-bar" id="unit-tabs-bar"></div>
       <div class="unit-content-wrap" id="unit-content-wrap"></div>
+    </div>
+
+    <div class="section-panel" id="section-review">
+      <div class="review-page-wrap">
+        <div class="review-page-header">
+          <h2>🔁 Ôn tập hôm nay</h2>
+          <p>Những từ đã đến hạn ôn lại, dựa trên tiến độ ghi nhớ của riêng bạn.</p>
+        </div>
+        <div id="review-zone"></div>
+      </div>
     </div>
 
     <div class="section-panel" id="section-grammar">

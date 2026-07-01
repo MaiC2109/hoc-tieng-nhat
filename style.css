@@ -459,8 +459,27 @@ body {
 
 .progress-bar-mini-fill.partial { background: var(--gold); }
 
-.accordion-body { display: none; padding: 0; }
-.accordion-item.open .accordion-body { display: block; }
+.accordion-body {
+  /* Dùng max-height thay vì display:none/block.
+     display:none xóa node khỏi layout → browser reflow toàn trang → màn hình trắng 2-3s.
+     max-height:0 + overflow:hidden chỉ thay đổi kích thước, không reflow → mượt. */
+  max-height: 0;
+  overflow: hidden;
+  padding: 0;
+  /* will-change: max-height báo trước cho browser chuẩn bị GPU layer cho phần này,
+     tránh dropped frames khi animation chạy. */
+  will-change: max-height;
+  transition: max-height 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.accordion-item.open .accordion-body {
+  /* 9999px đủ chứa bất kỳ nội dung nào. Animation trông nhanh vì
+     browser không thực sự animate đến 9999px — nó dừng tại chiều cao thật
+     của content, chỉ duration bị "lãng phí" ở phần trên 9999px không nhìn thấy.
+     Nếu sau này nội dung accordion rất dài, tăng giá trị này lên. */
+  max-height: 9999px;
+  transition: max-height 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+}
 
 /* ─────────────────────────────────────────────
    TIER 4 — WORKSPACE SUB-TABS
