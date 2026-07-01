@@ -173,9 +173,8 @@ if (STUDENT_CONFIG.deviceLogUrl) {
 const STUDENT_CONFIG = {
   dataScriptUrl: "/api/data",
   googleScriptUrl: "https://script.google.com/macros/s/AKfycbzwmTFWowwaAVQ-ZLmk3cveLH8l9Bi7rJZk6TDE2ikNnjlwB36Rn0a5An0PgmQu1Rag2w/exec",
-  deviceLogUrl: "https://zlblylqosqwnhudeivpt.supabase.co/"
   // Khi có, chỉ cần điền URL vào đây, không cần sửa gì thêm ở logDeviceVisit().
-  deviceLogUrl: ""
+  deviceLogUrl: "https://zlblylqosqwnhudeivpt.supabase.co/"
 };
 
 const HEADERS = ["id", "unit", "part", "kanji", "kana", "romaji", "hanviet", "meaning", "example", "audio"];
