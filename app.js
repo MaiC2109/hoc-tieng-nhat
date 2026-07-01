@@ -54,14 +54,24 @@ function srMarkWordsAsLearned(words) {
 }
 
 // Cập nhật trạng thái ôn tập của 1 từ sau khi học viên trả lời (Đã thuộc / Chưa thuộc)
+// Logic interval:
+//   Lần học đầu tiên (srMarkWordsAsLearned): interval=1, reps=0, dueDate=ngày mai
+//   Tick Remember lần 1 (reps=0 → 1): interval = SR_STEPS_DAYS[1] = 3 ngày
+//   Tick Remember lần 2 (reps=1 → 2): interval = SR_STEPS_DAYS[2] = 7 ngày
+//   Tick Remember lần 3+ (reps≥2)   : interval *= SR_GROWTH_FACTOR
+//   Tick Not Yet bất kỳ lúc nào     : interval reset về 1 ngày
 function srUpdateWordState(wordId, isCorrect) {
   const data = _srGetAll();
   const id = String(wordId);
   const st = data[id] || { interval: 0, reps: 0 };
 
   if (isCorrect) {
-    st.interval = st.reps < SR_STEPS_DAYS.length
-      ? SR_STEPS_DAYS[st.reps]
+    // reps hiện tại đã là "số lần đã ôn đúng từ trước" — dùng làm chỉ số cho bước KẾ TIẾP
+    // SR_STEPS_DAYS[0]=1 là interval của lần học đầu (set bởi srMarkWordsAsLearned),
+    // nên lần đúng đầu tiên cần nhảy lên SR_STEPS_DAYS[1]=3, tức index = reps + 1
+    const nextIndex = st.reps + 1;
+    st.interval = nextIndex < SR_STEPS_DAYS.length
+      ? SR_STEPS_DAYS[nextIndex]
       : Math.round(st.interval * SR_GROWTH_FACTOR);
     st.reps += 1;
   } else {
