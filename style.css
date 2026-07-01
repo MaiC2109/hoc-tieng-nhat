@@ -459,8 +459,27 @@ body {
 
 .progress-bar-mini-fill.partial { background: var(--gold); }
 
-.accordion-body { display: none; padding: 0; }
-.accordion-item.open .accordion-body { display: block; }
+.accordion-body {
+  /* Dùng max-height thay vì display:none/block.
+     display:none xóa node khỏi layout → browser reflow toàn trang → màn hình trắng 2-3s.
+     max-height:0 + overflow:hidden chỉ thay đổi kích thước, không reflow → mượt. */
+  max-height: 0;
+  overflow: hidden;
+  padding: 0;
+  /* will-change: max-height báo trước cho browser chuẩn bị GPU layer cho phần này,
+     tránh dropped frames khi animation chạy. */
+  will-change: max-height;
+  transition: max-height 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.accordion-item.open .accordion-body {
+  /* 9999px đủ chứa bất kỳ nội dung nào. Animation trông nhanh vì
+     browser không thực sự animate đến 9999px — nó dừng tại chiều cao thật
+     của content, chỉ duration bị "lãng phí" ở phần trên 9999px không nhìn thấy.
+     Nếu sau này nội dung accordion rất dài, tăng giá trị này lên. */
+  max-height: 9999px;
+  transition: max-height 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+}
 
 /* ─────────────────────────────────────────────
    TIER 4 — WORKSPACE SUB-TABS
@@ -695,73 +714,4 @@ body {
   .unit-tabs-bar { padding: 0 14px; }
   .logo-text { display: none; }
   .main-nav-btn { padding: 0 12px; font-size: 13px; }
-}
-
-/* ─────────────────────────────────────────────
-   ÔN TẬP HÔM NAY (Spaced Repetition Review)
-   Tái dùng các token + class flashcard sẵn có
-   (.flashcard-scene, .card-face, .flashcard-report...)
-───────────────────────────────────────────── */
-
-/* Badge số từ đến hạn, đặt cạnh nhãn nút nav "Ôn tập hôm nay" */
-.nav-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 18px;
-  height: 18px;
-  padding: 0 5px;
-  border-radius: 20px;
-  background: var(--vermillion);
-  color: #fff;
-  font-size: 10.5px;
-  font-weight: 700;
-  line-height: 1;
-  margin-left: 2px;
-}
-
-.review-page-wrap {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 28px 24px 40px;
-  max-width: 700px;
-  width: 100%;
-  align-self: center;
-}
-
-.review-page-header {
-  text-align: center;
-  margin-bottom: 22px;
-}
-
-.review-page-header h2 {
-  font-size: 20px;
-  font-weight: 700;
-  color: var(--ink);
-  margin-bottom: 6px;
-}
-
-.review-page-header p {
-  font-size: 13.5px;
-  color: var(--ink-mute);
-}
-
-/* review-zone tái sử dụng .flashcard-area, .flashcard-report, .empty-state
-   đã có sẵn trong app.js (render trực tiếp các class này) — không cần
-   định nghĩa thêm, chỉ cần đảm bảo #review-zone không giới hạn width
-   để các class đó canh giữa đúng như ở tab Flashcard hiện tại. */
-#review-zone {
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 10px 0 20px;
-  gap: 20px;
-}
-
-@media (max-width: 640px) {
-  .review-page-wrap { padding: 20px 14px 32px; }
-  .review-page-header h2 { font-size: 17px; }
 }

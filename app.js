@@ -441,6 +441,7 @@ function toggleAccordion(unit, part) {
   // Nếu đã mở thì đóng lại
   if (el.classList.contains('open')) {
     el.classList.remove('open');
+    stopAllAudio(); // dừng audio nếu đang phát khi đóng accordion
     if (state.activeAccordion[unit] === part) {
       state.activeAccordion[unit] = null;
     }
