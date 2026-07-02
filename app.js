@@ -123,101 +123,99 @@ function logDeviceVisit() {
       timestamp: new Date().toISOString()
     };
 
-    // Lưu local 1 bản ghi nhẹ để debug nếu cần
+    // Lưu local tối đa 50 bản ghi gần nhất
     const log = JSON.parse(localStorage.getItem('device_log') || '[]');
     log.push(payload);
-    if (log.length > 50) log.shift(); // giữ tối đa 50 bản ghi gần nhất
+    if (log.length > 50) log.shift();
     localStorage.setItem('device_log', JSON.stringify(log));
 
-    // Nếu đã có endpoint backend (vd: /api/log-device trên Vercel/Supabase),
-    // gửi kèm lên server. Để trống an toàn nếu chưa dựng endpoint này.
-if (STUDENT_CONFIG.deviceLogUrl) {
-
-  fetch(STUDENT_CONFIG.deviceLogUrl, {
-
-    method: 'POST',
-
-    headers: {
-
-      'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpsYmx5bHFvc3F3bmh1ZGVpdnB0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI1Mzk0NjUsImV4cCI6MjA5ODExNTQ2NX0.Xa8FblRuypm_eHMGz8GrCpwloKnzjgjTu8z_1ivS8_4',               // ← anon key của bạn
-
-      'Authorization': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpsYmx5bHFvc3F3bmh1ZGVpdnB0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI1Mzk0NjUsImV4cCI6MjA5ODExNTQ2NX0.Xa8FblRuypm_eHMGz8GrCpwloKnzjgjTu8z_1ivS8_4', // ← anon key của bạn (cùng giá trị)
-
-      'Content-Type': 'application/json',
-
-      'Prefer': 'return=minimal'
-
-    },
-
-    body: JSON.stringify({
-
-      device_type: payload.deviceType,
-
-      platform: payload.platform,
-
-      screen_width: payload.screenWidth,
-
-      visited_at: payload.timestamp
-
-    })
-
-  }).catch(() => {});
-
-}
+    // Gửi lên Supabase nếu đã cấu hình URL
+    if (STUDENT_CONFIG.deviceLogUrl) {
+      fetch(STUDENT_CONFIG.deviceLogUrl, {
+        method: 'POST',
+        headers: {
+          'apikey': STUDENT_CONFIG.supabaseAnonKey,
+          'Authorization': `Bearer ${STUDENT_CONFIG.supabaseAnonKey}`,
+          'Content-Type': 'application/json',
+          'Prefer': 'return=minimal'
+        },
+        body: JSON.stringify({
+          device_type: payload.deviceType,
+          platform: payload.platform,
+          screen_width: payload.screenWidth,
+          visited_at: payload.timestamp
+        })
+      }).catch(() => {});
+    }
   } catch (e) {
     console.error('Lỗi log thiết bị:', e);
   }
 }
 
-// 2. Cấu hình đường dẫn
+// 2. Cấu hình — tập trung toàn bộ thông tin kết nối tại đây
 const STUDENT_CONFIG = {
-  dataScriptUrl: "/api/data",
-  googleScriptUrl: "https://script.google.com/macros/s/AKfycbzwmTFWowwaAVQ-ZLmk3cveLH8l9Bi7rJZk6TDE2ikNnjlwB36Rn0a5An0PgmQu1Rag2w/exec",
-  // Khi có, chỉ cần điền URL vào đây, không cần sửa gì thêm ở logDeviceVisit().
-  deviceLogUrl: "https://zlblylqosqwnhudeivpt.supabase.co/"
+  // Supabase
+  supabaseUrl: "https://zlblylqosqwnhudeivpt.supabase.co",
+  supabaseAnonKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpsYmx5bHFvc3F3bmh1ZGVpdnB0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI1Mzk0NjUsImV4cCI6MjA5ODExNTQ2NX0.Xa8FblRuypm_eHMGz8GrCpwloKnzjgjTu8z_1ivS8_4",
+  // URL đầy đủ đến bảng vocabulary trong Supabase
+  vocabUrl: "https://zlblylqosqwnhudeivpt.supabase.co/rest/v1/vocabulary?order=id.asc",
+  // URL đến bảng device_logs
+  deviceLogUrl: "https://zlblylqosqwnhudeivpt.supabase.co/rest/v1/device_logs",
+  // Google Script (giữ lại để ghi điểm quiz nếu vẫn dùng)
+  googleScriptUrl: "https://script.google.com/macros/s/AKfycbzwmTFWowwaAVQ-ZLmk3cveLH8l9Bi7rJZk6TDE2ikNnjlwB36Rn0a5An0PgmQu1Rag2w/exec"
 };
 
-const HEADERS = ["id", "unit", "part", "kanji", "kana", "romaji", "hanviet", "meaning", "example", "audio"];
+// Tên cột Supabase phải khớp với: id, unit, part, kanji, kana, romaji, hanviet, meaning, example, audio
 
-// 3. Hàm nạp dữ liệu từ Google Sheet (Thay thế cho file data.js cũ)
+// 3. Nạp dữ liệu từ Supabase
 async function initApp() {
   const progressEl = document.getElementById('global-progress');
-  if (progressEl) progressEl.textContent = 'Đang đồng bộ...';
+  if (progressEl) progressEl.textContent = 'Đang tải dữ liệu...';
 
-  // 1. KIỂM TRA CACHE
+  // Kiểm tra cache — tránh gọi API mỗi lần load trang
   const cachedData = localStorage.getItem('vocab_cache');
-  const cacheTime = localStorage.getItem('vocab_cache_time');
-  const ONE_HOUR = 3600000; // 1 giờ tính bằng mili giây
+  const cacheTime  = localStorage.getItem('vocab_cache_time');
+  const ONE_HOUR   = 3600000;
 
-  // Nếu đã có dữ liệu và chưa quá 1 giờ
   if (cachedData && cacheTime && (Date.now() - parseInt(cacheTime) < ONE_HOUR)) {
-    console.log("Đang dùng dữ liệu từ bộ nhớ đệm (Cache)...");
     window.vocabularyData = JSON.parse(cachedData);
-    startUI(); // Hàm hiển thị giao diện
+    startUI();
     return;
   }
 
-  // 2. NẾU CHƯA CÓ CACHE HOẶC ĐÃ CŨ: Tải từ Google
+  // Fetch từ Supabase REST API
   try {
-    const response = await fetch(STUDENT_CONFIG.dataScriptUrl);
-    const rawData = await response.json();
-    
-    window.vocabularyData = Object.keys(rawData).map(key => {
-        let row = rawData[key];
-        let obj = {};
-        HEADERS.forEach((h, i) => { obj[h] = row[i]; });
-        return obj;
-    }).filter(item => item.id);
+    const response = await fetch(STUDENT_CONFIG.vocabUrl, {
+      headers: {
+        'apikey':        STUDENT_CONFIG.supabaseAnonKey,
+        'Authorization': `Bearer ${STUDENT_CONFIG.supabaseAnonKey}`,
+        'Content-Type':  'application/json'
+      }
+    });
 
-    // Lưu vào LocalStorage
+    if (!response.ok) {
+      throw new Error(`Supabase trả về lỗi: ${response.status} ${response.statusText}`);
+    }
+
+    // Supabase trả về JSON array trực tiếp — không cần mapping như Google Sheet
+    const rows = await response.json();
+    window.vocabularyData = rows.filter(item => item.id);
+
+    // Lưu cache
     localStorage.setItem('vocab_cache', JSON.stringify(window.vocabularyData));
     localStorage.setItem('vocab_cache_time', Date.now().toString());
 
-    console.log("Đã tải dữ liệu mới từ Google Sheet");
     startUI();
   } catch (err) {
     console.error("Lỗi tải:", err);
-    if (progressEl) progressEl.textContent = 'Lỗi mạng!';
+    // Fallback: nếu có cache cũ (dù hết hạn) thì vẫn dùng, tránh trang trắng
+    if (cachedData) {
+      window.vocabularyData = JSON.parse(cachedData);
+      startUI();
+      if (progressEl) progressEl.textContent = '⚠️ Dùng dữ liệu cũ (offline)';
+    } else {
+      if (progressEl) progressEl.textContent = '❌ Lỗi kết nối!';
+    }
   }
 }
 
