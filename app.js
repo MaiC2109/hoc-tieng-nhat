@@ -163,12 +163,13 @@ const STUDENT_CONFIG = {
   googleScriptUrl: "https://script.google.com/macros/s/AKfycbzwmTFWowwaAVQ-ZLmk3cveLH8l9Bi7rJZk6TDE2ikNnjlwB36Rn0a5An0PgmQu1Rag2w/exec",
 
   // ── GRAMMAR MODULE (Ngữ pháp) ──
-  // Tên cột Supabase: grammar_points(id, jlpt_level, title, meaning_short, structure,
-  //   week_number, day_number, related_grammar_id, related_note, is_active, created_at)
+  // Tên cột Supabase: grammar_points(id, jlpt_level, title, meaning_short, meaning_long,
+  //   structure, week_number, day_number, related_grammar_id, related_note, is_active, created_at)
+  // meaning_long: giải thích chi tiết + nuance, CHỈ hiển thị ở trang chi tiết (không hiện ở list).
   grammarPointsUrl: "https://zlblylqosqwnhudeivpt.supabase.co/rest/v1/grammar_points?is_active=eq.true&order=week_number.asc,day_number.asc,id.asc",
   // grammar_point_slides(id, grammar_point_id, slide_order, image_url)
   grammarSlidesUrl: "https://zlblylqosqwnhudeivpt.supabase.co/rest/v1/grammar_point_slides?order=slide_order.asc",
-  // grammar_examples(id, grammar_point_id, example_jp, example_vn, audio_url)
+  // grammar_examples(id, grammar_point_id, example_jp, example_vn) — không còn audio cho ví dụ
   grammarExamplesUrl: "https://zlblylqosqwnhudeivpt.supabase.co/rest/v1/grammar_examples",
   // user_grammar_progress(id, user_id, grammar_point_id, is_learned, learned_at)
   grammarProgressUrl: "https://zlblylqosqwnhudeivpt.supabase.co/rest/v1/user_grammar_progress",
@@ -1456,9 +1457,6 @@ function renderGrammarDetail(wrap) {
 
   const examplesHtml = examples.length > 0 ? examples.map(ex => `
     <div class="grammar-example-item">
-      ${ex.audio_url
-        ? `<button class="quiz-listen-btn" style="width:34px;height:34px;font-size:13px;" onclick="playGrammarAudio('${escAttr(ex.audio_url)}')">🎵</button>`
-        : `<div style="width:34px; flex-shrink:0;"></div>`}
       <div class="grammar-example-text">
         <div class="grammar-example-jp">${s(ex.example_jp)}</div>
         <div class="grammar-example-vn">${s(ex.example_vn)}</div>
@@ -1478,6 +1476,7 @@ function renderGrammarDetail(wrap) {
       </div>
       <div class="grammar-detail-meaning">${s(point.meaning_short)}</div>
       ${point.structure ? `<div class="grammar-detail-structure">📐 ${s(point.structure)}</div>` : ''}
+      ${point.meaning_long ? `<div class="grammar-detail-meaning-long">${s(point.meaning_long)}</div>` : ''}
       <div class="grammar-detail-position">Tuần ${s(point.week_number)} · Ngày ${s(point.day_number)}</div>
     </div>
 
@@ -1561,14 +1560,6 @@ function renderRelatedGrammarBox(point) {
   `;
 }
 
-// Phát audio ví dụ ngữ pháp (tái sử dụng biến state.currentAudio dùng chung với module Vocab)
-function playGrammarAudio(url) {
-  if (!url) return;
-  if (state.currentAudio) state.currentAudio.pause();
-  state.currentAudio = new Audio(url);
-  state.currentAudio.play().catch(e => console.log(e));
-}
-
 // Toggle "Đã học" — cập nhật UI ngay (optimistic), rồi ghi lên Supabase.
 // LƯU Ý: bảng user_grammar_progress cần có UNIQUE constraint trên (user_id, grammar_point_id)
 // để upsert (on_conflict) hoạt động đúng — xem ghi chú cuối file.
@@ -1631,16 +1622,22 @@ async function toggleGrammarLearned(pointId) {
      Panel #section-grammar chỉ chứa 1 container rỗng
      id="grammar-content-wrap" để render() ghi vào.
 
-  5) YÊU CẦU SUPABASE (bắt buộc để tính năng "Đã học" hoạt động đúng):
-     Bảng user_grammar_progress cần có UNIQUE constraint trên
-     (user_id, grammar_point_id), ví dụ:
-       ALTER TABLE user_grammar_progress
-       ADD CONSTRAINT uq_user_grammar UNIQUE (user_id, grammar_point_id);
-     Nếu chưa có, mỗi lần bấm "Đã học" sẽ tạo dòng mới thay vì cập nhật
-     dòng cũ (do dùng upsert on_conflict=user_id,grammar_point_id).
+  5) YÊU CẦU SUPABASE: chạy file grammar_schema.sql (SQL Editor trên
+     Supabase) để tạo đủ 4 bảng grammar_points, grammar_point_slides,
+     grammar_examples, user_grammar_progress kèm UNIQUE constraint
+     (user_id, grammar_point_id) trên user_grammar_progress — bắt buộc
+     để upsert on_conflict=user_id,grammar_point_id hoạt động đúng khi
+     bấm "Đã học" (nếu thiếu, mỗi lần bấm sẽ tạo dòng mới thay vì update).
 
   6) studentId trong STUDENT_CONFIG hiện đang hard-code "default_student"
      vì chưa có hệ thống đăng nhập. Khi có auth thật, thay giá trị này
      bằng user id thực tế của từng học viên.
+
+  7) grammar_examples KHÔNG còn cột audio_url — ví dụ ngữ pháp chỉ hiện
+     text (câu tiếng Nhật + nghĩa tiếng Việt), không có audio.
+
+  8) meaning_long (text, nullable) trên grammar_points dùng để giải
+     thích chi tiết + nuance của mẫu ngữ pháp, chỉ hiển thị ở trang
+     chi tiết (renderGrammarDetail), KHÔNG hiện ở trang danh sách.
   ─────────────────────────────────────────────────────────────────
 */

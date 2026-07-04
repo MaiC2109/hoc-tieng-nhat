@@ -212,6 +212,10 @@ body {
   line-height: 1;
 }
 
+.main-nav-btn .nav-label {
+  font-family: var(--font-ja);
+}
+
 .badge-soon {
   font-size: 9px;
   font-weight: 700;
@@ -566,7 +570,7 @@ body {
 .btn:disabled:hover { background: transparent; }
 .btn-outline:disabled:hover { background: transparent; }
 
-.word-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.word-table { width: 100%; border-collapse: collapse; font-size: 14px; table-layout: fixed; }
 .word-table th {
   text-align: left;
   padding: 9px 14px;
@@ -582,12 +586,20 @@ body {
 .word-table td { padding: 11px 14px; border-bottom: 1px solid var(--border); vertical-align: middle; }
 .word-table tbody tr:hover { background: var(--paper); }
 .word-table tbody tr:last-child td { border-bottom: none; }
-.word-table .cell-num { font-size: 12px; color: var(--ink-mute); font-weight: 500; width: 40px; }
-.word-table .cell-kanji { font-family: var(--font-ja-serif); font-size: 18px; color: var(--ink); font-weight: 700; }
-.word-table .cell-kana { font-family: var(--font-ja); font-size: 16px; font-weight: 400; color: var(--ink); }
-.word-table .cell-meaning { color: var(--ink-soft); font-size: 14px; }
-.word-table .cell-example { color: var(--ink-mute); font-size: 13px; }
+.word-table .cell-num { font-size: 12px; color: var(--ink-mute); font-weight: 500; width: 36px; }
+.word-table .cell-kanji { font-family: var(--font-ja-serif); font-size: 18px; color: var(--ink); font-weight: 700; width: 17%; word-break: break-word; white-space: pre-line; }
+.word-table .cell-kana { font-family: var(--font-ja); font-size: 16px; font-weight: 400; color: var(--ink); width: 16%; word-break: break-word; white-space: pre-line; }
+.word-table .cell-meaning { color: var(--ink-soft); font-size: 14px; width: 33%; white-space: pre-line; word-break: break-word; }
+.word-table .cell-example { color: var(--ink-mute); font-size: 13px; width: 18%; white-space: pre-line; word-break: break-word; }
 .word-table .cell-action { width: 48px; text-align: center; }
+
+/* Header widths phải khớp với các cell tương ứng để cột không lệch khi dùng table-layout: fixed */
+.word-table th:nth-child(1) { width: 36px; }
+.word-table th:nth-child(2) { width: 17%; }
+.word-table th:nth-child(3) { width: 16%; }
+.word-table th:nth-child(4) { width: 33%; }
+.word-table th:nth-child(5) { width: 18%; }
+.word-table th:nth-child(6) { width: 48px; }
 
 /* ─────────────────────────────────────────────
    SUB PANEL 2: FLASHCARD
@@ -604,8 +616,8 @@ body {
 .card-back { background: var(--paper-card); transform: rotateY(180deg); border: 1px solid var(--border); }
 
 .card-front .card-kanji { font-family: var(--font-ja-serif); font-size: 44px; font-weight: 700; color: #fff; }
-.card-front .card-example { font-size: 14px; color: rgba(255,255,255,0.75); text-align: center; max-width: 90%; margin-top: 4px; font-style: italic; }
-.card-back .card-meaning { font-size: 24px; font-weight: 700; color: var(--ink); text-align: center; }
+.card-front .card-example { font-size: 14px; color: rgba(255,255,255,0.75); text-align: center; max-width: 90%; margin-top: 4px; font-style: italic; white-space: pre-line; }
+.card-back .card-meaning { font-size: 24px; font-weight: 700; color: var(--ink); text-align: center; white-space: pre-line; }
 .card-back .card-kana-big { font-family: var(--font-ja); font-size: 22px; color: var(--vermillion); font-weight: 600; }
 .card-back .card-hanviet { font-size: 14px; color: var(--sage); font-weight: 500; }
 
@@ -661,7 +673,7 @@ body {
 .quiz-q-number { background: var(--vermillion); color: #fff; font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 3px; }
 
 .quiz-word-display { display: flex; align-items: center; gap: 14px; margin-bottom: 22px; }
-.quiz-word-main { font-family: var(--font-ja-serif); font-size: 36px; color: var(--ink); font-weight: 700; line-height: 1.2; }
+.quiz-word-main { font-family: var(--font-ja-serif); font-size: 36px; color: var(--ink); font-weight: 700; line-height: 1.2; white-space: pre-line; }
 
 /* Ẩn hoàn toàn phần text giải thích phụ trong Quiz */
 .quiz-word-sub { 
@@ -883,6 +895,9 @@ body {
   font-size: 12.5px;
   color: var(--ink-mute);
   margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .grammar-row-meta {
@@ -933,6 +948,7 @@ body {
   color: var(--ink-soft);
   font-weight: 500;
   margin-top: 8px;
+  white-space: pre-line;
 }
 
 .grammar-detail-structure {
@@ -943,7 +959,18 @@ body {
   padding: 5px 10px;
   border-radius: var(--radius-sm);
   margin-top: 10px;
+  white-space: pre-line;
   font-family: var(--font-ja);
+}
+
+.grammar-detail-meaning-long {
+  font-size: 13.5px;
+  color: var(--ink-soft);
+  line-height: 1.7;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px dashed var(--border-md);
+  white-space: pre-line;
 }
 
 .grammar-detail-position {
@@ -1058,12 +1085,14 @@ body {
   font-size: 15px;
   color: var(--ink);
   font-weight: 500;
+  white-space: pre-line;
 }
 
 .grammar-example-vn {
   font-size: 12.5px;
   color: var(--ink-mute);
   margin-top: 3px;
+  white-space: pre-line;
 }
 
 .grammar-related-box {
@@ -1093,6 +1122,7 @@ body {
   font-size: 12.5px;
   color: var(--ink-mute);
   margin-top: 4px;
+  white-space: pre-line;
 }
 
 .grammar-detail-actions { margin-bottom: 14px; display: flex; }
@@ -1117,12 +1147,58 @@ body {
 ::-webkit-scrollbar-thumb { background: var(--border-md); border-radius: 3px; }
 
 @media (max-width: 640px) {
-  .app-header { padding: 0 14px; }
+  .app-header {
+    padding: 0 10px;
+    height: 52px;
+    gap: 4px;
+  }
+  .app-logo { margin-right: 8px; }
   .parts-container { padding: 12px 14px; gap: 8px; }
   .quiz-choices { grid-template-columns: 1fr; }
   .sub-tab { padding: 7px 10px; font-size: 12px; }
   .workspace { padding: 12px 12px 14px; }
   .unit-tabs-bar { padding: 0 14px; }
   .logo-text { display: none; }
-  .main-nav-btn { padding: 0 12px; font-size: 13px; }
+
+  .main-nav {
+    flex: 1;
+    gap: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+    justify-content: space-between;
+  }
+  .main-nav::-webkit-scrollbar { display: none; }
+
+  .main-nav-btn {
+    flex: 1;
+    padding: 0 6px;
+    font-size: 12px;
+    gap: 3px;
+    justify-content: center;
+    min-width: 0;
+  }
+  .main-nav-btn .nav-icon { font-size: 14px; }
+  .main-nav-btn .nav-label { font-size: 12px; }
+
+  .badge-soon {
+    display: none; /* không đủ chỗ trên màn hình nhỏ, icon+nhãn đã đủ rõ nghĩa */
+  }
+
+  .nav-badge {
+    position: absolute;
+    top: 4px;
+    right: 2px;
+    min-width: 14px;
+    height: 14px;
+    font-size: 9px;
+    padding: 0 3px;
+  }
+
+  .header-right { gap: 6px; }
+  .progress-container { gap: 6px; }
+}
+
+@media (max-width: 380px) {
+  .main-nav-btn .nav-label { display: none; } /* chỉ còn icon khi màn hình quá hẹp */
+  .main-nav-btn { gap: 0; }
 }

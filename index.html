@@ -28,24 +28,23 @@
 
     <nav class="main-nav">
       <button class="main-nav-btn" data-section="vocab" onclick="switchMainSection('vocab')">
-        <span class="nav-icon">📖</span> Vocab
+        <span class="nav-icon">📖</span> <span class="nav-label">語彙</span>
       </button>
       <button class="main-nav-btn" data-section="review" onclick="openReviewToday()">
-        <span class="nav-icon">🔁</span> Ôn tập hôm nay
+        <span class="nav-icon">🔁</span> <span class="nav-label">復習</span>
         <span id="review-due-badge" class="nav-badge" style="display:none;"></span>
       </button>
       <button class="main-nav-btn" data-section="grammar" onclick="openGrammarModule()">
-        <span class="nav-icon">✍️</span> Ngữ pháp
+        <span class="nav-icon">✍️</span> <span class="nav-label">文法</span>
       </button>
       <button class="main-nav-btn" data-section="kanji" disabled>
-        <span class="nav-icon">漢</span> Kanji
+        <span class="nav-icon">漢</span> <span class="nav-label">漢字</span>
         <span class="badge-soon">Soon</span>
       </button>
     </nav>
 
   <div class="header-right">
   <div class="progress-container">
-    <span class="progress-summary" id="global-progress">Loading…</span>
     <button id="sync-btn" onclick="syncData()" title="Cập nhật dữ liệu mới">🔄</button>
   </div>
 </div>
