@@ -7,11 +7,11 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&family=Inter:wght@300;400;500;600;700&family=Noto+Serif+JP:wght@400;700&display=swap" rel="stylesheet" />
-  
+
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  
+
 <div id="loading-overlay" class="loading-overlay">
   <div class="spinner"></div>
   <p>Đang tải bài học...</p>
@@ -34,9 +34,8 @@
         <span class="nav-icon">🔁</span> Ôn tập hôm nay
         <span id="review-due-badge" class="nav-badge" style="display:none;"></span>
       </button>
-      <button class="main-nav-btn" data-section="grammar" disabled>
-        <span class="nav-icon">✍️</span> Grammar
-        <span class="badge-soon">Soon</span>
+      <button class="main-nav-btn" data-section="grammar" onclick="openGrammarModule()">
+        <span class="nav-icon">✍️</span> Ngữ pháp
       </button>
       <button class="main-nav-btn" data-section="kanji" disabled>
         <span class="nav-icon">漢</span> Kanji
@@ -68,11 +67,12 @@
       </div>
     </div>
 
+    <!-- MODULE NGỮ PHÁP (Grammar) — nội dung được render hoàn toàn bằng JS
+         (renderGrammarSection() trong app.js) vào container rỗng bên dưới.
+         Xem thêm ghi chú tích hợp ở cuối app.js. -->
     <div class="section-panel" id="section-grammar">
-      <div class="placeholder-panel">
-        <div class="placeholder-icon">✍️</div>
-        <h3>Grammar Module</h3>
-        <p>Grammar lessons and exercises will appear here in a future update.</p>
+      <div class="grammar-page-wrap">
+        <div id="grammar-content-wrap"></div>
       </div>
     </div>
 

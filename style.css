@@ -460,23 +460,14 @@ body {
 .progress-bar-mini-fill.partial { background: var(--gold); }
 
 .accordion-body {
-  /* Dùng max-height thay vì display:none/block.
-     display:none xóa node khỏi layout → browser reflow toàn trang → màn hình trắng 2-3s.
-     max-height:0 + overflow:hidden chỉ thay đổi kích thước, không reflow → mượt. */
   max-height: 0;
   overflow: hidden;
   padding: 0;
-  /* will-change: max-height báo trước cho browser chuẩn bị GPU layer cho phần này,
-     tránh dropped frames khi animation chạy. */
   will-change: max-height;
   transition: max-height 0.28s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .accordion-item.open .accordion-body {
-  /* 9999px đủ chứa bất kỳ nội dung nào. Animation trông nhanh vì
-     browser không thực sự animate đến 9999px — nó dừng tại chiều cao thật
-     của content, chỉ duration bị "lãng phí" ở phần trên 9999px không nhìn thấy.
-     Nếu sau này nội dung accordion rất dài, tăng giá trị này lên. */
   max-height: 9999px;
   transition: max-height 0.35s cubic-bezier(0.4, 0, 0.2, 1);
 }
@@ -571,6 +562,9 @@ body {
 .btn-primary:hover { background: var(--verm-light); }
 .btn-outline { background: transparent; border: 1px solid var(--border-md); color: var(--ink); }
 .btn-outline:hover { background: var(--paper-warm); }
+.btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.btn:disabled:hover { background: transparent; }
+.btn-outline:disabled:hover { background: transparent; }
 
 .word-table { width: 100%; border-collapse: collapse; font-size: 14px; }
 .word-table th {
@@ -698,8 +692,425 @@ body {
 .review-stat-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.07em; color: var(--ink-mute); font-weight: 600; }
 
 /* ─────────────────────────────────────────────
-   EMPTY STATE & GLOBAL ELEMENTS
+   ÔN TẬP HÔM NAY (Spaced Repetition Review)
 ───────────────────────────────────────────── */
+.nav-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 20px;
+  background: var(--vermillion);
+  color: #fff;
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 1;
+  margin-left: 2px;
+}
+
+.review-page-wrap {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 28px 24px 40px;
+  max-width: 700px;
+  width: 100%;
+  align-self: center;
+}
+
+.review-page-header {
+  text-align: center;
+  width: 100%;
+  margin-bottom: 22px;
+}
+
+.review-page-header h2 {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--ink);
+  margin-bottom: 6px;
+  text-align: center;
+}
+
+.review-page-header p {
+  font-size: 13.5px;
+  color: var(--ink-mute);
+  text-align: center;
+}
+
+#review-zone {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 10px 0 20px;
+  gap: 20px;
+}
+
+@media (max-width: 640px) {
+  .review-page-wrap { padding: 20px 14px 32px; }
+  .review-page-header h2 { font-size: 17px; }
+}
+
+/* ═════════════════════════════════════════════
+   MODULE NGỮ PHÁP (Grammar) — tái sử dụng token
+   màu / spacing / shadow đã có ở trên, không tạo
+   hệ màu mới.
+═════════════════════════════════════════════ */
+
+.grammar-page-wrap {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 20px 24px 40px;
+  max-width: 780px;
+  width: 100%;
+  align-self: center;
+}
+
+/* ── Trang danh sách ── */
+.grammar-list-header {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.grammar-list-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.grammar-list-title-row h2 {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.grammar-count-badge {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-mute);
+  background: var(--paper-warm);
+  padding: 3px 10px;
+  border-radius: 20px;
+}
+
+.grammar-progress-summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12.5px;
+  color: var(--ink-mute);
+  font-weight: 500;
+}
+
+.grammar-search-wrap { width: 100%; }
+
+.grammar-search-input {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid var(--border-md);
+  border-radius: var(--radius-sm);
+  background: var(--paper-card);
+  font-family: var(--font-sans);
+  font-size: 13.5px;
+  color: var(--ink);
+  transition: border-color var(--transition);
+}
+
+.grammar-search-input:focus {
+  outline: none;
+  border-color: var(--vermillion);
+}
+
+.grammar-list-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.grammar-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 13px 16px;
+  background: var(--paper-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all var(--transition);
+  box-shadow: var(--shadow-sm);
+}
+
+.grammar-row:hover {
+  border-color: var(--vermillion);
+  box-shadow: var(--shadow-md);
+}
+
+.grammar-row.learned {
+  border-left: 3px solid var(--sage);
+}
+
+.grammar-row-check {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--sage-light);
+  color: var(--sage);
+  font-size: 12px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.grammar-row-text { flex: 1; min-width: 0; }
+
+.grammar-row-title {
+  font-family: var(--font-ja);
+  font-size: 15.5px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.grammar-row-meaning {
+  font-size: 12.5px;
+  color: var(--ink-mute);
+  margin-top: 2px;
+}
+
+.grammar-row-meta {
+  font-size: 11px;
+  color: var(--ink-mute);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* ── Trang chi tiết ── */
+.grammar-detail-topbar { margin-bottom: 16px; }
+
+.grammar-detail-header {
+  background: var(--paper-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 20px 22px;
+  margin-bottom: 18px;
+  box-shadow: var(--shadow-sm);
+}
+
+.grammar-detail-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.grammar-detail-title-row h2 {
+  font-family: var(--font-ja);
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.grammar-level-badge {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #fff;
+  background: var(--vermillion);
+  padding: 3px 9px;
+  border-radius: 5px;
+}
+
+.grammar-detail-meaning {
+  font-size: 15px;
+  color: var(--ink-soft);
+  font-weight: 500;
+  margin-top: 8px;
+}
+
+.grammar-detail-structure {
+  font-size: 13px;
+  color: var(--sage);
+  background: var(--sage-light);
+  display: inline-block;
+  padding: 5px 10px;
+  border-radius: var(--radius-sm);
+  margin-top: 10px;
+  font-family: var(--font-ja);
+}
+
+.grammar-detail-position {
+  font-size: 12px;
+  color: var(--ink-mute);
+  margin-top: 10px;
+}
+
+.grammar-carousel-wrap { margin-bottom: 20px; }
+
+.grammar-carousel {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.carousel-image-wrap {
+  flex: 1;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  border: 1px solid var(--border);
+  background: var(--paper-warm);
+  box-shadow: var(--shadow-sm);
+  aspect-ratio: 16 / 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.carousel-image {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+.carousel-arrow {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid var(--border-md);
+  background: var(--paper-card);
+  color: var(--ink);
+  font-size: 18px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all var(--transition);
+}
+
+.carousel-arrow:hover:not(:disabled) {
+  background: var(--vermillion);
+  color: #fff;
+  border-color: var(--vermillion);
+}
+
+.carousel-arrow:disabled { opacity: 0.3; cursor: not-allowed; }
+
+.carousel-dots {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.carousel-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--border-md);
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.carousel-dot.active {
+  background: var(--vermillion);
+  width: 18px;
+  border-radius: 4px;
+}
+
+.grammar-section-block { margin-bottom: 18px; }
+
+.grammar-block-heading {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink-soft);
+  margin-bottom: 10px;
+}
+
+.grammar-example-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.grammar-example-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  background: var(--paper-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.grammar-example-text { flex: 1; min-width: 0; }
+
+.grammar-example-jp {
+  font-family: var(--font-ja);
+  font-size: 15px;
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.grammar-example-vn {
+  font-size: 12.5px;
+  color: var(--ink-mute);
+  margin-top: 3px;
+}
+
+.grammar-related-box {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  background: var(--gold-light);
+  border: 1px solid rgba(184, 134, 11, 0.25);
+  border-radius: var(--radius-md);
+  padding: 14px 16px;
+  margin-bottom: 18px;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.grammar-related-box:hover { box-shadow: var(--shadow-sm); }
+
+.related-box-icon { font-size: 18px; flex-shrink: 0; }
+
+.related-box-title {
+  font-size: 13.5px;
+  color: var(--gold);
+  font-weight: 600;
+}
+
+.related-box-note {
+  font-size: 12.5px;
+  color: var(--ink-mute);
+  margin-top: 4px;
+}
+
+.grammar-detail-actions { margin-bottom: 14px; display: flex; }
+
+.grammar-detail-nav {
+  display: flex;
+  gap: 10px;
+}
+
+.grammar-detail-nav .btn { flex: 1; justify-content: center; }
+
+@media (max-width: 640px) {
+  .grammar-page-wrap { padding: 14px 14px 32px; }
+  .grammar-detail-title-row h2 { font-size: 21px; }
+  .quiz-choices { grid-template-columns: 1fr; }
+}
+
+
 .empty-state { text-align: center; padding: 40px 20px; color: var(--ink-mute); font-size: 14px; }
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }

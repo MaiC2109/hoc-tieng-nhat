@@ -8,7 +8,22 @@ const state = {
   quizState: {},
   flashcardState: {},
   currentAudio: null,
-  reviewFlashcardState: null // trạng thái riêng cho phiên Ôn tập (Spaced Repetition)
+  reviewFlashcardState: null, // trạng thái riêng cho phiên Ôn tập (Spaced Repetition)
+
+  // ============================================================
+  //  GRAMMAR MODULE STATE (Ngữ pháp)
+  // ============================================================
+  grammar: {
+    points: [],              // toàn bộ grammar_points (đã sort theo week/day từ query)
+    slidesByPoint: {},       // { [grammar_point_id]: [slide, ...] } đã sort theo slide_order
+    examplesByPoint: {},     // { [grammar_point_id]: [example, ...] }
+    progressByPoint: {},     // { [grammar_point_id]: true/false } — is_learned
+    loaded: false,           // đã fetch dữ liệu lần đầu chưa (lazy-load khi vào tab)
+    searchTerm: '',          // từ khóa search hiện tại (live filter, không gọi lại API)
+    view: 'list',            // 'list' | 'detail'
+    activeId: null,          // grammar_point_id đang xem ở trang chi tiết
+    carouselIndex: 0         // vị trí slide ảnh hiện tại trong carousel trang chi tiết
+  }
 };
 
 // ============================================================
@@ -54,21 +69,12 @@ function srMarkWordsAsLearned(words) {
 }
 
 // Cập nhật trạng thái ôn tập của 1 từ sau khi học viên trả lời (Đã thuộc / Chưa thuộc)
-// Logic interval:
-//   Lần học đầu tiên (srMarkWordsAsLearned): interval=1, reps=0, dueDate=ngày mai
-//   Tick Remember lần 1 (reps=0 → 1): interval = SR_STEPS_DAYS[1] = 3 ngày
-//   Tick Remember lần 2 (reps=1 → 2): interval = SR_STEPS_DAYS[2] = 7 ngày
-//   Tick Remember lần 3+ (reps≥2)   : interval *= SR_GROWTH_FACTOR
-//   Tick Not Yet bất kỳ lúc nào     : interval reset về 1 ngày
 function srUpdateWordState(wordId, isCorrect) {
   const data = _srGetAll();
   const id = String(wordId);
   const st = data[id] || { interval: 0, reps: 0 };
 
   if (isCorrect) {
-    // reps hiện tại đã là "số lần đã ôn đúng từ trước" — dùng làm chỉ số cho bước KẾ TIẾP
-    // SR_STEPS_DAYS[0]=1 là interval của lần học đầu (set bởi srMarkWordsAsLearned),
-    // nên lần đúng đầu tiên cần nhảy lên SR_STEPS_DAYS[1]=3, tức index = reps + 1
     const nextIndex = st.reps + 1;
     st.interval = nextIndex < SR_STEPS_DAYS.length
       ? SR_STEPS_DAYS[nextIndex]
@@ -95,20 +101,17 @@ function srGetDueWords() {
 
   return window.vocabularyData.filter(w => {
     const st = data[String(w.id)];
-    if (!st || !st.dueDate) return false; // chưa từng học -> không tính vào "ôn tập"
+    if (!st || !st.dueDate) return false;
     return st.dueDate <= today;
   });
 }
 
-// Đếm nhanh số từ đến hạn hôm nay (dùng để hiện badge trên nav)
 function srCountDueWords() {
   return srGetDueWords().length;
 }
 
 // ============================================================
-//  DEVICE LOGGING (âm thầm ghi nhận loại thiết bị học viên dùng)
-//  Mục đích: quan sát hành vi đa thiết bị trước khi quyết định
-//  có cần xây sync qua Supabase ở giai đoạn sau hay không.
+//  DEVICE LOGGING
 // ============================================================
 function logDeviceVisit() {
   try {
@@ -123,93 +126,113 @@ function logDeviceVisit() {
       timestamp: new Date().toISOString()
     };
 
-    // Lưu local 1 bản ghi nhẹ để debug nếu cần
     const log = JSON.parse(localStorage.getItem('device_log') || '[]');
     log.push(payload);
-    if (log.length > 50) log.shift(); // giữ tối đa 50 bản ghi gần nhất
+    if (log.length > 50) log.shift();
     localStorage.setItem('device_log', JSON.stringify(log));
 
-    // Nếu đã có endpoint backend (vd: /api/log-device trên Vercel/Supabase),
-    // gửi kèm lên server. Để trống an toàn nếu chưa dựng endpoint này.
     if (STUDENT_CONFIG.deviceLogUrl) {
       fetch(STUDENT_CONFIG.deviceLogUrl, {
         method: 'POST',
-        mode: 'no-cors',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      }).catch(() => {}); // im lặng bỏ qua lỗi mạng
+        headers: {
+          'apikey': STUDENT_CONFIG.supabaseAnonKey,
+          'Authorization': `Bearer ${STUDENT_CONFIG.supabaseAnonKey}`,
+          'Content-Type': 'application/json',
+          'Prefer': 'return=minimal'
+        },
+        body: JSON.stringify({
+          device_type: payload.deviceType,
+          platform: payload.platform,
+          screen_width: payload.screenWidth,
+          visited_at: payload.timestamp
+        })
+      }).catch(() => {});
     }
   } catch (e) {
     console.error('Lỗi log thiết bị:', e);
   }
 }
 
-// 2. Cấu hình đường dẫn
+// 2. Cấu hình — tập trung toàn bộ thông tin kết nối tại đây
 const STUDENT_CONFIG = {
-  dataScriptUrl: "/api/data",
+  // Supabase
+  supabaseUrl: "https://zlblylqosqwnhudeivpt.supabase.co",
+  supabaseAnonKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpsYmx5bHFvc3F3bmh1ZGVpdnB0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI1Mzk0NjUsImV4cCI6MjA5ODExNTQ2NX0.Xa8FblRuypm_eHMGz8GrCpwloKnzjgjTu8z_1ivS8_4",
+  vocabUrl: "https://zlblylqosqwnhudeivpt.supabase.co/rest/v1/vocabulary?order=id.asc",
+  deviceLogUrl: "https://zlblylqosqwnhudeivpt.supabase.co/rest/v1/device_logs",
   googleScriptUrl: "https://script.google.com/macros/s/AKfycbzwmTFWowwaAVQ-ZLmk3cveLH8l9Bi7rJZk6TDE2ikNnjlwB36Rn0a5An0PgmQu1Rag2w/exec",
-  // Để trống cho tới khi bạn dựng endpoint log thiết bị trên Vercel/Supabase.
-  // Khi có, chỉ cần điền URL vào đây, không cần sửa gì thêm ở logDeviceVisit().
-  deviceLogUrl: ""
+
+  // ── GRAMMAR MODULE (Ngữ pháp) ──
+  // Tên cột Supabase: grammar_points(id, jlpt_level, title, meaning_short, structure,
+  //   week_number, day_number, related_grammar_id, related_note, is_active, created_at)
+  grammarPointsUrl: "https://zlblylqosqwnhudeivpt.supabase.co/rest/v1/grammar_points?is_active=eq.true&order=week_number.asc,day_number.asc,id.asc",
+  // grammar_point_slides(id, grammar_point_id, slide_order, image_url)
+  grammarSlidesUrl: "https://zlblylqosqwnhudeivpt.supabase.co/rest/v1/grammar_point_slides?order=slide_order.asc",
+  // grammar_examples(id, grammar_point_id, example_jp, example_vn, audio_url)
+  grammarExamplesUrl: "https://zlblylqosqwnhudeivpt.supabase.co/rest/v1/grammar_examples",
+  // user_grammar_progress(id, user_id, grammar_point_id, is_learned, learned_at)
+  grammarProgressUrl: "https://zlblylqosqwnhudeivpt.supabase.co/rest/v1/user_grammar_progress",
+  // ID học viên tạm thời (chưa có hệ thống đăng nhập) — dùng để lưu tiến độ "Đã học".
+  // Khi có bảng users/auth thật, thay giá trị này bằng user id thật của học viên.
+  studentId: "default_student"
 };
 
-const HEADERS = ["id", "unit", "part", "kanji", "kana", "romaji", "hanviet", "meaning", "example", "audio"];
-
-// 3. Hàm nạp dữ liệu từ Google Sheet (Thay thế cho file data.js cũ)
+// 3. Nạp dữ liệu từ Supabase
 async function initApp() {
   const progressEl = document.getElementById('global-progress');
-  if (progressEl) progressEl.textContent = 'Đang đồng bộ...';
+  if (progressEl) progressEl.textContent = 'Đang tải dữ liệu...';
 
-  // 1. KIỂM TRA CACHE
   const cachedData = localStorage.getItem('vocab_cache');
-  const cacheTime = localStorage.getItem('vocab_cache_time');
-  const ONE_HOUR = 3600000; // 1 giờ tính bằng mili giây
+  const cacheTime  = localStorage.getItem('vocab_cache_time');
+  const ONE_HOUR   = 3600000;
 
-  // Nếu đã có dữ liệu và chưa quá 1 giờ
   if (cachedData && cacheTime && (Date.now() - parseInt(cacheTime) < ONE_HOUR)) {
-    console.log("Đang dùng dữ liệu từ bộ nhớ đệm (Cache)...");
     window.vocabularyData = JSON.parse(cachedData);
-    startUI(); // Hàm hiển thị giao diện
+    startUI();
     return;
   }
 
-  // 2. NẾU CHƯA CÓ CACHE HOẶC ĐÃ CŨ: Tải từ Google
   try {
-    const response = await fetch(STUDENT_CONFIG.dataScriptUrl);
-    const rawData = await response.json();
-    
-    window.vocabularyData = Object.keys(rawData).map(key => {
-        let row = rawData[key];
-        let obj = {};
-        HEADERS.forEach((h, i) => { obj[h] = row[i]; });
-        return obj;
-    }).filter(item => item.id);
+    const response = await fetch(STUDENT_CONFIG.vocabUrl, {
+      headers: {
+        'apikey':        STUDENT_CONFIG.supabaseAnonKey,
+        'Authorization': `Bearer ${STUDENT_CONFIG.supabaseAnonKey}`,
+        'Content-Type':  'application/json'
+      }
+    });
 
-    // Lưu vào LocalStorage
+    if (!response.ok) {
+      throw new Error(`Supabase trả về lỗi: ${response.status} ${response.statusText}`);
+    }
+
+    const rows = await response.json();
+    window.vocabularyData = rows.filter(item => item.id);
+
     localStorage.setItem('vocab_cache', JSON.stringify(window.vocabularyData));
     localStorage.setItem('vocab_cache_time', Date.now().toString());
 
-    console.log("Đã tải dữ liệu mới từ Google Sheet");
     startUI();
   } catch (err) {
     console.error("Lỗi tải:", err);
-    if (progressEl) progressEl.textContent = 'Lỗi mạng!';
+    if (cachedData) {
+      window.vocabularyData = JSON.parse(cachedData);
+      startUI();
+      if (progressEl) progressEl.textContent = '⚠️ Dùng dữ liệu cũ (offline)';
+    } else {
+      if (progressEl) progressEl.textContent = '❌ Lỗi kết nối!';
+    }
   }
 }
 
-// Hàm này để tách biệt việc khởi tạo giao diện
 // ============================================================
 //  DEBUG PANEL — công cụ test Spaced Repetition NGAY TRONG APP
-//  Kích hoạt: thêm ?debug=sr vào cuối URL, ví dụ:
-//  https://your-site.vercel.app/?debug=sr
-//  Học viên bình thường không thấy gì cả vì không ai gõ tham số này.
 // ============================================================
 function isDebugMode() {
   return new URLSearchParams(window.location.search).get('debug') === 'sr';
 }
 
 function renderDebugPanel() {
-  if (!isDebugMode()) return; // không làm gì nếu không bật debug
+  if (!isDebugMode()) return;
 
   const panel = document.createElement('div');
   panel.id = 'sr-debug-panel';
@@ -236,7 +259,6 @@ function renderDebugPanel() {
   `;
   document.body.appendChild(panel);
 
-  // Style nhanh cho nút trong panel, không cần đụng vào style.css chính
   const style = document.createElement('style');
   style.textContent = `
     .sr-debug-btn {
@@ -254,7 +276,6 @@ function _srDebugLog(msg) {
   console.log(msg);
 }
 
-// Nút 1: ép toàn bộ từ đã học về due = hôm nay, để vào "Ôn tập" thấy ngay
 function srDebugForceAllDueToday() {
   const data = _srGetAll();
   const today = _srToday();
@@ -265,7 +286,6 @@ function srDebugForceAllDueToday() {
   _srDebugLog(`✅ Đã ép ${count} từ về dueDate = ${today}.\nBấm "Ôn tập hôm nay" trên nav để kiểm tra.`);
 }
 
-// Nút 2: giả lập N ngày trôi qua (đẩy lùi dueDate của toàn bộ từ về quá khứ)
 function srDebugSimulateDaysPassed() {
   const n = parseInt(prompt('Giả lập đã trôi qua bao nhiêu ngày?', '7'), 10);
   if (isNaN(n)) return;
@@ -280,7 +300,6 @@ function srDebugSimulateDaysPassed() {
   _srDebugLog(`✅ Đã đẩy lùi dueDate của toàn bộ từ về sớm hơn ${n} ngày.\nSố từ đến hạn ngay bây giờ: ${srCountDueWords()}`);
 }
 
-// Nút 3: chạy bộ test logic đầy đủ — in kết quả ra Console (giữ chi tiết ở đó vì khá dài)
 function srDebugRunFullTest() {
   if (typeof srRunFullTestSuite !== 'function') {
     _srDebugLog('⚠️ Chưa nạp bộ test đầy đủ. Hãy chắc rằng file sr_test_script.js đã được include, hoặc dùng 3 nút còn lại để test nhanh.');
@@ -290,7 +309,6 @@ function srDebugRunFullTest() {
   srRunFullTestSuite();
 }
 
-// Nút 4: xem nhanh dữ liệu hiện có, không cần mở Console
 function srDebugInspect() {
   const data = _srGetAll();
   const today = _srToday();
@@ -301,14 +319,12 @@ function srDebugInspect() {
   _srDebugLog(lines.length ? lines.join('\n') : '(chưa có từ nào trong sr_vocab)');
 }
 
-// Nút 5: dọn sạch để test lại từ đầu
 function srDebugClearAll() {
   if (!confirm('Xóa toàn bộ dữ liệu Spaced Repetition? (chỉ ảnh hưởng máy/trình duyệt này)')) return;
   localStorage.removeItem(SR_STORAGE_KEY);
   updateReviewBadge();
   _srDebugLog('🗑️ Đã xóa sạch sr_vocab.');
 }
-
 
 function startUI() {
   const units = getUnits();
@@ -317,17 +333,16 @@ function startUI() {
     renderUnitTabs(units);
     renderUnitContent();
     updateGlobalProgress();
-    updateReviewBadge(); // hiện số từ cần ôn hôm nay (Spaced Repetition), an toàn nếu badge chưa có trong HTML
-    switchMainSection('vocab'); // panel mặc định khi mở app — thay cho class "active" viết cứng trong HTML
-    renderDebugPanel(); // chỉ hiện khi URL có ?debug=sr, không ảnh hưởng học viên bình thường
-    // Ẩn loading nếu bạn có dùng overlay
+    updateReviewBadge();
+    switchMainSection('vocab');
+    renderDebugPanel();
     const overlay = document.getElementById('loading-overlay');
     if (overlay) overlay.style.display = 'none';
   }
 }
-// Kích hoạt khi trang web tải xong
+
 document.addEventListener('DOMContentLoaded', () => {
-  logDeviceVisit(); // ghi nhận thiết bị mỗi lần học viên mở app — không chặn luồng chính
+  logDeviceVisit();
   initApp();
 });
 
@@ -368,17 +383,11 @@ function _digits(str) {
   return m ? m[0] : '0';
 }
 
-// Helper dùng chung cho mặt trước Flashcard (cả Vocab thường lẫn Ôn tập):
-// Nếu từ có Kanji -> hiện Kanji như bình thường.
-// Nếu từ KHÔNG có Kanji (chỉ tồn tại ở dạng kana, vd: けが) -> hiện
-// chính chữ Kana đó thay vì hiển thị placeholder text "Kana Only".
 function getFrontCardDisplay(word) {
   const hasKanji = word.kanji && word.kanji !== '—';
   if (hasKanji) {
     return `<div class="card-kanji">${word.kanji}</div>`;
   }
-  // Không có kanji: dùng kana làm chữ chính, giữ cỡ chữ to như kanji
-  // để bố cục card không bị lệch trọng tâm giữa các từ có/không có kanji.
   return `<div class="card-kanji">${s(word.kana)}</div>`;
 }
 
@@ -391,12 +400,9 @@ function buildAudioPath(wordObj) {
 
 function getUnits() {
   if (typeof window.vocabularyData === 'undefined') return [];
-  
-  // Lấy danh sách Unit, sau đó dùng .filter để loại bỏ những tên rác
   const units = [...new Set(window.vocabularyData.map(w => w.unit))];
-  
   return units
-    .filter(u => u && u !== "unit" && u !== "Unit") // Dòng này sẽ loại bỏ cái tên "unit" thừa
+    .filter(u => u && u !== "unit" && u !== "Unit")
     .sort((a, b) => String(a).localeCompare(String(b), undefined, {numeric: true, sensitivity: 'base'}));
 }
 
@@ -414,7 +420,7 @@ function getWords(unitName, partName) {
 function renderUnitTabs(units) {
   const bar = document.getElementById('unit-tabs-bar');
   if (!bar) return;
-  
+
   bar.innerHTML = units.map(u => {
     const totalWords = vocabularyData.filter(w => w.unit === u).length;
     const activeClass = (u === state.activeUnit) ? 'active' : '';
@@ -437,54 +443,50 @@ function toggleAccordion(unit, part) {
   const partKey = `${unit}_${part}`;
   const el = document.getElementById(`acc-item-${escAttr(partKey)}`);
   if (!el) return;
-  
-  // Nếu đã mở thì đóng lại
+
   if (el.classList.contains('open')) {
     el.classList.remove('open');
-    stopAllAudio(); // dừng audio nếu đang phát khi đóng accordion
+    stopAllAudio();
     if (state.activeAccordion[unit] === part) {
       state.activeAccordion[unit] = null;
     }
   } else {
-    // Đóng các item khác trong cùng unit
     if (state.activeAccordion[unit]) {
       const prev = document.getElementById(`acc-item-${escId(unit)}_${escId(state.activeAccordion[unit])}`);
       if (prev) prev.classList.remove('open');
     }
-    
-    // Mở item được chọn
+
     el.classList.add('open');
     state.activeAccordion[unit] = part;
-    
+
     const curTab = state.activeSubTab[partKey] || 'study';
     buildWorkspacePanels(partKey, curTab);
   }
 }
+
 function renderUnitContent() {
   const wrap = document.getElementById('unit-content-wrap');
   if (!wrap) return;
-  
+
   const unit = state.activeUnit;
   const parts = getPartsForUnit(unit);
-  
+
   if (parts.length === 0) {
     wrap.innerHTML = `<div class="empty-state">No data available for this Unit.</div>`;
     return;
   }
-  
+
   let html = `<div class="parts-container">`;
-  
+
   parts.forEach((p, idx) => {
     const partKey = `${unit}_${p}`;
-    
-    // Mặc định ban đầu sẽ đóng hết, chỉ mở khi người dùng chủ động click
     const isOpen = (state.activeAccordion[unit] === p);
-    
+
     const savedScore = localStorage.getItem(`quiz_${partKey}`);
     let badgeHtml = `<div class="progress-badge not-started">Not Started</div>`;
     let fillWidth = '0%';
     let partialClass = '';
-    
+
     if (savedScore !== null) {
       const [score, total] = savedScore.split('/').map(Number);
       if (total > 0) {
@@ -497,9 +499,9 @@ function renderUnitContent() {
         }
       }
     }
-    
+
     const curTab = state.activeSubTab[partKey] || 'study';
-    
+
     html += `
       <div class="accordion-item ${isOpen ? 'open' : ''}" id="acc-item-${escAttr(partKey)}">
         <button class="accordion-header" onclick="toggleAccordion('${escAttr(unit)}', '${escAttr(p)}')">
@@ -526,11 +528,10 @@ function renderUnitContent() {
       </div>
     `;
   });
-  
+
   html += `</div>`;
   wrap.innerHTML = html;
 
-  // Chỉ dựng Workspace panel cho những bài nào đang thực sự được mở
   parts.forEach((p, idx) => {
     const partKey = `${unit}_${p}`;
     const isOpen = (state.activeAccordion[unit] === p);
@@ -544,10 +545,10 @@ function renderUnitContent() {
 function switchSubTab(partKey, tabName) {
   stopAllAudio();
   state.activeSubTab[partKey] = tabName;
-  
+
   const container = document.getElementById(`panels-${partKey}`);
   if (!container) return;
-  
+
   [`study`, `card`, `quiz`].forEach(t => {
     const btn = document.getElementById(`tab-btn-${partKey}-${t}`);
     if (btn) btn.classList.toggle('active', t === tabName);
@@ -559,10 +560,10 @@ function switchSubTab(partKey, tabName) {
 function buildWorkspacePanels(partKey, activeTab) {
   const container = document.getElementById(`panels-${partKey}`);
   if (!container) return;
-  
+
   const [u, p] = partKey.split('_');
   const words = getWords(u, p);
-  
+
   let studyActive = activeTab === 'study' ? 'active' : '';
   let cardActive  = activeTab === 'card' ? 'active' : '';
   let quizActive  = activeTab === 'quiz' ? 'active' : '';
@@ -644,13 +645,13 @@ function stopAllAudio() {
 
 function playSingleAudio(wordId, path, partKey) {
   if (state.isAutoplay) stopAllAudio();
-  
+
   document.querySelectorAll('.word-table tbody tr').forEach(r => r.classList.remove('playing'));
   const row = document.getElementById(`row-${partKey}-${wordId}`);
   if (row) row.classList.add('playing');
 
   if (state.currentAudio) state.currentAudio.pause();
-  
+
   state.currentAudio = new Audio(path);
   state.currentAudio.onended = () => { if (row) row.classList.remove('playing'); };
   state.currentAudio.onerror = () => { if (row) row.classList.remove('playing'); };
@@ -660,17 +661,17 @@ function playSingleAudio(wordId, path, partKey) {
 function toggleAutoplay(partKey) {
   if (state.isAutoplay) { stopAllAudio(); return; }
   if (state.currentAudio) state.currentAudio.pause();
-  
+
   state.isAutoplay = true;
   const btn = document.getElementById(`btn-autoplay-${partKey}`);
   if (btn) btn.textContent = '⏹ Stop Autoplay';
 
   const [u, p] = partKey.split('_');
   const words = getWords(u, p);
-  
+
   state.playlist = words.map(w => ({ id: w.id, path: buildAudioPath(w) }));
   state.playlistIndex = 0;
-  
+
   runAutoplayCycle(partKey);
 }
 
@@ -704,7 +705,7 @@ function runAutoplayCycle(partKey) {
 
 function initFlashcardEngine(partKey) {
   const [u, p] = partKey.split('_');
-  const words = _shuffle(getWords(u, p)).slice(0, 20); 
+  const words = _shuffle(getWords(u, p)).slice(0, 20);
 
   state.flashcardState[partKey] = {
     index: 0,
@@ -715,8 +716,6 @@ function initFlashcardEngine(partKey) {
     isFinished: false
   };
 
-  // Spaced Repetition: đánh dấu các từ trong Part này là "đã học lần đầu"
-  // (chỉ áp dụng cho từ chưa từng có trong sr_vocab, không ghi đè lịch sử ôn cũ)
   srMarkWordsAsLearned(words);
 
   renderFlashcard(partKey);
@@ -743,7 +742,7 @@ function renderFlashcard(partKey) {
 
   zone.innerHTML = `
     <div class="flashcard-counter">Card <span>${idx + 1}</span> of <span>${fState.cards.length}</span></div>
-    
+
     <div class="flashcard-scene" id="card-scene-${partKey}" onclick="this.classList.toggle('flipped')">
       <div class="flashcard-inner">
         <div class="card-face card-front">
@@ -754,7 +753,7 @@ function renderFlashcard(partKey) {
           </div>
           <div class="flip-hint" style="color:rgba(255,255,255,0.3); margin-top:16px;">Click card to flip</div>
         </div>
-        
+
         <div class="card-face card-back" onclick="event.stopPropagation();">
           <div class="card-kana-big">${s(currentWord.kana)}</div>
           <div class="card-hanviet">${s(currentWord.hanviet)}</div>
@@ -784,7 +783,6 @@ function evaluateFlashcard(partKey, isRemembered) {
   const currentWord = fState.cards[fState.index];
   if (isRemembered) { fState.remembered++; } else { fState.notYet++; fState.notYetList.push(currentWord); }
 
-  // Spaced Repetition: ghi nhận kết quả để tính lại lịch ôn tiếp theo cho từ này
   srUpdateWordState(currentWord.id, isRemembered);
 
   if (fState.index + 1 < fState.cards.length) {
@@ -844,12 +842,12 @@ function changeQuizMode(partKey, newMode) {
 
 function initQuizEngine(partKey, mode = 'k2m') {
   const [u, p] = partKey.split('_');
-  const words = _shuffle(getWords(u, p)); 
-  
+  const words = _shuffle(getWords(u, p));
+
   state.quizState[partKey] = {
     index: 0,
     score: 0,
-    quizMode: mode, 
+    quizMode: mode,
     questions: words.map(w => {
       let questionMain = '';
       let questionSub = '';
@@ -882,14 +880,14 @@ function initQuizEngine(partKey, mode = 'k2m') {
       const distractors = _shuffle(cleanPool).slice(0, 3);
       const choices = _shuffle([correctAnswer, ...distractors]);
 
-      return { 
-        word: w, 
+      return {
+        word: w,
         questionMain: questionMain,
         questionSub: questionSub,
         correctAnswer: correctAnswer,
-        choices: choices, 
-        selected: null, 
-        status: 'unanswered' 
+        choices: choices,
+        selected: null,
+        status: 'unanswered'
       };
     })
   };
@@ -926,7 +924,7 @@ function renderQuizQuestion(partKey) {
       <div class="quiz-question-label">
         <span class="quiz-q-number">Q${quiz.index + 1}</span> Multiple Choice Quiz
       </div>
-      
+
       <div class="quiz-word-display">
         <div>
           <div class="quiz-word-main">${q.questionMain}</div>
@@ -982,7 +980,7 @@ function evaluateQuizEnd(partKey) {
   document.getElementById(`quiz-zone-${partKey}`).style.display = 'none';
   const review = document.getElementById(`quiz-review-${partKey}`);
   if (!review) return;
-  
+
   const quiz = state.quizState[partKey];
   const total = quiz.questions.length;
   const score = quiz.score;
@@ -992,11 +990,10 @@ function evaluateQuizEnd(partKey) {
   updateGlobalProgress();
   refreshBadgeOnAccordion(partKey, score, total);
 
-  // ─── ĐOẠN CODE TỰ ĐỘNG GỬI ĐIỂM LÊN GOOGLE SHEETS ĐƯỢC CHÈN VÀO ĐÂY ───
   if (STUDENT_CONFIG.googleScriptUrl && STUDENT_CONFIG.googleScriptUrl !== "") {
     const payload = {
       studentName: STUDENT_CONFIG.studentName,
-      partKey: partKey, 
+      partKey: partKey,
       quizMode: quiz.quizMode === 'k2m' ? 'Kanji -> Meaning' : (quiz.quizMode === 'f2k' ? 'Kana -> Kanji' : 'Meaning -> Kanji'),
       scoreText: `${score}/${total}`,
       accuracy: `${pct}%`
@@ -1004,14 +1001,13 @@ function evaluateQuizEnd(partKey) {
 
     fetch(STUDENT_CONFIG.googleScriptUrl, {
       method: "POST",
-      mode: "no-cors", 
+      mode: "no-cors",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload)
     })
     .then(() => console.log("Gửi điểm thành công về Google Sheets!"))
     .catch(err => console.error("Lỗi gửi điểm:", err));
   }
-  // ───────────────────────────────────────────────────────────────────
 
   let emoji = '🎉'; let title = 'Excellent Work!';
   if (pct < 50) { emoji = '🩹'; title = 'Keep Practicing!'; } else if (pct < 80) { emoji = '👍'; title = 'Good Effort!'; }
@@ -1065,35 +1061,25 @@ function updateGlobalProgress() {
 
 function syncData() {
   const btn = document.getElementById('sync-btn');
-  btn.classList.add('rotating'); // Bắt đầu hiệu ứng xoay
-  
-  // Thông báo cho người dùng
+  btn.classList.add('rotating');
+
   const progressEl = document.getElementById('global-progress');
   if (progressEl) progressEl.textContent = 'Đang đồng bộ lại dữ liệu...';
 
-  // Xóa bộ nhớ đệm
   localStorage.removeItem('vocab_cache');
   localStorage.removeItem('vocab_cache_time');
 
-  // Gọi lại hàm initApp để tải mới hoàn toàn
   initApp().then(() => {
-    btn.classList.remove('rotating'); // Dừng xoay khi xong
+    btn.classList.remove('rotating');
   });
 }
 
 // ============================================================
 //  TRANG "ÔN TẬP HÔM NAY" (Spaced Repetition Review)
-//  Tái sử dụng giao diện flashcard hiện có, khác ở nguồn dữ liệu:
-//  thay vì lấy theo Part, lấy theo danh sách từ ĐẾN HẠN ôn hôm nay.
-//  Yêu cầu HTML: 1 nút/khu vực gọi openReviewToday() và 1 container
-//  rỗng có id="review-zone" để render vào (xem ghi chú cuối file).
 // ============================================================
-
-// Cập nhật badge số từ cần ôn hôm nay — gọi hàm này ở bất cứ đâu
-// bạn muốn hiển thị con số (vd: trên nav bar, sau khi initApp xong).
 function updateReviewBadge() {
   const badge = document.getElementById('review-due-badge');
-  if (!badge) return; // an toàn nếu HTML chưa có phần tử này
+  if (!badge) return;
   const count = srCountDueWords();
   if (count > 0) {
     badge.textContent = count;
@@ -1103,7 +1089,6 @@ function updateReviewBadge() {
   }
 }
 
-// Mở phiên Ôn tập hôm nay — gọi từ nút nav "Ôn tập hôm nay" trong index.html
 function openReviewToday() {
   const zone = document.getElementById('review-zone');
   if (!zone) {
@@ -1112,7 +1097,7 @@ function openReviewToday() {
   }
 
   stopAllAudio();
-  switchMainSection('review'); // chuyển panel + active đúng nút nav nhờ data-section="review"
+  switchMainSection('review');
 
   const dueWords = _shuffle(srGetDueWords());
 
@@ -1196,7 +1181,6 @@ function evaluateReviewFlashcard(isRemembered) {
   const currentWord = rState.cards[rState.index];
   if (isRemembered) { rState.remembered++; } else { rState.notYet++; rState.notYetList.push(currentWord); }
 
-  // Đây là bước quan trọng nhất: cập nhật lại lịch ôn tiếp theo cho từ này
   srUpdateWordState(currentWord.id, isRemembered);
 
   if (rState.index + 1 < rState.cards.length) {
@@ -1207,7 +1191,6 @@ function evaluateReviewFlashcard(isRemembered) {
     renderReviewReport();
   }
 
-  // Cập nhật lại badge số từ còn lại đến hạn (vd: trên nav)
   updateReviewBadge();
 }
 
@@ -1249,6 +1232,382 @@ function renderReviewReport() {
   `;
 }
 
+// ============================================================
+//  GRAMMAR MODULE (Ngữ pháp) — Soumatome N3, chia theo Tuần/Ngày
+//  Data nguồn: Supabase bảng grammar_points, grammar_point_slides,
+//  grammar_examples, user_grammar_progress (xem STUDENT_CONFIG).
+//
+//  Cấu trúc màn hình:
+//   - openGrammarModule()   : entry point khi bấm nav "Ngữ pháp"
+//   - loadGrammarData()     : fetch 1 lần, cache vào state.grammar (lazy-load)
+//   - renderGrammarSection(): dispatcher, chọn render list hay detail
+//   - renderGrammarListView() / renderGrammarListRows() / filterGrammarList()
+//   - renderGrammarDetail() / renderGrammarCarousel() / carouselNav()
+//   - toggleGrammarLearned(), navigateGrammarPoint(), playGrammarAudio()
+// ============================================================
+
+function openGrammarModule() {
+  stopAllAudio();
+  switchMainSection('grammar');
+
+  if (!state.grammar.loaded) {
+    renderGrammarLoading();
+    loadGrammarData();
+  } else {
+    state.grammar.view = 'list';
+    state.grammar.activeId = null;
+    renderGrammarSection();
+  }
+}
+
+function renderGrammarLoading() {
+  const wrap = document.getElementById('grammar-content-wrap');
+  if (wrap) wrap.innerHTML = `<div class="empty-state">Đang tải dữ liệu ngữ pháp...</div>`;
+}
+
+async function loadGrammarData() {
+  try {
+    const headers = {
+      'apikey': STUDENT_CONFIG.supabaseAnonKey,
+      'Authorization': `Bearer ${STUDENT_CONFIG.supabaseAnonKey}`,
+      'Content-Type': 'application/json'
+    };
+
+    const progressUrl = `${STUDENT_CONFIG.grammarProgressUrl}?user_id=eq.${encodeURIComponent(STUDENT_CONFIG.studentId)}`;
+
+    const [pointsRes, slidesRes, examplesRes, progressRes] = await Promise.all([
+      fetch(STUDENT_CONFIG.grammarPointsUrl, { headers }),
+      fetch(STUDENT_CONFIG.grammarSlidesUrl, { headers }),
+      fetch(STUDENT_CONFIG.grammarExamplesUrl, { headers }),
+      fetch(progressUrl, { headers })
+    ]);
+
+    if (!pointsRes.ok) {
+      throw new Error(`Supabase grammar_points lỗi: ${pointsRes.status} ${pointsRes.statusText}`);
+    }
+
+    const points = await pointsRes.json();
+    const slides = slidesRes.ok ? await slidesRes.json() : [];
+    const examples = examplesRes.ok ? await examplesRes.json() : [];
+    const progress = progressRes.ok ? await progressRes.json() : [];
+
+    const slidesByPoint = {};
+    slides.forEach(sl => {
+      if (!slidesByPoint[sl.grammar_point_id]) slidesByPoint[sl.grammar_point_id] = [];
+      slidesByPoint[sl.grammar_point_id].push(sl);
+    });
+    Object.keys(slidesByPoint).forEach(id => {
+      slidesByPoint[id].sort((a, b) => a.slide_order - b.slide_order);
+    });
+
+    const examplesByPoint = {};
+    examples.forEach(ex => {
+      if (!examplesByPoint[ex.grammar_point_id]) examplesByPoint[ex.grammar_point_id] = [];
+      examplesByPoint[ex.grammar_point_id].push(ex);
+    });
+
+    const progressByPoint = {};
+    progress.forEach(pr => { progressByPoint[pr.grammar_point_id] = !!pr.is_learned; });
+
+    state.grammar.points = points;
+    state.grammar.slidesByPoint = slidesByPoint;
+    state.grammar.examplesByPoint = examplesByPoint;
+    state.grammar.progressByPoint = progressByPoint;
+    state.grammar.loaded = true;
+    state.grammar.view = 'list';
+    state.grammar.activeId = null;
+    state.grammar.searchTerm = '';
+
+    renderGrammarSection();
+  } catch (err) {
+    console.error('Lỗi tải dữ liệu ngữ pháp:', err);
+    const wrap = document.getElementById('grammar-content-wrap');
+    if (wrap) {
+      wrap.innerHTML = `<div class="empty-state">❌ Không tải được dữ liệu ngữ pháp. Vui lòng bấm lại vào tab Ngữ pháp để thử lại.</div>`;
+    }
+  }
+}
+
+// Dispatcher: quyết định render trang danh sách hay trang chi tiết
+function renderGrammarSection() {
+  const wrap = document.getElementById('grammar-content-wrap');
+  if (!wrap) return;
+
+  if (state.grammar.view === 'detail' && state.grammar.activeId !== null) {
+    renderGrammarDetail(wrap);
+  } else {
+    renderGrammarListView(wrap);
+  }
+}
+
+// ── TRANG DANH SÁCH ──────────────────────────────────────────
+
+function renderGrammarListView(wrap) {
+  const points = state.grammar.points;
+  const total = points.length;
+  const learnedCount = points.filter(p => state.grammar.progressByPoint[p.id]).length;
+  const pct = total > 0 ? Math.round((learnedCount / total) * 100) : 0;
+  const level = total > 0 ? points[0].jlpt_level : 'N3';
+
+  wrap.innerHTML = `
+    <div class="grammar-list-header">
+      <div class="grammar-list-title-row">
+        <h2>Ngữ pháp ${s(level)}</h2>
+        <span class="grammar-count-badge">${total} mẫu</span>
+      </div>
+      <div class="grammar-progress-summary">
+        <div class="progress-bar-mini" style="width:130px;">
+          <div class="progress-bar-mini-fill" style="width:${pct}%"></div>
+        </div>
+        <span>${learnedCount}/${total} đã học (${pct}%)</span>
+      </div>
+      <div class="grammar-search-wrap">
+        <input
+          type="text"
+          id="grammar-search-input"
+          class="grammar-search-input"
+          placeholder="🔍 Tìm theo mẫu ngữ pháp hoặc nghĩa..."
+          value="${escAttr(state.grammar.searchTerm)}"
+          oninput="filterGrammarList(this.value)"
+        />
+      </div>
+    </div>
+    <div class="grammar-list-body" id="grammar-list-body"></div>
+  `;
+
+  renderGrammarListRows();
+}
+
+function filterGrammarList(term) {
+  state.grammar.searchTerm = term;
+  renderGrammarListRows();
+}
+
+function renderGrammarListRows() {
+  const body = document.getElementById('grammar-list-body');
+  if (!body) return;
+
+  const term = state.grammar.searchTerm.trim().toLowerCase();
+  const filtered = state.grammar.points.filter(p => {
+    if (!term) return true;
+    return (p.title || '').toLowerCase().includes(term) ||
+           (p.meaning_short || '').toLowerCase().includes(term);
+  });
+
+  if (filtered.length === 0) {
+    body.innerHTML = `<div class="empty-state">Không tìm thấy mẫu ngữ pháp phù hợp.</div>`;
+    return;
+  }
+
+  body.innerHTML = filtered.map(p => {
+    const isLearned = !!state.grammar.progressByPoint[p.id];
+    return `
+      <div class="grammar-row ${isLearned ? 'learned' : ''}" onclick="openGrammarDetail(${p.id})">
+        <div class="grammar-row-check">${isLearned ? '✓' : ''}</div>
+        <div class="grammar-row-text">
+          <div class="grammar-row-title">${s(p.title)}</div>
+          <div class="grammar-row-meaning">${s(p.meaning_short)}</div>
+        </div>
+        <div class="grammar-row-meta">Tuần ${s(p.week_number)} · Ngày ${s(p.day_number)}</div>
+      </div>
+    `;
+  }).join('');
+}
+
+// ── TRANG CHI TIẾT ───────────────────────────────────────────
+
+function openGrammarDetail(id) {
+  stopAllAudio();
+  state.grammar.view = 'detail';
+  state.grammar.activeId = id;
+  state.grammar.carouselIndex = 0;
+  renderGrammarSection();
+  const wrap = document.getElementById('grammar-content-wrap');
+  if (wrap) wrap.scrollTop = 0;
+}
+
+function backToGrammarList() {
+  stopAllAudio();
+  state.grammar.view = 'list';
+  state.grammar.activeId = null;
+  renderGrammarSection();
+}
+
+function navigateGrammarPoint(direction) {
+  const points = state.grammar.points;
+  const curIndex = points.findIndex(p => p.id === state.grammar.activeId);
+  if (curIndex === -1) return;
+  const nextIndex = curIndex + direction;
+  if (nextIndex < 0 || nextIndex >= points.length) return;
+  openGrammarDetail(points[nextIndex].id);
+}
+
+function renderGrammarDetail(wrap) {
+  const point = state.grammar.points.find(p => p.id === state.grammar.activeId);
+  if (!point) {
+    wrap.innerHTML = `<div class="empty-state">Không tìm thấy mẫu ngữ pháp này.</div>`;
+    return;
+  }
+
+  const examples = state.grammar.examplesByPoint[point.id] || [];
+  const points = state.grammar.points;
+  const curIndex = points.findIndex(p => p.id === point.id);
+  const isLearned = !!state.grammar.progressByPoint[point.id];
+
+  const examplesHtml = examples.length > 0 ? examples.map(ex => `
+    <div class="grammar-example-item">
+      ${ex.audio_url
+        ? `<button class="quiz-listen-btn" style="width:34px;height:34px;font-size:13px;" onclick="playGrammarAudio('${escAttr(ex.audio_url)}')">🎵</button>`
+        : `<div style="width:34px; flex-shrink:0;"></div>`}
+      <div class="grammar-example-text">
+        <div class="grammar-example-jp">${s(ex.example_jp)}</div>
+        <div class="grammar-example-vn">${s(ex.example_vn)}</div>
+      </div>
+    </div>
+  `).join('') : `<div class="empty-state" style="padding:16px;">Chưa có ví dụ cho mẫu ngữ pháp này.</div>`;
+
+  wrap.innerHTML = `
+    <div class="grammar-detail-topbar">
+      <button class="btn btn-outline" onclick="backToGrammarList()">← Danh sách</button>
+    </div>
+
+    <div class="grammar-detail-header">
+      <div class="grammar-detail-title-row">
+        <h2>${s(point.title)}</h2>
+        <span class="grammar-level-badge">${s(point.jlpt_level)}</span>
+      </div>
+      <div class="grammar-detail-meaning">${s(point.meaning_short)}</div>
+      ${point.structure ? `<div class="grammar-detail-structure">📐 ${s(point.structure)}</div>` : ''}
+      <div class="grammar-detail-position">Tuần ${s(point.week_number)} · Ngày ${s(point.day_number)}</div>
+    </div>
+
+    <div class="grammar-carousel-wrap" id="grammar-carousel-wrap">
+      ${renderGrammarCarousel(point.id)}
+    </div>
+
+    <div class="grammar-section-block">
+      <h4 class="grammar-block-heading">📝 Ví dụ</h4>
+      <div class="grammar-example-list">${examplesHtml}</div>
+    </div>
+
+    ${renderRelatedGrammarBox(point)}
+
+    <div class="grammar-detail-actions">
+      <button class="btn ${isLearned ? 'btn-outline' : 'btn-primary'}" style="flex:1; justify-content:center;" onclick="toggleGrammarLearned(${point.id})">
+        ${isLearned ? '✓ Đã học' : 'Đánh dấu Đã học'}
+      </button>
+    </div>
+
+    <div class="grammar-detail-nav">
+      <button class="btn btn-outline" onclick="navigateGrammarPoint(-1)" ${curIndex <= 0 ? 'disabled' : ''}>‹ Mẫu trước</button>
+      <button class="btn btn-outline" onclick="navigateGrammarPoint(1)" ${curIndex >= points.length - 1 ? 'disabled' : ''}>Mẫu tiếp theo ›</button>
+    </div>
+  `;
+}
+
+// Carousel ảnh slide (mỗi mẫu ngữ pháp có 3-4 ảnh riêng, không dùng chung slide cả ngày)
+function renderGrammarCarousel(pointId) {
+  const slides = state.grammar.slidesByPoint[pointId] || [];
+  if (slides.length === 0) {
+    return `<div class="empty-state" style="padding:30px;">Chưa có slide minh họa cho mẫu này.</div>`;
+  }
+
+  const idx = Math.min(state.grammar.carouselIndex, slides.length - 1);
+
+  return `
+    <div class="grammar-carousel">
+      <button class="carousel-arrow carousel-prev" onclick="carouselNav(-1)" ${idx === 0 ? 'disabled' : ''}>‹</button>
+      <div class="carousel-image-wrap">
+        <img src="${escAttr(slides[idx].image_url)}" alt="Slide ${idx + 1}" class="carousel-image" />
+      </div>
+      <button class="carousel-arrow carousel-next" onclick="carouselNav(1)" ${idx === slides.length - 1 ? 'disabled' : ''}>›</button>
+    </div>
+    <div class="carousel-dots">
+      ${slides.map((sl, i) => `<span class="carousel-dot ${i === idx ? 'active' : ''}" onclick="carouselGoTo(${i})"></span>`).join('')}
+    </div>
+  `;
+}
+
+function carouselNav(direction) {
+  const id = state.grammar.activeId;
+  const slides = state.grammar.slidesByPoint[id] || [];
+  const next = state.grammar.carouselIndex + direction;
+  if (next < 0 || next >= slides.length) return;
+  state.grammar.carouselIndex = next;
+  const carouselWrap = document.getElementById('grammar-carousel-wrap');
+  if (carouselWrap) carouselWrap.innerHTML = renderGrammarCarousel(id);
+}
+
+function carouselGoTo(i) {
+  state.grammar.carouselIndex = i;
+  const carouselWrap = document.getElementById('grammar-carousel-wrap');
+  if (carouselWrap) carouselWrap.innerHTML = renderGrammarCarousel(state.grammar.activeId);
+}
+
+// Box cảnh báo "Dễ nhầm với" — chỉ hiện nếu related_grammar_id khác null
+function renderRelatedGrammarBox(point) {
+  if (!point.related_grammar_id) return '';
+  const related = state.grammar.points.find(p => p.id === point.related_grammar_id);
+  if (!related) return '';
+
+  return `
+    <div class="grammar-related-box" onclick="openGrammarDetail(${related.id})">
+      <div class="related-box-icon">⚠️</div>
+      <div class="related-box-content">
+        <div class="related-box-title">Dễ nhầm với: <strong>${s(related.title)}</strong></div>
+        ${point.related_note ? `<div class="related-box-note">${s(point.related_note)}</div>` : ''}
+      </div>
+    </div>
+  `;
+}
+
+// Phát audio ví dụ ngữ pháp (tái sử dụng biến state.currentAudio dùng chung với module Vocab)
+function playGrammarAudio(url) {
+  if (!url) return;
+  if (state.currentAudio) state.currentAudio.pause();
+  state.currentAudio = new Audio(url);
+  state.currentAudio.play().catch(e => console.log(e));
+}
+
+// Toggle "Đã học" — cập nhật UI ngay (optimistic), rồi ghi lên Supabase.
+// LƯU Ý: bảng user_grammar_progress cần có UNIQUE constraint trên (user_id, grammar_point_id)
+// để upsert (on_conflict) hoạt động đúng — xem ghi chú cuối file.
+async function toggleGrammarLearned(pointId) {
+  const current = !!state.grammar.progressByPoint[pointId];
+  const next = !current;
+
+  state.grammar.progressByPoint[pointId] = next;
+  renderGrammarSection();
+
+  try {
+    const headers = {
+      'apikey': STUDENT_CONFIG.supabaseAnonKey,
+      'Authorization': `Bearer ${STUDENT_CONFIG.supabaseAnonKey}`,
+      'Content-Type': 'application/json',
+      'Prefer': 'resolution=merge-duplicates,return=minimal'
+    };
+
+    const url = `${STUDENT_CONFIG.grammarProgressUrl}?on_conflict=user_id,grammar_point_id`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        user_id: STUDENT_CONFIG.studentId,
+        grammar_point_id: pointId,
+        is_learned: next,
+        learned_at: next ? new Date().toISOString() : null
+      })
+    });
+
+    if (!res.ok) throw new Error(`Lưu tiến độ ngữ pháp lỗi: ${res.status}`);
+  } catch (err) {
+    console.error('Lỗi lưu tiến độ ngữ pháp, hoàn tác lại UI:', err);
+    // Hoàn tác nếu lưu thất bại, tránh UI hiển thị sai trạng thái thật trên server
+    state.grammar.progressByPoint[pointId] = current;
+    renderGrammarSection();
+  }
+}
+
 /*
   ─────────────────────────────────────────────────────────────────
   GHI CHÚ TÍCH HỢP HTML (đã áp dụng sẵn trong index.html mới):
@@ -1266,5 +1625,22 @@ function renderReviewReport() {
   3) Panel "Vocab" không còn gắn class "active" cứng trong HTML —
      startUI() gọi switchMainSection('vocab') ngay khi app load xong,
      đảm bảo đúng 1 nguồn sự thật duy nhất cho việc panel nào active.
+
+  4) Nút "Ngữ pháp" gọi openGrammarModule() thay vì switchMainSection()
+     trực tiếp — vì cần lazy-load dữ liệu Supabase lần đầu tiên vào tab.
+     Panel #section-grammar chỉ chứa 1 container rỗng
+     id="grammar-content-wrap" để render() ghi vào.
+
+  5) YÊU CẦU SUPABASE (bắt buộc để tính năng "Đã học" hoạt động đúng):
+     Bảng user_grammar_progress cần có UNIQUE constraint trên
+     (user_id, grammar_point_id), ví dụ:
+       ALTER TABLE user_grammar_progress
+       ADD CONSTRAINT uq_user_grammar UNIQUE (user_id, grammar_point_id);
+     Nếu chưa có, mỗi lần bấm "Đã học" sẽ tạo dòng mới thay vì cập nhật
+     dòng cũ (do dùng upsert on_conflict=user_id,grammar_point_id).
+
+  6) studentId trong STUDENT_CONFIG hiện đang hard-code "default_student"
+     vì chưa có hệ thống đăng nhập. Khi có auth thật, thay giá trị này
+     bằng user id thực tế của từng học viên.
   ─────────────────────────────────────────────────────────────────
 */
