@@ -212,10 +212,6 @@ body {
   line-height: 1;
 }
 
-.main-nav-btn .nav-label {
-  font-family: var(--font-ja);
-}
-
 .badge-soon {
   font-size: 9px;
   font-weight: 700;
@@ -464,14 +460,23 @@ body {
 .progress-bar-mini-fill.partial { background: var(--gold); }
 
 .accordion-body {
+  /* Dùng max-height thay vì display:none/block.
+     display:none xóa node khỏi layout → browser reflow toàn trang → màn hình trắng 2-3s.
+     max-height:0 + overflow:hidden chỉ thay đổi kích thước, không reflow → mượt. */
   max-height: 0;
   overflow: hidden;
   padding: 0;
+  /* will-change: max-height báo trước cho browser chuẩn bị GPU layer cho phần này,
+     tránh dropped frames khi animation chạy. */
   will-change: max-height;
   transition: max-height 0.28s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .accordion-item.open .accordion-body {
+  /* 9999px đủ chứa bất kỳ nội dung nào. Animation trông nhanh vì
+     browser không thực sự animate đến 9999px — nó dừng tại chiều cao thật
+     của content, chỉ duration bị "lãng phí" ở phần trên 9999px không nhìn thấy.
+     Nếu sau này nội dung accordion rất dài, tăng giá trị này lên. */
   max-height: 9999px;
   transition: max-height 0.35s cubic-bezier(0.4, 0, 0.2, 1);
 }
@@ -566,11 +571,8 @@ body {
 .btn-primary:hover { background: var(--verm-light); }
 .btn-outline { background: transparent; border: 1px solid var(--border-md); color: var(--ink); }
 .btn-outline:hover { background: var(--paper-warm); }
-.btn:disabled { opacity: 0.4; cursor: not-allowed; }
-.btn:disabled:hover { background: transparent; }
-.btn-outline:disabled:hover { background: transparent; }
 
-.word-table { width: 100%; border-collapse: collapse; font-size: 14px; table-layout: fixed; }
+.word-table { width: 100%; border-collapse: collapse; font-size: 14px; }
 .word-table th {
   text-align: left;
   padding: 9px 14px;
@@ -586,20 +588,12 @@ body {
 .word-table td { padding: 11px 14px; border-bottom: 1px solid var(--border); vertical-align: middle; }
 .word-table tbody tr:hover { background: var(--paper); }
 .word-table tbody tr:last-child td { border-bottom: none; }
-.word-table .cell-num { font-size: 12px; color: var(--ink-mute); font-weight: 500; width: 36px; }
-.word-table .cell-kanji { font-family: var(--font-ja-serif); font-size: 18px; color: var(--ink); font-weight: 700; width: 17%; word-break: break-word; white-space: pre-line; }
-.word-table .cell-kana { font-family: var(--font-ja); font-size: 16px; font-weight: 400; color: var(--ink); width: 16%; word-break: break-word; white-space: pre-line; }
-.word-table .cell-meaning { color: var(--ink-soft); font-size: 14px; width: 33%; white-space: pre-line; word-break: break-word; }
-.word-table .cell-example { color: var(--ink-mute); font-size: 13px; width: 18%; white-space: pre-line; word-break: break-word; }
+.word-table .cell-num { font-size: 12px; color: var(--ink-mute); font-weight: 500; width: 40px; }
+.word-table .cell-kanji { font-family: var(--font-ja-serif); font-size: 18px; color: var(--ink); font-weight: 700; }
+.word-table .cell-kana { font-family: var(--font-ja); font-size: 16px; font-weight: 400; color: var(--ink); }
+.word-table .cell-meaning { color: var(--ink-soft); font-size: 14px; }
+.word-table .cell-example { color: var(--ink-mute); font-size: 13px; }
 .word-table .cell-action { width: 48px; text-align: center; }
-
-/* Header widths phải khớp với các cell tương ứng để cột không lệch khi dùng table-layout: fixed */
-.word-table th:nth-child(1) { width: 36px; }
-.word-table th:nth-child(2) { width: 17%; }
-.word-table th:nth-child(3) { width: 16%; }
-.word-table th:nth-child(4) { width: 33%; }
-.word-table th:nth-child(5) { width: 18%; }
-.word-table th:nth-child(6) { width: 48px; }
 
 /* ─────────────────────────────────────────────
    SUB PANEL 2: FLASHCARD
@@ -616,8 +610,8 @@ body {
 .card-back { background: var(--paper-card); transform: rotateY(180deg); border: 1px solid var(--border); }
 
 .card-front .card-kanji { font-family: var(--font-ja-serif); font-size: 44px; font-weight: 700; color: #fff; }
-.card-front .card-example { font-size: 14px; color: rgba(255,255,255,0.75); text-align: center; max-width: 90%; margin-top: 4px; font-style: italic; white-space: pre-line; }
-.card-back .card-meaning { font-size: 24px; font-weight: 700; color: var(--ink); text-align: center; white-space: pre-line; }
+.card-front .card-example { font-size: 14px; color: rgba(255,255,255,0.75); text-align: center; max-width: 90%; margin-top: 4px; font-style: italic; }
+.card-back .card-meaning { font-size: 24px; font-weight: 700; color: var(--ink); text-align: center; }
 .card-back .card-kana-big { font-family: var(--font-ja); font-size: 22px; color: var(--vermillion); font-weight: 600; }
 .card-back .card-hanviet { font-size: 14px; color: var(--sage); font-weight: 500; }
 
@@ -673,7 +667,7 @@ body {
 .quiz-q-number { background: var(--vermillion); color: #fff; font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 3px; }
 
 .quiz-word-display { display: flex; align-items: center; gap: 14px; margin-bottom: 22px; }
-.quiz-word-main { font-family: var(--font-ja-serif); font-size: 36px; color: var(--ink); font-weight: 700; line-height: 1.2; white-space: pre-line; }
+.quiz-word-main { font-family: var(--font-ja-serif); font-size: 36px; color: var(--ink); font-weight: 700; line-height: 1.2; }
 
 /* Ẩn hoàn toàn phần text giải thích phụ trong Quiz */
 .quiz-word-sub { 
@@ -767,379 +761,6 @@ body {
   .review-page-header h2 { font-size: 17px; }
 }
 
-/* ═════════════════════════════════════════════
-   MODULE NGỮ PHÁP (Grammar) — tái sử dụng token
-   màu / spacing / shadow đã có ở trên, không tạo
-   hệ màu mới.
-═════════════════════════════════════════════ */
-
-.grammar-page-wrap {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  padding: 20px 24px 40px;
-  max-width: 780px;
-  width: 100%;
-  align-self: center;
-}
-
-/* ── Trang danh sách ── */
-.grammar-list-header {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  margin-bottom: 18px;
-}
-
-.grammar-list-title-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.grammar-list-title-row h2 {
-  font-size: 20px;
-  font-weight: 700;
-  color: var(--ink);
-}
-
-.grammar-count-badge {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--ink-mute);
-  background: var(--paper-warm);
-  padding: 3px 10px;
-  border-radius: 20px;
-}
-
-.grammar-progress-summary {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 12.5px;
-  color: var(--ink-mute);
-  font-weight: 500;
-}
-
-.grammar-search-wrap { width: 100%; }
-
-.grammar-search-input {
-  width: 100%;
-  padding: 10px 14px;
-  border: 1px solid var(--border-md);
-  border-radius: var(--radius-sm);
-  background: var(--paper-card);
-  font-family: var(--font-sans);
-  font-size: 13.5px;
-  color: var(--ink);
-  transition: border-color var(--transition);
-}
-
-.grammar-search-input:focus {
-  outline: none;
-  border-color: var(--vermillion);
-}
-
-.grammar-list-body {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.grammar-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 13px 16px;
-  background: var(--paper-card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  cursor: pointer;
-  transition: all var(--transition);
-  box-shadow: var(--shadow-sm);
-}
-
-.grammar-row:hover {
-  border-color: var(--vermillion);
-  box-shadow: var(--shadow-md);
-}
-
-.grammar-row.learned {
-  border-left: 3px solid var(--sage);
-}
-
-.grammar-row-check {
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  background: var(--sage-light);
-  color: var(--sage);
-  font-size: 12px;
-  font-weight: 700;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
-.grammar-row-text { flex: 1; min-width: 0; }
-
-.grammar-row-title {
-  font-family: var(--font-ja);
-  font-size: 15.5px;
-  font-weight: 700;
-  color: var(--ink);
-}
-
-.grammar-row-meaning {
-  font-size: 12.5px;
-  color: var(--ink-mute);
-  margin-top: 2px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.grammar-row-meta {
-  font-size: 11px;
-  color: var(--ink-mute);
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-
-/* ── Trang chi tiết ── */
-.grammar-detail-topbar { margin-bottom: 16px; }
-
-.grammar-detail-header {
-  background: var(--paper-card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  padding: 20px 22px;
-  margin-bottom: 18px;
-  box-shadow: var(--shadow-sm);
-}
-
-.grammar-detail-title-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.grammar-detail-title-row h2 {
-  font-family: var(--font-ja);
-  font-size: 26px;
-  font-weight: 700;
-  color: var(--ink);
-}
-
-.grammar-level-badge {
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  color: #fff;
-  background: var(--vermillion);
-  padding: 3px 9px;
-  border-radius: 5px;
-}
-
-.grammar-detail-meaning {
-  font-size: 15px;
-  color: var(--ink-soft);
-  font-weight: 500;
-  margin-top: 8px;
-  white-space: pre-line;
-}
-
-.grammar-detail-structure {
-  font-size: 13px;
-  color: var(--sage);
-  background: var(--sage-light);
-  display: inline-block;
-  padding: 5px 10px;
-  border-radius: var(--radius-sm);
-  margin-top: 10px;
-  white-space: pre-line;
-  font-family: var(--font-ja);
-}
-
-.grammar-detail-meaning-long {
-  font-size: 13.5px;
-  color: var(--ink-soft);
-  line-height: 1.7;
-  margin-top: 14px;
-  padding-top: 14px;
-  border-top: 1px dashed var(--border-md);
-  white-space: pre-line;
-}
-
-.grammar-detail-position {
-  font-size: 12px;
-  color: var(--ink-mute);
-  margin-top: 10px;
-}
-
-.grammar-carousel-wrap { margin-bottom: 20px; }
-
-.grammar-carousel {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.carousel-image-wrap {
-  flex: 1;
-  border-radius: var(--radius-md);
-  overflow: hidden;
-  border: 1px solid var(--border);
-  background: var(--paper-warm);
-  box-shadow: var(--shadow-sm);
-  aspect-ratio: 16 / 10;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.carousel-image {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  display: block;
-}
-
-.carousel-arrow {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  border: 1px solid var(--border-md);
-  background: var(--paper-card);
-  color: var(--ink);
-  font-size: 18px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  transition: all var(--transition);
-}
-
-.carousel-arrow:hover:not(:disabled) {
-  background: var(--vermillion);
-  color: #fff;
-  border-color: var(--vermillion);
-}
-
-.carousel-arrow:disabled { opacity: 0.3; cursor: not-allowed; }
-
-.carousel-dots {
-  display: flex;
-  justify-content: center;
-  gap: 6px;
-  margin-top: 10px;
-}
-
-.carousel-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--border-md);
-  cursor: pointer;
-  transition: all var(--transition);
-}
-
-.carousel-dot.active {
-  background: var(--vermillion);
-  width: 18px;
-  border-radius: 4px;
-}
-
-.grammar-section-block { margin-bottom: 18px; }
-
-.grammar-block-heading {
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--ink-soft);
-  margin-bottom: 10px;
-}
-
-.grammar-example-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.grammar-example-item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 14px;
-  background: var(--paper-card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-}
-
-.grammar-example-text { flex: 1; min-width: 0; }
-
-.grammar-example-jp {
-  font-family: var(--font-ja);
-  font-size: 15px;
-  color: var(--ink);
-  font-weight: 500;
-  white-space: pre-line;
-}
-
-.grammar-example-vn {
-  font-size: 12.5px;
-  color: var(--ink-mute);
-  margin-top: 3px;
-  white-space: pre-line;
-}
-
-.grammar-related-box {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  background: var(--gold-light);
-  border: 1px solid rgba(184, 134, 11, 0.25);
-  border-radius: var(--radius-md);
-  padding: 14px 16px;
-  margin-bottom: 18px;
-  cursor: pointer;
-  transition: all var(--transition);
-}
-
-.grammar-related-box:hover { box-shadow: var(--shadow-sm); }
-
-.related-box-icon { font-size: 18px; flex-shrink: 0; }
-
-.related-box-title {
-  font-size: 13.5px;
-  color: var(--gold);
-  font-weight: 600;
-}
-
-.related-box-note {
-  font-size: 12.5px;
-  color: var(--ink-mute);
-  margin-top: 4px;
-  white-space: pre-line;
-}
-
-.grammar-detail-actions { margin-bottom: 14px; display: flex; }
-
-.grammar-detail-nav {
-  display: flex;
-  gap: 10px;
-}
-
-.grammar-detail-nav .btn { flex: 1; justify-content: center; }
-
-@media (max-width: 640px) {
-  .grammar-page-wrap { padding: 14px 14px 32px; }
-  .grammar-detail-title-row h2 { font-size: 21px; }
-  .quiz-choices { grid-template-columns: 1fr; }
-}
-
 
 .empty-state { text-align: center; padding: 40px 20px; color: var(--ink-mute); font-size: 14px; }
 ::-webkit-scrollbar { width: 6px; height: 6px; }
@@ -1147,58 +768,106 @@ body {
 ::-webkit-scrollbar-thumb { background: var(--border-md); border-radius: 3px; }
 
 @media (max-width: 640px) {
-  .app-header {
-    padding: 0 10px;
-    height: 52px;
-    gap: 4px;
-  }
-  .app-logo { margin-right: 8px; }
+  .app-header { padding: 0 14px; }
   .parts-container { padding: 12px 14px; gap: 8px; }
   .quiz-choices { grid-template-columns: 1fr; }
   .sub-tab { padding: 7px 10px; font-size: 12px; }
   .workspace { padding: 12px 12px 14px; }
   .unit-tabs-bar { padding: 0 14px; }
   .logo-text { display: none; }
-
-  .main-nav {
-    flex: 1;
-    gap: 0;
-    overflow-x: auto;
-    scrollbar-width: none;
-    justify-content: space-between;
-  }
-  .main-nav::-webkit-scrollbar { display: none; }
-
-  .main-nav-btn {
-    flex: 1;
-    padding: 0 6px;
-    font-size: 12px;
-    gap: 3px;
-    justify-content: center;
-    min-width: 0;
-  }
-  .main-nav-btn .nav-icon { font-size: 14px; }
-  .main-nav-btn .nav-label { font-size: 12px; }
-
-  .badge-soon {
-    display: none; /* không đủ chỗ trên màn hình nhỏ, icon+nhãn đã đủ rõ nghĩa */
-  }
-
-  .nav-badge {
-    position: absolute;
-    top: 4px;
-    right: 2px;
-    min-width: 14px;
-    height: 14px;
-    font-size: 9px;
-    padding: 0 3px;
-  }
-
-  .header-right { gap: 6px; }
-  .progress-container { gap: 6px; }
+  .main-nav-btn { padding: 0 12px; font-size: 13px; }
+}
+/* ─────────────────────────────────────────────
+   MÀN HÌNH ĐĂNG NHẬP (Login Screen)
+   Tái sử dụng token màu/spacing/radius/shadow đã có ở trên,
+   không tạo hệ màu mới.
+───────────────────────────────────────────── */
+.login-screen {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: var(--paper);
 }
 
-@media (max-width: 380px) {
-  .main-nav-btn .nav-label { display: none; } /* chỉ còn icon khi màn hình quá hẹp */
-  .main-nav-btn { gap: 0; }
+.login-box {
+  width: 100%;
+  max-width: 340px;
+  background: var(--paper-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  padding: 32px 28px;
+}
+
+.login-box .logo-mark {
+  width: 40px;
+  height: 40px;
+  background: var(--vermillion);
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-ja-serif);
+  font-size: 19px;
+  font-weight: 700;
+  color: #fff;
+  margin: 0 auto 14px;
+}
+
+.login-box h2 {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--ink);
+  text-align: center;
+  margin-bottom: 4px;
+}
+
+.login-box p {
+  font-size: 12.5px;
+  color: var(--ink-mute);
+  text-align: center;
+  margin-bottom: 22px;
+}
+
+.login-form-group {
+  margin-bottom: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.login-form-group label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+
+.login-form-group input {
+  padding: 10px 12px;
+  border: 1px solid var(--border-md);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-sans);
+  font-size: 13.5px;
+  color: var(--ink);
+  background: var(--paper-card);
+  transition: border-color var(--transition);
+}
+
+.login-form-group input:focus {
+  outline: none;
+  border-color: var(--vermillion);
+}
+
+.login-error {
+  font-size: 12px;
+  color: var(--vermillion);
+  min-height: 16px;
+  margin-bottom: 6px;
+  text-align: center;
+}
+
+@media (max-width: 480px) {
+  .login-box { padding: 26px 20px; }
 }

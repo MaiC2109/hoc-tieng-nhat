@@ -7,10 +7,48 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&family=Inter:wght@300;400;500;600;700&family=Noto+Serif+JP:wght@400;700&display=swap" rel="stylesheet" />
-
+  
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
+
+  <!-- ════════════════════════════════════════════════════════════
+       MÀN HÌNH ĐĂNG NHẬP
+       Hiển thị mặc định, che toàn bộ nội dung học tập cho đến khi
+       đăng nhập thành công qua Supabase Auth (logic thêm ở app.js).
+       Tái sử dụng token màu/spacing/shadow/radius đã có trong style.css.
+  ════════════════════════════════════════════════════════════ -->
+  <div id="login-screen" class="login-screen">
+    <div class="login-box">
+      <div class="logo-mark">語</div>
+      <h2>日本語 Vocab</h2>
+      <p>Đăng nhập để bắt đầu buổi học</p>
+
+      <form id="login-form">
+        <div class="login-form-group">
+          <label for="login-email">Email</label>
+          <input type="email" id="login-email" name="email" placeholder="ban@example.com" autocomplete="username" required />
+        </div>
+        <div class="login-form-group">
+          <label for="login-password">Mật khẩu</label>
+          <input type="password" id="login-password" name="password" placeholder="••••••••" autocomplete="current-password" required />
+        </div>
+
+        <div id="login-error" class="login-error"></div>
+
+        <button type="submit" class="btn btn-primary" id="login-submit-btn" style="width:100%; justify-content:center;">
+          Đăng nhập
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════
+       TOÀN BỘ NỘI DUNG HỌC TẬP — ẩn mặc định (style="display:none;")
+       cho đến khi đăng nhập thành công, lúc đó app.js sẽ show #app-root
+       và ẩn #login-screen.
+  ════════════════════════════════════════════════════════════ -->
+  <div id="app-root" style="display:none;">
 
 <div id="loading-overlay" class="loading-overlay">
   <div class="spinner"></div>
@@ -28,23 +66,25 @@
 
     <nav class="main-nav">
       <button class="main-nav-btn" data-section="vocab" onclick="switchMainSection('vocab')">
-        <span class="nav-icon">📖</span> <span class="nav-label">語彙</span>
+        <span class="nav-icon">📖</span> Vocab
       </button>
       <button class="main-nav-btn" data-section="review" onclick="openReviewToday()">
-        <span class="nav-icon">🔁</span> <span class="nav-label">復習</span>
+        <span class="nav-icon">🔁</span> Ôn tập hôm nay
         <span id="review-due-badge" class="nav-badge" style="display:none;"></span>
       </button>
-      <button class="main-nav-btn" data-section="grammar" onclick="openGrammarModule()">
-        <span class="nav-icon">✍️</span> <span class="nav-label">文法</span>
+      <button class="main-nav-btn" data-section="grammar" disabled>
+        <span class="nav-icon">✍️</span> Grammar
+        <span class="badge-soon">Soon</span>
       </button>
       <button class="main-nav-btn" data-section="kanji" disabled>
-        <span class="nav-icon">漢</span> <span class="nav-label">漢字</span>
+        <span class="nav-icon">漢</span> Kanji
         <span class="badge-soon">Soon</span>
       </button>
     </nav>
 
   <div class="header-right">
   <div class="progress-container">
+    <span class="progress-summary" id="global-progress">Loading…</span>
     <button id="sync-btn" onclick="syncData()" title="Cập nhật dữ liệu mới">🔄</button>
   </div>
 </div>
@@ -66,12 +106,11 @@
       </div>
     </div>
 
-    <!-- MODULE NGỮ PHÁP (Grammar) — nội dung được render hoàn toàn bằng JS
-         (renderGrammarSection() trong app.js) vào container rỗng bên dưới.
-         Xem thêm ghi chú tích hợp ở cuối app.js. -->
     <div class="section-panel" id="section-grammar">
-      <div class="grammar-page-wrap">
-        <div id="grammar-content-wrap"></div>
+      <div class="placeholder-panel">
+        <div class="placeholder-icon">✍️</div>
+        <h3>Grammar Module</h3>
+        <p>Grammar lessons and exercises will appear here in a future update.</p>
       </div>
     </div>
 
@@ -83,6 +122,9 @@
       </div>
     </div>
   </div>
+
+  </div>
+  <!-- kết thúc #app-root -->
 
 <script src="app.js"></script>
 </body>
