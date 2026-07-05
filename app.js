@@ -193,7 +193,6 @@ async function handleLogin(e) {
       headers: {
         'apikey': STUDENT_CONFIG.supabaseAnonKey,
         'Content-Type': 'application/json',
-        // Bổ sung header quan trọng để Supabase nhận diện request từ client
         'X-Client-Info': 'supabase-js/2.0.0' 
       },
       body: JSON.stringify({
@@ -202,14 +201,12 @@ async function handleLogin(e) {
       })
     });
 
-    // Kiểm tra xem server có trả về JSON không trước khi parse
     const contentType = response.headers.get("content-type");
     let data;
     
     if (contentType && contentType.includes("application/json")) {
       data = await response.json();
     } else {
-      // Nếu server trả về text thuần (như "Bad Request")
       const textError = await response.text();
       console.error('Server trả về chuỗi văn bản thuần:', textError);
       throw new Error(`Lỗi hệ thống: ${textError || response.statusText}`);
@@ -220,7 +217,7 @@ async function handleLogin(e) {
       throw new Error(data.error_description || data.message || 'Email hoặc mật khẩu không chính xác.');
     }
 
-    // Lưu token thông tin session vào localStorage để duy trì trạng thái đăng nhập
+    // Lưu token thông tin session vào localStorage
     localStorage.setItem('supabase_session', JSON.stringify(data));
     
     // Gán thông tin phục vụ cho logic tracking
@@ -234,9 +231,11 @@ async function handleLogin(e) {
     errorEl.textContent = err.message;
     if (submitBtn) {
       submitBtn.disabled = false;
-      submitBtn.textContent = 'Đang nhập';
+      submitBtn.textContent = 'Đăng nhập';
     }
   }
+} // <--- Hãy đảm bảo dấu ngoặc đóng này của hàm handleLogin tồn tại đúng vị trí!
+
 function checkExistingSession() {
   try {
     const sessionData = localStorage.getItem('supabase_session');
