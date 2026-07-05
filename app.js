@@ -162,10 +162,99 @@ const STUDENT_CONFIG = {
   // URL đến bảng device_logs
   deviceLogUrl: "https://zlblylqosqwnhudeivpt.supabase.co/rest/v1/device_logs",
   // Google Script (giữ lại để ghi điểm quiz nếu vẫn dùng)
-  googleScriptUrl: "https://script.google.com/macros/s/AKfycbzwmTFWowwaAVQ-ZLmk3cveLH8l9Bi7rJZk6TDE2ikNnjlwB36Rn0a5An0PgmQu1Rag2w/exec"
+  googleScriptUrl: "https://script.google.com/macros/s/AKfycbzwmTFWowwaAVQ-ZLmk3cveLH8l9Bi7rJZk6TDE2ikNnjlwB36Rn0a5An0PgmQu1Rag2w/exec",
+  // Lưu trữ thông tin đăng nhập động phục vụ cho việc gửi điểm sau này
+  studentName: "Học viên",
+  userId: null
 };
 
 // Tên cột Supabase phải khớp với: id, unit, part, kanji, kana, romaji, hanviet, meaning, example, audio
+
+// ============================================================
+//  SUPABASE AUTH COMPONENT (Xử lý Đăng nhập & Xác thực)
+// ============================================================
+async function handleLogin(e) {
+  e.preventDefault();
+  const emailEl = document.getElementById('login-email');
+  const passwordEl = document.getElementById('login-password');
+  const errorEl = document.getElementById('login-error');
+  const submitBtn = document.getElementById('login-submit-btn');
+
+  if (!emailEl || !passwordEl || !errorEl) return;
+  errorEl.textContent = '';
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Đang xử lý...';
+  }
+
+  try {
+    const response = await fetch(`${STUDENT_CONFIG.supabaseUrl}/auth/v1/token?grant_type=password`, {
+      method: 'POST',
+      headers: {
+        'apikey': STUDENT_CONFIG.supabaseAnonKey,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        email: emailEl.value.trim(),
+        password: passwordEl.value
+      })
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error_description || data.message || 'Email hoặc mật khẩu không chính xác.');
+    }
+
+    // Lưu token thông tin session vào localStorage để duy trì trạng thái đăng nhập công việc sau
+    localStorage.setItem('supabase_session', JSON.stringify(data));
+    
+    // Gán thông tin phục vụ cho logic tracking
+    STUDENT_CONFIG.userId = data.user?.id || null;
+    STUDENT_CONFIG.studentName = data.user?.email || "Học viên";
+
+    // Chuyển màn hình giao diện học tập
+    showAppContent();
+
+  } catch (err) {
+    errorEl.textContent = err.message;
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Đăng nhập';
+    }
+  }
+}
+
+function checkExistingSession() {
+  try {
+    const sessionData = localStorage.getItem('supabase_session');
+    if (sessionData) {
+      const data = JSON.parse(sessionData);
+      // Kiểm tra sơ bộ tính hợp lệ của cấu trúc object session trả về
+      if (data && data.access_token && data.user) {
+        STUDENT_CONFIG.userId = data.user.id;
+        STUDENT_CONFIG.studentName = data.user.email;
+        showAppContent();
+        return true;
+      }
+    }
+  } catch (e) {
+    console.error('Lỗi kiểm tra session cũ:', e);
+  }
+  return false;
+}
+
+function showAppContent() {
+  const loginScreen = document.getElementById('login-screen');
+  const appRoot = document.getElementById('app-root');
+  
+  if (loginScreen) loginScreen.style.display = 'none';
+  if (appRoot) appRoot.style.display = 'block';
+  
+  // Tiến hành khởi tạo dữ liệu bài học khi đã đăng nhập hợp lệ
+  logDeviceVisit();
+  initApp();
+}
 
 // 3. Nạp dữ liệu từ Supabase
 async function initApp() {
@@ -349,8 +438,18 @@ function startUI() {
 }
 // Kích hoạt khi trang web tải xong
 document.addEventListener('DOMContentLoaded', () => {
-  logDeviceVisit(); // ghi nhận thiết bị mỗi lần học viên mở app — không chặn luồng chính
-  initApp();
+  // Lắng nghe sự kiện submit của form đăng nhập
+  const loginForm = document.getElementById('login-form');
+  if (loginForm) {
+    loginForm.addEventListener('submit', handleLogin);
+  }
+
+  // Nếu session cũ vẫn hợp lệ, hệ thống tự động đăng nhập thẳng vào trong
+  if (!checkExistingSession()) {
+    // Nếu chưa đăng nhập, chỉ đảm bảo che đi các tài nguyên khác (đã cấu hình ẩn trong HTML)
+    const overlay = document.getElementById('loading-overlay');
+    if (overlay) overlay.style.display = 'none';
+  }
 });
 
 function switchMainSection(sectionId) {
@@ -392,7 +491,7 @@ function _digits(str) {
 
 // Helper dùng chung cho mặt trước Flashcard (cả Vocab thường lẫn Ôn tập):
 // Nếu từ có Kanji -> hiện Kanji như bình thường.
-// Nếu từ KHÔNG có Kanji (chỉ tồn tại ở dạng kana, vd: けが) -> hiện
+// Nếu từ KHÔNG có Kanji (chỉ tồn tại ở dạng kana, vd: けgあ) -> hiện
 // chính chữ Kana đó thay vì hiển thị placeholder text "Kana Only".
 function getFrontCardDisplay(word) {
   const hasKanji = word.kanji && word.kanji !== '—';
@@ -1018,6 +1117,7 @@ function evaluateQuizEnd(partKey) {
   if (STUDENT_CONFIG.googleScriptUrl && STUDENT_CONFIG.googleScriptUrl !== "") {
     const payload = {
       studentName: STUDENT_CONFIG.studentName,
+      userId: STUDENT_CONFIG.userId, // Bổ sung kèm theo uuid từ hệ thống Supabase Auth phục vụ đối soát
       partKey: partKey, 
       quizMode: quiz.quizMode === 'k2m' ? 'Kanji -> Meaning' : (quiz.quizMode === 'f2k' ? 'Kana -> Kanji' : 'Meaning -> Kanji'),
       scoreText: `${score}/${total}`,
@@ -1270,23 +1370,3 @@ function renderReviewReport() {
     </div>
   `;
 }
-
-/*
-  ─────────────────────────────────────────────────────────────────
-  GHI CHÚ TÍCH HỢP HTML (đã áp dụng sẵn trong index.html mới):
-
-  1) Mỗi nút trong .main-nav cần có thuộc tính data-section khớp với
-     id của panel tương ứng (id="section-XXX" -> data-section="XXX").
-     switchMainSection() dựa vào thuộc tính này để active đúng nút,
-     không còn dò theo nội dung chữ trên nút như bản cũ.
-
-  2) Nút "Ôn tập hôm nay" gọi openReviewToday() thay vì
-     switchMainSection() trực tiếp — vì cần khởi tạo lại
-     state.reviewFlashcardState mỗi lần mở. Hàm này tự gọi
-     switchMainSection('review') ở bên trong.
-
-  3) Panel "Vocab" không còn gắn class "active" cứng trong HTML —
-     startUI() gọi switchMainSection('vocab') ngay khi app load xong,
-     đảm bảo đúng 1 nguồn sự thật duy nhất cho việc panel nào active.
-  ─────────────────────────────────────────────────────────────────
-*/
