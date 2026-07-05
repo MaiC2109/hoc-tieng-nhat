@@ -188,7 +188,7 @@ async function handleLogin(e) {
   }
 
   try {
-    const response = await fetch(`${STUDENT_CONFIG.supabaseUrl}/auth/v1/token?grant_type=password`, {
+    const response = await fetch(`${STUDENT_CONFIG.supabaseUrl}/auth/v1/signin-with-password`, {
       method: 'POST',
       headers: {
         'apikey': STUDENT_CONFIG.supabaseAnonKey,
