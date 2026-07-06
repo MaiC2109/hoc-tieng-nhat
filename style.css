@@ -241,6 +241,17 @@ body {
   font-weight: 600;
 }
 
+#logout-btn {
+  background: var(--paper-card);
+  border: 1px solid var(--border-md);
+  color: var(--ink);
+}
+#logout-btn:hover {
+  background: var(--vermillion);
+  color: #fff;
+  border-color: var(--vermillion);
+}
+
 /* ─────────────────────────────────────────────
    SECTION PANELS (Vocab / Grammar / Kanji)
 ───────────────────────────────────────────── */
