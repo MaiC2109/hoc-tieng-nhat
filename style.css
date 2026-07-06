@@ -241,6 +241,17 @@ body {
   font-weight: 600;
 }
 
+#logout-btn {
+  background: var(--paper-card);
+  border: 1px solid var(--border-md);
+  color: var(--ink);
+}
+#logout-btn:hover {
+  background: var(--vermillion);
+  color: #fff;
+  border-color: var(--vermillion);
+}
+
 /* ─────────────────────────────────────────────
    SECTION PANELS (Vocab / Grammar / Kanji)
 ───────────────────────────────────────────── */
@@ -776,4 +787,98 @@ body {
   .unit-tabs-bar { padding: 0 14px; }
   .logo-text { display: none; }
   .main-nav-btn { padding: 0 12px; font-size: 13px; }
+}
+/* ─────────────────────────────────────────────
+   MÀN HÌNH ĐĂNG NHẬP (Login Screen)
+   Tái sử dụng token màu/spacing/radius/shadow đã có ở trên,
+   không tạo hệ màu mới.
+───────────────────────────────────────────── */
+.login-screen {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: var(--paper);
+}
+
+.login-box {
+  width: 100%;
+  max-width: 340px;
+  background: var(--paper-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  padding: 32px 28px;
+}
+
+.login-box .logo-mark {
+  width: 40px;
+  height: 40px;
+  background: var(--vermillion);
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-ja-serif);
+  font-size: 19px;
+  font-weight: 700;
+  color: #fff;
+  margin: 0 auto 14px;
+}
+
+.login-box h2 {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--ink);
+  text-align: center;
+  margin-bottom: 4px;
+}
+
+.login-box p {
+  font-size: 12.5px;
+  color: var(--ink-mute);
+  text-align: center;
+  margin-bottom: 22px;
+}
+
+.login-form-group {
+  margin-bottom: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.login-form-group label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+
+.login-form-group input {
+  padding: 10px 12px;
+  border: 1px solid var(--border-md);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-sans);
+  font-size: 13.5px;
+  color: var(--ink);
+  background: var(--paper-card);
+  transition: border-color var(--transition);
+}
+
+.login-form-group input:focus {
+  outline: none;
+  border-color: var(--vermillion);
+}
+
+.login-error {
+  font-size: 12px;
+  color: var(--vermillion);
+  min-height: 16px;
+  margin-bottom: 6px;
+  text-align: center;
+}
+
+@media (max-width: 480px) {
+  .login-box { padding: 26px 20px; }
 }

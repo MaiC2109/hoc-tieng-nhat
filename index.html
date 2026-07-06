@@ -11,7 +11,45 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  
+
+  <!-- ════════════════════════════════════════════════════════════
+       MÀN HÌNH ĐĂNG NHẬP
+       Hiển thị mặc định, che toàn bộ nội dung học tập cho đến khi
+       đăng nhập thành công qua Supabase Auth (logic thêm ở app.js).
+       Tái sử dụng token màu/spacing/shadow/radius đã có trong style.css.
+  ════════════════════════════════════════════════════════════ -->
+  <div id="login-screen" class="login-screen">
+    <div class="login-box">
+      <div class="logo-mark">語</div>
+      <h2>日本語 Vocab</h2>
+      <p>Đăng nhập để bắt đầu buổi học</p>
+
+      <form id="login-form">
+        <div class="login-form-group">
+          <label for="login-email">Email</label>
+          <input type="email" id="login-email" name="email" placeholder="ban@example.com" autocomplete="username" required />
+        </div>
+        <div class="login-form-group">
+          <label for="login-password">Mật khẩu</label>
+          <input type="password" id="login-password" name="password" placeholder="••••••••" autocomplete="current-password" required />
+        </div>
+
+        <div id="login-error" class="login-error"></div>
+
+        <button type="submit" class="btn btn-primary" id="login-submit-btn" style="width:100%; justify-content:center;">
+          Đăng nhập
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════
+       TOÀN BỘ NỘI DUNG HỌC TẬP — ẩn mặc định (style="display:none;")
+       cho đến khi đăng nhập thành công, lúc đó app.js sẽ show #app-root
+       và ẩn #login-screen.
+  ════════════════════════════════════════════════════════════ -->
+  <div id="app-root" style="display:none;">
+
 <div id="loading-overlay" class="loading-overlay">
   <div class="spinner"></div>
   <p>Đang tải bài học...</p>
@@ -31,7 +69,7 @@
         <span class="nav-icon">📖</span> Vocab
       </button>
       <button class="main-nav-btn" data-section="review" onclick="openReviewToday()">
-        <span class="nav-icon">🔁</span> Ôn tập hôm nay
+        <span class="nav-icon">🔁</span> Review
         <span id="review-due-badge" class="nav-badge" style="display:none;"></span>
       </button>
       <button class="main-nav-btn" data-section="grammar" disabled>
@@ -46,8 +84,8 @@
 
   <div class="header-right">
   <div class="progress-container">
-    <span class="progress-summary" id="global-progress">Loading…</span>
     <button id="sync-btn" onclick="syncData()" title="Cập nhật dữ liệu mới">🔄</button>
+    <button id="logout-btn" onclick="logoutUser()" title="Đăng xuất" class="btn btn-outline" style="padding:6px 12px; font-size:12px;">Logout</button>
   </div>
 </div>
   </header>
@@ -85,6 +123,11 @@
     </div>
   </div>
 
+  </div>
+  <!-- kết thúc #app-root -->
+
+<!-- Supabase JS SDK — dùng cho Supabase Auth (đăng nhập/đăng xuất/session) -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="app.js"></script>
 </body>
 </html>
