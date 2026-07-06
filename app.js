@@ -154,139 +154,16 @@ function logDeviceVisit() {
 
 // 2. Cấu hình — tập trung toàn bộ thông tin kết nối tại đây
 const STUDENT_CONFIG = {
-  // Supabase (Production)
+  // Supabase
   supabaseUrl: "https://zlblylqosqwnhudeivpt.supabase.co",
   supabaseAnonKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpsYmx5bHFvc3F3bmh1ZGVpdnB0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI1Mzk0NjUsImV4cCI6MjA5ODExNTQ2NX0.Xa8FblRuypm_eHMGz8GrCpwloKnzjgjTu8z_1ivS8_4",
+  // URL đầy đủ đến bảng vocabulary trong Supabase
   vocabUrl: "https://zlblylqosqwnhudeivpt.supabase.co/rest/v1/vocabulary?order=id.asc",
+  // URL đến bảng device_logs
   deviceLogUrl: "https://zlblylqosqwnhudeivpt.supabase.co/rest/v1/device_logs",
+  // Google Script (giữ lại để ghi điểm quiz nếu vẫn dùng)
   googleScriptUrl: "https://script.google.com/macros/s/AKfycbzwmTFWowwaAVQ-ZLmk3cveLH8l9Bi7rJZk6TDE2ikNnjlwB36Rn0a5An0PgmQu1Rag2w/exec"
 };
-
-// ============================================================
-//  SUPABASE AUTH — lớp xác thực bao ngoài toàn bộ app
-//  Dùng chung 1 Supabase client (supabaseClient) cho auth; các API call
-//  REST khác (vocabulary, device_logs...) vẫn giữ nguyên cách gọi fetch()
-//  trực tiếp với apikey/Authorization như code cũ, không đổi.
-// ============================================================
-
-// window.supabase là global do CDN supabase-js@2 tạo ra (chứa hàm createClient).
-// Đặt tên biến instance là supabaseClient để tránh nhầm với global đó.
-const supabaseClient = window.supabase.createClient(
-  STUDENT_CONFIG.supabaseUrl,
-  STUDENT_CONFIG.supabaseAnonKey
-);
-
-// Lưu tạm thông tin user đã đăng nhập vào biến JS (không dùng localStorage/
-// sessionStorage) — session thật sự do supabase-js tự quản lý nội bộ.
-let currentUser = null;
-
-// Kiểm tra phiên đăng nhập hiện có (vd sau khi F5 lại trang).
-// Nếu còn hợp lệ -> bỏ qua màn hình đăng nhập, vào thẳng app.
-// Nếu không -> hiện màn hình đăng nhập.
-async function initAuth() {
-  try {
-    const { data: { session }, error } = await supabaseClient.auth.getSession();
-    if (error) throw error;
-
-    if (session) {
-      currentUser = session.user;
-      showAppRoot();
-      initApp();
-    } else {
-      showLoginScreen();
-    }
-  } catch (err) {
-    console.error('Lỗi kiểm tra phiên đăng nhập:', err);
-    showLoginScreen();
-  }
-}
-
-// Lắng nghe thay đổi trạng thái đăng nhập (vd: token hết hạn, đăng xuất ở tab khác)
-// để đồng bộ lại giao diện mà không cần F5 thủ công.
-supabaseClient.auth.onAuthStateChange((event, session) => {
-  if (event === 'SIGNED_OUT') {
-    currentUser = null;
-    showLoginScreen();
-  }
-});
-
-function showLoginScreen() {
-  const loginScreen = document.getElementById('login-screen');
-  const appRoot = document.getElementById('app-root');
-  if (loginScreen) loginScreen.style.display = 'flex';
-  if (appRoot) appRoot.style.display = 'none';
-}
-
-function showAppRoot() {
-  const loginScreen = document.getElementById('login-screen');
-  const appRoot = document.getElementById('app-root');
-  if (loginScreen) loginScreen.style.display = 'none';
-  if (appRoot) appRoot.style.display = 'block';
-}
-
-// Gắn sự kiện submit cho form đăng nhập (#login-form trong index.html)
-function initLoginForm() {
-  const form = document.getElementById('login-form');
-  if (!form) return;
-
-  form.addEventListener('submit', async (e) => {
-    e.preventDefault();
-
-    const emailInput = document.getElementById('login-email');
-    const passwordInput = document.getElementById('login-password');
-    const errorEl = document.getElementById('login-error');
-    const submitBtn = document.getElementById('login-submit-btn');
-
-    const email = emailInput.value.trim();
-    const password = passwordInput.value;
-
-    errorEl.textContent = '';
-    submitBtn.disabled = true;
-    submitBtn.textContent = 'Đang đăng nhập...';
-
-    try {
-      const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
-
-      if (error) {
-        // Thông báo lỗi chung chung — không tiết lộ email có tồn tại hay không,
-        // tránh bị dò email (user enumeration). Supabase mặc định đã trả về
-        // cùng 1 loại lỗi ("Invalid login credentials") cho cả 2 trường hợp
-        // sai email lẫn sai mật khẩu, nên chỉ cần hiển thị thông báo chung.
-        console.error('Lỗi đăng nhập:', error.message);
-        errorEl.textContent = 'Email hoặc mật khẩu không đúng.';
-        return;
-      }
-
-      // Đăng nhập thành công — supabase-js tự lưu session (không cần tự lưu tay).
-      const { data: userData, error: userError } = await supabaseClient.auth.getUser();
-      if (userError) throw userError;
-
-      currentUser = userData.user;
-      form.reset();
-      showAppRoot();
-      initApp();
-    } catch (err) {
-      console.error('Lỗi không xác định khi đăng nhập:', err);
-      errorEl.textContent = 'Có lỗi xảy ra, vui lòng thử lại.';
-    } finally {
-      submitBtn.disabled = false;
-      submitBtn.textContent = 'Đăng nhập';
-    }
-  });
-}
-
-// Gọi từ nút "Đăng xuất" trong header (xem index.html)
-async function logoutUser() {
-  try {
-    await supabaseClient.auth.signOut();
-  } catch (err) {
-    console.error('Lỗi khi đăng xuất:', err);
-  } finally {
-    // Tải lại trang cho sạch toàn bộ state trong bộ nhớ (units, accordion,
-    // quiz, flashcard...) — đơn giản và an toàn hơn là tự reset tay từng state.
-    location.reload();
-  }
-}
 
 // Tên cột Supabase phải khớp với: id, unit, part, kanji, kana, romaji, hanviet, meaning, example, audio
 
@@ -473,8 +350,7 @@ function startUI() {
 // Kích hoạt khi trang web tải xong
 document.addEventListener('DOMContentLoaded', () => {
   logDeviceVisit(); // ghi nhận thiết bị mỗi lần học viên mở app — không chặn luồng chính
-  initLoginForm();  // gắn sự kiện submit cho form đăng nhập
-  initAuth();       // kiểm tra phiên đăng nhập -> tự vào app hoặc hiện màn hình đăng nhập
+  initApp();
 });
 
 function switchMainSection(sectionId) {
