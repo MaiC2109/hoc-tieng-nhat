@@ -86,6 +86,7 @@
   <div class="progress-container">
     <span class="progress-summary" id="global-progress">Loading…</span>
     <button id="sync-btn" onclick="syncData()" title="Cập nhật dữ liệu mới">🔄</button>
+    <button id="logout-btn" onclick="logoutUser()" title="Đăng xuất" class="btn btn-outline" style="padding:6px 12px; font-size:12px;">Đăng xuất</button>
   </div>
 </div>
   </header>
@@ -126,6 +127,8 @@
   </div>
   <!-- kết thúc #app-root -->
 
+<!-- Supabase JS SDK — dùng cho Supabase Auth (đăng nhập/đăng xuất/session) -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="app.js"></script>
 </body>
 </html>

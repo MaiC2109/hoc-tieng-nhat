@@ -153,119 +153,149 @@ function logDeviceVisit() {
 }
 
 // 2. Cấu hình — tập trung toàn bộ thông tin kết nối tại đây
+// ⚠️ FILE NÀY DÀNH CHO MÔI TRƯỜNG TEST/STAGING — trỏ vào Supabase project
+// Test (hzecdpnmegfwbximgqlv), KHÔNG PHẢI Production. Khi merge/deploy lên
+// Production, nhớ đổi lại supabaseUrl/supabaseAnonKey (và các URL REST bên
+// dưới) sang project Production (zlblylqosqwnhudeivpt).
 const STUDENT_CONFIG = {
-  // Supabase
+  // Supabase (Test/Staging)
   supabaseUrl: "https://hzecdpnmegfwbximgqlv.supabase.co",
   supabaseAnonKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh6ZWNkcG5tZWdmd2J4aW1ncWx2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMyMTEwNTEsImV4cCI6MjA5ODc4NzA1MX0.esdOJo7gvQXLJjG94PUQ_rghTfGCAAaYzdP3l-j3u-s",
   // URL đầy đủ đến bảng vocabulary trong Supabase
-  vocabUrl: "https://zlblylqosqwnhudeivpt.supabase.co/rest/v1/vocabulary?order=id.asc",
+  vocabUrl: "https://hzecdpnmegfwbximgqlv.supabase.co/rest/v1/vocabulary?order=id.asc",
   // URL đến bảng device_logs
-  deviceLogUrl: "https://zlblylqosqwnhudeivpt.supabase.co/rest/v1/device_logs",
-  // Google Script (giữ lại để ghi điểm quiz nếu vẫn dùng)
-  googleScriptUrl: "https://script.google.com/macros/s/AKfycbzwmTFWowwaAVQ-ZLmk3cveLH8l9Bi7rJZk6TDE2ikNnjlwB36Rn0a5An0PgmQu1Rag2w/exec",
-  // Lưu trữ thông tin đăng nhập động phục vụ cho việc gửi điểm sau này
-  studentName: "Học viên",
-  userId: null
+  deviceLogUrl: "https://hzecdpnmegfwbximgqlv.supabase.co/rest/v1/device_logs",
+  // Google Script (giữ lại để ghi điểm quiz nếu vẫn dùng) — không liên quan Supabase env
+  googleScriptUrl: "https://script.google.com/macros/s/AKfycbzwmTFWowwaAVQ-ZLmk3cveLH8l9Bi7rJZk6TDE2ikNnjlwB36Rn0a5An0PgmQu1Rag2w/exec"
 };
 
-// Tên cột Supabase phải khớp với: id, unit, part, kanji, kana, romaji, hanviet, meaning, example, audio
-
 // ============================================================
-//  SUPABASE AUTH COMPONENT (Xử lý Đăng nhập & Xác thực)
+//  SUPABASE AUTH — lớp xác thực bao ngoài toàn bộ app
+//  Dùng chung 1 Supabase client (supabaseClient) cho auth; các API call
+//  REST khác (vocabulary, device_logs...) vẫn giữ nguyên cách gọi fetch()
+//  trực tiếp với apikey/Authorization như code cũ, không đổi.
 // ============================================================
-async function handleLogin(e) {
-  e.preventDefault();
-  const emailEl = document.getElementById('login-email');
-  const passwordEl = document.getElementById('login-password');
-  const errorEl = document.getElementById('login-error');
-  const submitBtn = document.getElementById('login-submit-btn');
 
-  if (!emailEl || !passwordEl || !errorEl) return;
-  errorEl.textContent = '';
-  if (submitBtn) {
-    submitBtn.disabled = true;
-    submitBtn.textContent = 'Đang xử lý...';
-  }
+// window.supabase là global do CDN supabase-js@2 tạo ra (chứa hàm createClient).
+// Đặt tên biến instance là supabaseClient để tránh nhầm với global đó.
+const supabaseClient = window.supabase.createClient(
+  STUDENT_CONFIG.supabaseUrl,
+  STUDENT_CONFIG.supabaseAnonKey
+);
 
+// Lưu tạm thông tin user đã đăng nhập vào biến JS (không dùng localStorage/
+// sessionStorage) — session thật sự do supabase-js tự quản lý nội bộ.
+let currentUser = null;
+
+// Kiểm tra phiên đăng nhập hiện có (vd sau khi F5 lại trang).
+// Nếu còn hợp lệ -> bỏ qua màn hình đăng nhập, vào thẳng app.
+// Nếu không -> hiện màn hình đăng nhập.
+async function initAuth() {
   try {
-    const response = await fetch(`${STUDENT_CONFIG.supabaseUrl}/auth/v1/signin-with-password`, {
-      method: 'POST',
-      headers: {
-        'apikey': STUDENT_CONFIG.supabaseAnonKey,
-        'Content-Type': 'application/json',
-        'X-Client-Info': 'supabase-js/2.0.0' 
-      },
-      body: JSON.stringify({
-        email: emailEl.value.trim(),
-        password: passwordEl.value
-      })
-    });
+    const { data: { session }, error } = await supabaseClient.auth.getSession();
+    if (error) throw error;
 
-    const contentType = response.headers.get("content-type");
-    let data;
-    
-    if (contentType && contentType.includes("application/json")) {
-      data = await response.json();
+    if (session) {
+      currentUser = session.user;
+      showAppRoot();
+      initApp();
     } else {
-      const textError = await response.text();
-      console.error('Server trả về chuỗi văn bản thuần:', textError);
-      throw new Error(`Lỗi hệ thống: ${textError || response.statusText}`);
+      showLoginScreen();
     }
-
-    if (!response.ok) {
-      console.error('Supabase Auth Error Detail:', data);
-      throw new Error(data.error_description || data.message || 'Email hoặc mật khẩu không chính xác.');
-    }
-
-    // Lưu token thông tin session vào localStorage
-    localStorage.setItem('supabase_session', JSON.stringify(data));
-    
-    // Gán thông tin phục vụ cho logic tracking
-    STUDENT_CONFIG.userId = data.user?.id || null;
-    STUDENT_CONFIG.studentName = data.user?.email || "Học viên";
-
-    // Chuyển màn hình giao diện học tập
-    showAppContent();
-
   } catch (err) {
-    errorEl.textContent = err.message;
-    if (submitBtn) {
+    console.error('Lỗi kiểm tra phiên đăng nhập:', err);
+    showLoginScreen();
+  }
+}
+
+// Lắng nghe thay đổi trạng thái đăng nhập (vd: token hết hạn, đăng xuất ở tab khác)
+// để đồng bộ lại giao diện mà không cần F5 thủ công.
+supabaseClient.auth.onAuthStateChange((event, session) => {
+  if (event === 'SIGNED_OUT') {
+    currentUser = null;
+    showLoginScreen();
+  }
+});
+
+function showLoginScreen() {
+  const loginScreen = document.getElementById('login-screen');
+  const appRoot = document.getElementById('app-root');
+  if (loginScreen) loginScreen.style.display = 'flex';
+  if (appRoot) appRoot.style.display = 'none';
+}
+
+function showAppRoot() {
+  const loginScreen = document.getElementById('login-screen');
+  const appRoot = document.getElementById('app-root');
+  if (loginScreen) loginScreen.style.display = 'none';
+  if (appRoot) appRoot.style.display = 'block';
+}
+
+// Gắn sự kiện submit cho form đăng nhập (#login-form trong index.html)
+function initLoginForm() {
+  const form = document.getElementById('login-form');
+  if (!form) return;
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const emailInput = document.getElementById('login-email');
+    const passwordInput = document.getElementById('login-password');
+    const errorEl = document.getElementById('login-error');
+    const submitBtn = document.getElementById('login-submit-btn');
+
+    const email = emailInput.value.trim();
+    const password = passwordInput.value;
+
+    errorEl.textContent = '';
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Đang đăng nhập...';
+
+    try {
+      const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+
+      if (error) {
+        // Thông báo lỗi chung chung — không tiết lộ email có tồn tại hay không,
+        // tránh bị dò email (user enumeration). Supabase mặc định đã trả về
+        // cùng 1 loại lỗi ("Invalid login credentials") cho cả 2 trường hợp
+        // sai email lẫn sai mật khẩu, nên chỉ cần hiển thị thông báo chung.
+        console.error('Lỗi đăng nhập:', error.message);
+        errorEl.textContent = 'Email hoặc mật khẩu không đúng.';
+        return;
+      }
+
+      // Đăng nhập thành công — supabase-js tự lưu session (không cần tự lưu tay).
+      const { data: userData, error: userError } = await supabaseClient.auth.getUser();
+      if (userError) throw userError;
+
+      currentUser = userData.user;
+      form.reset();
+      showAppRoot();
+      initApp();
+    } catch (err) {
+      console.error('Lỗi không xác định khi đăng nhập:', err);
+      errorEl.textContent = 'Có lỗi xảy ra, vui lòng thử lại.';
+    } finally {
       submitBtn.disabled = false;
       submitBtn.textContent = 'Đăng nhập';
     }
-  }
-} // <--- Hãy đảm bảo dấu ngoặc đóng này của hàm handleLogin tồn tại đúng vị trí!
+  });
+}
 
-function checkExistingSession() {
+// Gọi từ nút "Đăng xuất" trong header (xem index.html)
+async function logoutUser() {
   try {
-    const sessionData = localStorage.getItem('supabase_session');
-    if (sessionData) {
-      const data = JSON.parse(sessionData);
-      // Kiểm tra sơ bộ tính hợp lệ của cấu trúc object session trả về
-      if (data && data.access_token && data.user) {
-        STUDENT_CONFIG.userId = data.user.id;
-        STUDENT_CONFIG.studentName = data.user.email;
-        showAppContent();
-        return true;
-      }
-    }
-  } catch (e) {
-    console.error('Lỗi kiểm tra session cũ:', e);
+    await supabaseClient.auth.signOut();
+  } catch (err) {
+    console.error('Lỗi khi đăng xuất:', err);
+  } finally {
+    // Tải lại trang cho sạch toàn bộ state trong bộ nhớ (units, accordion,
+    // quiz, flashcard...) — đơn giản và an toàn hơn là tự reset tay từng state.
+    location.reload();
   }
-  return false;
 }
 
-function showAppContent() {
-  const loginScreen = document.getElementById('login-screen');
-  const appRoot = document.getElementById('app-root');
-  
-  if (loginScreen) loginScreen.style.display = 'none';
-  if (appRoot) appRoot.style.display = 'block';
-  
-  // Tiến hành khởi tạo dữ liệu bài học khi đã đăng nhập hợp lệ
-  logDeviceVisit();
-  initApp();
-}
+// Tên cột Supabase phải khớp với: id, unit, part, kanji, kana, romaji, hanviet, meaning, example, audio
 
 // 3. Nạp dữ liệu từ Supabase
 async function initApp() {
@@ -449,18 +479,9 @@ function startUI() {
 }
 // Kích hoạt khi trang web tải xong
 document.addEventListener('DOMContentLoaded', () => {
-  // Lắng nghe sự kiện submit của form đăng nhập
-  const loginForm = document.getElementById('login-form');
-  if (loginForm) {
-    loginForm.addEventListener('submit', handleLogin);
-  }
-
-  // Nếu session cũ vẫn hợp lệ, hệ thống tự động đăng nhập thẳng vào trong
-  if (!checkExistingSession()) {
-    // Nếu chưa đăng nhập, chỉ đảm bảo che đi các tài nguyên khác (đã cấu hình ẩn trong HTML)
-    const overlay = document.getElementById('loading-overlay');
-    if (overlay) overlay.style.display = 'none';
-  }
+  logDeviceVisit(); // ghi nhận thiết bị mỗi lần học viên mở app — không chặn luồng chính
+  initLoginForm();  // gắn sự kiện submit cho form đăng nhập
+  initAuth();       // kiểm tra phiên đăng nhập -> tự vào app hoặc hiện màn hình đăng nhập
 });
 
 function switchMainSection(sectionId) {
@@ -502,7 +523,7 @@ function _digits(str) {
 
 // Helper dùng chung cho mặt trước Flashcard (cả Vocab thường lẫn Ôn tập):
 // Nếu từ có Kanji -> hiện Kanji như bình thường.
-// Nếu từ KHÔNG có Kanji (chỉ tồn tại ở dạng kana, vd: けgあ) -> hiện
+// Nếu từ KHÔNG có Kanji (chỉ tồn tại ở dạng kana, vd: けが) -> hiện
 // chính chữ Kana đó thay vì hiển thị placeholder text "Kana Only".
 function getFrontCardDisplay(word) {
   const hasKanji = word.kanji && word.kanji !== '—';
@@ -1128,7 +1149,6 @@ function evaluateQuizEnd(partKey) {
   if (STUDENT_CONFIG.googleScriptUrl && STUDENT_CONFIG.googleScriptUrl !== "") {
     const payload = {
       studentName: STUDENT_CONFIG.studentName,
-      userId: STUDENT_CONFIG.userId, // Bổ sung kèm theo uuid từ hệ thống Supabase Auth phục vụ đối soát
       partKey: partKey, 
       quizMode: quiz.quizMode === 'k2m' ? 'Kanji -> Meaning' : (quiz.quizMode === 'f2k' ? 'Kana -> Kanji' : 'Meaning -> Kanji'),
       scoreText: `${score}/${total}`,
@@ -1381,3 +1401,23 @@ function renderReviewReport() {
     </div>
   `;
 }
+
+/*
+  ─────────────────────────────────────────────────────────────────
+  GHI CHÚ TÍCH HỢP HTML (đã áp dụng sẵn trong index.html mới):
+
+  1) Mỗi nút trong .main-nav cần có thuộc tính data-section khớp với
+     id của panel tương ứng (id="section-XXX" -> data-section="XXX").
+     switchMainSection() dựa vào thuộc tính này để active đúng nút,
+     không còn dò theo nội dung chữ trên nút như bản cũ.
+
+  2) Nút "Ôn tập hôm nay" gọi openReviewToday() thay vì
+     switchMainSection() trực tiếp — vì cần khởi tạo lại
+     state.reviewFlashcardState mỗi lần mở. Hàm này tự gọi
+     switchMainSection('review') ở bên trong.
+
+  3) Panel "Vocab" không còn gắn class "active" cứng trong HTML —
+     startUI() gọi switchMainSection('vocab') ngay khi app load xong,
+     đảm bảo đúng 1 nguồn sự thật duy nhất cho việc panel nào active.
+  ─────────────────────────────────────────────────────────────────
+*/
