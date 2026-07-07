@@ -16,7 +16,7 @@ const ADMIN_CONFIG = {
 
 // Chỉ 1 tài khoản admin cụ thể được phép vào — kiểm tra khớp email sau khi
 // đăng nhập thành công. Đổi giá trị này cho đúng email admin thật của bạn.
-const ADMIN_EMAIL = "admin@example.com";
+const ADMIN_EMAIL = "chuquynhmai91@gmail.com";
 
 // window.supabase là global do CDN supabase-js@2 tạo ra (chứa hàm createClient).
 // Đặt tên biến instance là supabaseClient để tránh nhầm với global đó.
