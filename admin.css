@@ -1,0 +1,805 @@
+/* ============================================================
+   ADMIN LAYOUT — admin.css
+   File này CHỈ chứa style layout đặc thù cho trang Admin.
+   Không định nghĩa lại :root hay biến màu — toàn bộ var(--...) dùng
+   ở đây đều kế thừa từ ../style.css (được link TRƯỚC file này trong
+   admin/index.html).
+   ============================================================ */
+
+body {
+  background: var(--paper);
+}
+
+/* ── LAYOUT GỐC: sidebar trái cố định + nội dung bên phải ── */
+.admin-shell {
+  display: flex;
+  height: 100vh;
+  align-items: stretch;
+  overflow: hidden; /* khóa scroll ở body, chỉ .admin-content cuộn riêng */
+}
+
+/* ── SIDEBAR CỐ ĐỊNH ── */
+.admin-sidebar {
+  width: 200px;
+  flex-shrink: 0;
+  background: var(--ink);
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  position: sticky;
+  top: 0;
+}
+
+.admin-sidebar-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 20px 18px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  flex-shrink: 0;
+}
+
+.admin-sidebar-brand .logo-mark {
+  width: 32px;
+  height: 32px;
+  background: var(--vermillion);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-ja-serif);
+  font-size: 16px;
+  font-weight: 700;
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.admin-sidebar-brand-text {
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: #fff;
+  white-space: nowrap;
+}
+
+.admin-sidebar-brand-sub {
+  font-size: 10px;
+  color: rgba(255,255,255,0.45);
+  font-weight: 400;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* ── NAV: trạng thái active/hover rõ ràng ── */
+.admin-nav {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 14px 10px;
+  overflow-y: auto;
+}
+
+.admin-nav-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  color: rgba(255,255,255,0.6);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  width: 100%;
+  text-align: left;
+  transition: color var(--transition), background var(--transition);
+}
+
+.admin-nav-item:hover {
+  color: rgba(255,255,255,0.9);
+  background: rgba(255,255,255,0.06);
+}
+
+.admin-nav-item.active {
+  color: #fff;
+  background: rgba(255,255,255,0.1);
+  font-weight: 600;
+}
+
+.admin-nav-item.active::before {
+  content: '';
+  position: absolute;
+  left: -10px;
+  top: 6px;
+  bottom: 6px;
+  width: 3px;
+  background: var(--vermillion);
+  border-radius: 0 3px 3px 0;
+}
+
+.admin-nav-item .ti {
+  font-size: 17px;
+  line-height: 1;
+  width: 18px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.admin-sidebar-footer {
+  padding: 14px 10px;
+  border-top: 1px solid rgba(255,255,255,0.08);
+  flex-shrink: 0;
+}
+
+.admin-logout-btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: rgba(255,255,255,0.6);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.admin-logout-btn:hover {
+  color: #fff;
+  background: var(--vermillion);
+}
+
+.admin-logout-btn .ti { font-size: 17px; }
+
+/* ── KHU VỰC NỘI DUNG BÊN PHẢI ── */
+.admin-main {
+  flex: 1;
+  min-width: 0;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.admin-topbar {
+  height: 56px;
+  flex-shrink: 0;
+  background: var(--paper-card);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+}
+
+.admin-topbar-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.admin-topbar-sub {
+  font-size: 11.5px;
+  color: var(--ink-mute);
+  margin-top: 1px;
+}
+
+/* Vùng nội dung cuộn riêng, không kéo theo sidebar/topbar */
+.admin-content {
+  flex: 1;
+  min-height: 0;
+  padding: 24px 28px 40px;
+  overflow-y: auto;
+}
+
+/* Mỗi mục nav ứng với 1 section — ẩn/hiện bằng JS (toggle class .active) */
+.admin-section { display: none; }
+.admin-section.active { display: block; }
+
+/* ── SECTION: TỔNG QUAN — thẻ số liệu dạng grid, responsive 1 cột ── */
+.admin-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 28px;
+  max-width: 640px;
+}
+
+.admin-stat-card {
+  background: var(--paper-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  padding: 20px 22px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  transition: box-shadow var(--transition);
+}
+
+.admin-stat-card:hover {
+  box-shadow: var(--shadow-md);
+}
+
+.admin-stat-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.admin-stat-icon.vocab { background: var(--verm-glow); color: var(--vermillion); }
+.admin-stat-icon.students { background: var(--sage-light); color: var(--sage); }
+
+.admin-stat-value {
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--ink);
+  line-height: 1.1;
+}
+
+.admin-stat-label {
+  font-size: 12px;
+  color: var(--ink-mute);
+  margin-top: 2px;
+}
+
+.admin-panel-card {
+  background: var(--paper-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  padding: 20px 22px;
+  max-width: 640px;
+}
+
+.admin-panel-card h3 {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink);
+  margin-bottom: 14px;
+}
+
+#recent-activity-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.admin-activity-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 4px;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+
+.admin-activity-row:last-child {
+  border-bottom: none;
+}
+
+.admin-activity-text {
+  color: var(--ink-soft);
+}
+
+.admin-activity-time {
+  color: var(--ink-mute);
+  font-size: 11.5px;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+/* ── FORM ĐĂNG NHẬP ADMIN — căn giữa màn hình, tối giản ── */
+.admin-login-screen {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: var(--paper);
+}
+
+.admin-login-box {
+  width: 100%;
+  max-width: 340px;
+  background: var(--paper-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  padding: 32px 28px;
+}
+
+.admin-login-box .logo-mark {
+  width: 40px;
+  height: 40px;
+  background: var(--vermillion);
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-ja-serif);
+  font-size: 19px;
+  font-weight: 700;
+  color: #fff;
+  margin: 0 auto 14px;
+}
+
+.admin-login-box h2 {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--ink);
+  text-align: center;
+  margin-bottom: 4px;
+}
+
+.admin-login-box p {
+  font-size: 12.5px;
+  color: var(--ink-mute);
+  text-align: center;
+  margin-bottom: 22px;
+}
+
+.admin-form-group {
+  margin-bottom: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.admin-form-group label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+
+.admin-form-group input,
+.admin-form-group select,
+.admin-form-group textarea {
+  padding: 10px 12px;
+  border: 1px solid var(--border-md);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-sans);
+  font-size: 13.5px;
+  color: var(--ink);
+  background: var(--paper-card);
+  transition: border-color var(--transition);
+}
+
+.admin-form-group textarea {
+  resize: vertical;
+  min-height: 44px;
+}
+
+.admin-form-group input:focus,
+.admin-form-group select:focus,
+.admin-form-group textarea:focus {
+  outline: none;
+  border-color: var(--vermillion);
+}
+
+.admin-form-group .admin-readonly-input {
+  background: var(--paper-warm);
+  color: var(--ink-mute);
+  cursor: not-allowed;
+}
+
+.admin-form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.admin-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.admin-hint-text {
+  font-size: 12px;
+  color: var(--ink-mute);
+  margin-top: 6px;
+  line-height: 1.5;
+}
+
+.admin-hint-text code {
+  background: var(--paper-warm);
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 11.5px;
+}
+
+.admin-login-error {
+  font-size: 12px;
+  color: var(--vermillion);
+  min-height: 16px;
+  margin-bottom: 6px;
+  text-align: center;
+}
+
+/* ============================================================
+   SECTION: VOCAB — toolbar lọc, bảng danh sách, khu vực CSV import
+   ============================================================ */
+
+.admin-vocab-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 18px;
+  flex-wrap: wrap;
+}
+
+.admin-filter-group {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.admin-toolbar-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.admin-select {
+  padding: 9px 12px;
+  border: 1px solid var(--border-md);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: var(--ink);
+  background: var(--paper-card);
+  transition: border-color var(--transition);
+  min-width: 140px;
+}
+
+.admin-select:focus {
+  outline: none;
+  border-color: var(--vermillion);
+}
+
+/* Bảng danh sách cần chiếm toàn bộ chiều rộng khả dụng, không giới hạn
+   max-width như .admin-panel-card mặc định (dùng cho stat card/login) */
+.admin-panel-card.admin-table-card,
+.admin-panel-card.admin-csv-card {
+  max-width: none;
+  margin-bottom: 20px;
+}
+
+.admin-table-scroll {
+  overflow-x: auto;
+}
+
+.admin-vocab-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13.5px;
+}
+
+.admin-vocab-table th {
+  text-align: left;
+  padding: 10px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+  border-bottom: 1px solid var(--border);
+  background: var(--paper);
+  white-space: nowrap;
+}
+
+.admin-vocab-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+  color: var(--ink-soft);
+}
+
+.admin-vocab-table tbody tr:hover {
+  background: var(--paper);
+}
+
+.admin-vocab-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.admin-vocab-table .cell-kanji {
+  font-family: var(--font-ja-serif);
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.admin-vocab-table .cell-kana {
+  font-family: var(--font-ja);
+  color: var(--ink);
+}
+
+.admin-row-actions {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+}
+
+.admin-row-action-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-md);
+  background: var(--paper-card);
+  color: var(--ink-mute);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  transition: all var(--transition);
+}
+
+.admin-row-action-btn:hover {
+  color: #fff;
+  background: var(--sage);
+  border-color: var(--sage);
+}
+
+.admin-row-action-btn.danger:hover {
+  background: var(--vermillion);
+  border-color: var(--vermillion);
+}
+
+/* ── CSV Import ── */
+.admin-csv-card h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.admin-csv-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 14px;
+}
+
+.admin-file-input {
+  font-size: 13px;
+  color: var(--ink-soft);
+  font-family: var(--font-sans);
+}
+
+.admin-csv-preview-wrap {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px dashed var(--border-md);
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+/* ── PANEL TRƯỢT: THÊM/SỬA TỪ VỰNG ── */
+.admin-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(26, 31, 46, 0.45);
+  z-index: 200;
+}
+
+.admin-slide-panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 440px;
+  max-width: 100%;
+  background: var(--paper-card);
+  box-shadow: var(--shadow-lg);
+  z-index: 201;
+  display: flex;
+  flex-direction: column;
+}
+
+.admin-slide-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 22px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.admin-slide-panel-header h3 {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.admin-slide-close-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: none;
+  background: var(--paper);
+  color: var(--ink-mute);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition);
+}
+
+.admin-slide-close-btn:hover {
+  background: var(--vermillion);
+  color: #fff;
+}
+
+.admin-slide-panel-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 22px;
+}
+
+.admin-slide-panel-body .admin-form-group {
+  margin-bottom: 14px;
+}
+
+
+/* ── PANEL: QUẢN LÝ UNIT/PART ── */
+.admin-category-add-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+
+.admin-category-add-row input {
+  flex: 1;
+  padding: 9px 12px;
+  border: 1px solid var(--border-md);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-sans);
+  font-size: 13.5px;
+  color: var(--ink);
+}
+
+.admin-category-add-row input:focus {
+  outline: none;
+  border-color: var(--vermillion);
+}
+
+.admin-category-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.admin-category-unit-block {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  background: var(--paper-card);
+}
+
+.admin-category-unit-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding-bottom: 8px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.admin-category-unit-name {
+  font-family: var(--font-ja);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.admin-category-part-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-left: 8px;
+}
+
+.admin-category-part-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+
+.admin-category-part-row:hover {
+  background: var(--paper);
+}
+
+.admin-category-add-row-part {
+  margin-top: 6px;
+  margin-bottom: 0;
+}
+
+.admin-category-add-row-part input {
+  font-size: 13px;
+  padding: 7px 10px;
+}
+
+@media (max-width: 860px) {
+  .admin-sidebar {
+    width: 64px;
+  }
+  .admin-sidebar-brand-text,
+  .admin-sidebar-brand-sub {
+    display: none;
+  }
+  .admin-sidebar-brand {
+    justify-content: center;
+    padding: 16px 0;
+  }
+  .admin-nav-item span:not(.ti),
+  .admin-logout-btn span:not(.ti) {
+    display: none;
+  }
+  .admin-nav-item,
+  .admin-logout-btn {
+    justify-content: center;
+    padding: 12px 0;
+  }
+  .admin-nav-item.active::before {
+    left: 0;
+  }
+  .admin-stats-grid {
+    grid-template-columns: 1fr;
+  }
+  .admin-content {
+    padding: 18px 16px 32px;
+  }
+  .admin-vocab-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .admin-filter-group {
+    flex-direction: column;
+  }
+  .admin-toolbar-actions {
+    flex-direction: column;
+  }
+  .admin-toolbar-actions .btn {
+    width: 100%;
+    justify-content: center;
+  }
+  .admin-select {
+    width: 100%;
+  }
+  .admin-form-row {
+    grid-template-columns: 1fr;
+  }
+  .admin-slide-panel {
+    width: 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  .admin-login-box {
+    padding: 26px 20px;
+  }
+}
