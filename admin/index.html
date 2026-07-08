@@ -143,9 +143,14 @@
                 <option value="">Tất cả Part</option>
               </select>
             </div>
-            <button class="btn btn-primary" id="btn-add-vocab" onclick="openVocabForm()">
-              <i class="ti ti-plus"></i> Thêm từ mới
-            </button>
+            <div class="admin-toolbar-actions">
+              <button class="btn btn-outline" id="btn-manage-categories">
+                <i class="ti ti-adjustments"></i> Quản lý Unit/Part
+              </button>
+              <button class="btn btn-primary" id="btn-add-vocab" onclick="openVocabForm()">
+                <i class="ti ti-plus"></i> Thêm từ mới
+              </button>
+            </div>
           </div>
 
           <!-- Bảng danh sách từ vựng -->
@@ -304,6 +309,32 @@
           <button type="submit" class="btn btn-primary" id="vocab-form-submit-btn">Lưu từ vựng</button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════
+       PANEL TRƯỢT: QUẢN LÝ UNIT/PART (danh mục, mức tối thiểu)
+       Xem tên gọi trong admin.js: openCategoryManager()/renderCategoryManager()
+  ════════════════════════════════════════════════════════════ -->
+  <div id="category-manager-overlay" class="admin-overlay" style="display:none;"></div>
+
+  <div id="category-manager-panel" class="admin-slide-panel" style="display:none;">
+    <div class="admin-slide-panel-header">
+      <h3>Quản lý Unit/Part</h3>
+      <button type="button" class="admin-slide-close-btn" id="category-manager-close-btn">
+        <i class="ti ti-x"></i>
+      </button>
+    </div>
+
+    <div class="admin-slide-panel-body">
+      <div class="admin-category-add-row">
+        <input type="text" id="new-unit-input" placeholder="Tên Unit mới (vd: Unit 10)" />
+        <button class="btn btn-primary" id="btn-add-unit-category">
+          <i class="ti ti-plus"></i> Thêm Unit
+        </button>
+      </div>
+
+      <div id="category-list" class="admin-category-list"></div>
     </div>
   </div>
 

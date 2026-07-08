@@ -451,6 +451,12 @@ body {
   flex-wrap: wrap;
 }
 
+.admin-toolbar-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
 .admin-select {
   padding: 9px 12px;
   border: 1px solid var(--border-md);
@@ -653,6 +659,90 @@ body {
 }
 
 
+/* ── PANEL: QUẢN LÝ UNIT/PART ── */
+.admin-category-add-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+
+.admin-category-add-row input {
+  flex: 1;
+  padding: 9px 12px;
+  border: 1px solid var(--border-md);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-sans);
+  font-size: 13.5px;
+  color: var(--ink);
+}
+
+.admin-category-add-row input:focus {
+  outline: none;
+  border-color: var(--vermillion);
+}
+
+.admin-category-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.admin-category-unit-block {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  background: var(--paper-card);
+}
+
+.admin-category-unit-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding-bottom: 8px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.admin-category-unit-name {
+  font-family: var(--font-ja);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.admin-category-part-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-left: 8px;
+}
+
+.admin-category-part-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+
+.admin-category-part-row:hover {
+  background: var(--paper);
+}
+
+.admin-category-add-row-part {
+  margin-top: 6px;
+  margin-bottom: 0;
+}
+
+.admin-category-add-row-part input {
+  font-size: 13px;
+  padding: 7px 10px;
+}
+
 @media (max-width: 860px) {
   .admin-sidebar {
     width: 64px;
@@ -689,6 +779,13 @@ body {
   }
   .admin-filter-group {
     flex-direction: column;
+  }
+  .admin-toolbar-actions {
+    flex-direction: column;
+  }
+  .admin-toolbar-actions .btn {
+    width: 100%;
+    justify-content: center;
   }
   .admin-select {
     width: 100%;
