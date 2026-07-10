@@ -501,7 +501,9 @@ function initVocabFilters() {
 // ── FORM "THÊM TỪ MỚI" — panel trượt ──────────────────────────
 
 const vocabFormState = {
-  computedWordIndex: null   // word_index kế tiếp, tính TOÀN CỤC ngay khi mở form
+  computedWordIndex: null,  // word_index kế tiếp (khi thêm mới) hoặc word_index cố định (khi sửa, không đổi)
+  mode: 'create',           // 'create' | 'edit'
+  editingId: null           // id của từ đang sửa (chỉ có giá trị khi mode === 'edit')
 };
 
 // Trích số từ chuỗi kiểu "Unit 3" -> "3", dùng để dựng tên file audio
@@ -688,6 +690,9 @@ async function openVocabForm() {
   title.textContent = 'Thêm từ mới';
   document.getElementById('vocab-form-id').value = '';
 
+  vocabFormState.mode = 'create';
+  vocabFormState.editingId = null;
+
   try {
     await loadCategories();
   } catch (err) {
@@ -699,6 +704,7 @@ async function openVocabForm() {
   populateVocabFormPartOptions('');
 
   vocabFormState.computedWordIndex = null;
+  filenameInput.readOnly = false;
   filenameInput.value = 'Đang tính word_index...';
 
   overlay.style.display = 'block';
@@ -714,15 +720,77 @@ async function openVocabForm() {
   refreshAudioFilenamePreview();
 }
 
+// Mở panel trượt để SỬA 1 từ đã có (id lấy từ nút "Sửa" trong bảng, tra
+// trực tiếp trong vocabAdminState.currentRows — không fetch lại). Khác
+// openVocabForm(): word_index KHÔNG được tính lại/không cho sửa, vì tên
+// file audio đã cố định theo word_index cũ (giữ nguyên convention u{unit}
+// _p{part}_word-{word_index}.mp3 — đổi word_index sẽ làm audio cũ bị lệch).
+async function editVocab(id) {
+  const row = vocabAdminState.currentRows.find(r => r.id === id);
+  if (!row) {
+    alert('Không tìm thấy từ vựng này trong danh sách hiện tại — thử tải lại bảng.');
+    return;
+  }
+
+  const panel = document.getElementById('vocab-form-panel');
+  const overlay = document.getElementById('vocab-form-overlay');
+  const title = document.getElementById('vocab-form-title');
+  const errorEl = document.getElementById('vocab-form-error');
+  const form = document.getElementById('vocab-form');
+  const filenameInput = document.getElementById('vocab-audio-filename');
+
+  form.reset();
+  errorEl.textContent = '';
+  title.textContent = 'Sửa từ vựng';
+  document.getElementById('vocab-form-id').value = row.id;
+
+  vocabFormState.mode = 'edit';
+  vocabFormState.editingId = row.id;
+  vocabFormState.computedWordIndex = row.word_index; // giữ nguyên, KHÔNG tính lại
+
+  try {
+    await loadCategories();
+  } catch (err) {
+    console.error('Lỗi tải danh mục Unit/Part:', err);
+    errorEl.textContent = 'Không tải được danh mục Unit/Part.';
+  }
+
+  populateVocabFormUnitOptions();
+  populateVocabFormPartOptions(row.unit);
+
+  overlay.style.display = 'block';
+  panel.style.display = 'flex';
+
+  // Đổ dữ liệu có sẵn vào form sau khi các dropdown Unit/Part đã dựng xong
+  document.getElementById('vocab-unit').value = row.unit;
+  document.getElementById('vocab-part').value = row.part;
+  document.getElementById('vocab-kanji').value = row.kanji && row.kanji !== '—' ? row.kanji : '';
+  document.getElementById('vocab-kana').value = row.kana || '';
+  document.getElementById('vocab-romaji').value = row.romaji || '';
+  document.getElementById('vocab-hanviet').value = row.hanviet || '';
+  document.getElementById('vocab-meaning').value = row.meaning || '';
+  document.getElementById('vocab-example').value = row.example || '';
+
+  // Khóa word_index gián tiếp: người dùng không nhập trực tiếp word_index ở
+  // form này (nó chỉ được suy ra qua tên file audio), nên chỉ cần đảm bảo
+  // filenameInput luôn hiển thị đúng word_index CŨ, không cho tính lại.
+  filenameInput.readOnly = true;
+
+  refreshAudioFilenamePreview();
+}
+
 function closeVocabForm() {
   document.getElementById('vocab-form-overlay').style.display = 'none';
   document.getElementById('vocab-form-panel').style.display = 'none';
   vocabFormState.computedWordIndex = null;
+  vocabFormState.mode = 'create';
+  vocabFormState.editingId = null;
 }
 
-// Insert từ vựng mới vào Supabase với word_index = giá trị đã tính sẵn ở
-// openVocabForm(). Thành công thì reset form + đóng panel + load lại bảng.
-async function submitNewVocab(e) {
+// Insert (mode 'create') hoặc update (mode 'edit') từ vựng vào Supabase.
+// Ở mode 'edit', word_index KHÔNG được gửi lên/không đổi — giữ nguyên giá
+// trị cũ vì tên file audio đã cố định theo word_index đó.
+async function submitVocabForm(e) {
   e.preventDefault();
 
   const errorEl = document.getElementById('vocab-form-error');
@@ -746,7 +814,10 @@ async function submitNewVocab(e) {
     errorEl.textContent = 'Vui lòng nhập đủ Kana và Meaning.';
     return;
   }
-  if (vocabFormState.computedWordIndex === null) {
+
+  const isEdit = vocabFormState.mode === 'edit' && vocabFormState.editingId !== null;
+
+  if (!isEdit && vocabFormState.computedWordIndex === null) {
     errorEl.textContent = 'Chưa tính được word_index kế tiếp — đóng và mở lại form rồi thử lại.';
     return;
   }
@@ -756,32 +827,58 @@ async function submitNewVocab(e) {
   submitBtn.innerHTML = 'Đang lưu...';
 
   try {
-    const payload = {
-      unit,
-      part,
-      word_index: vocabFormState.computedWordIndex,
-      kanji: kanji || null,
-      kana,
-      romaji: romaji || null,
-      hanviet: hanviet || null,
-      meaning,
-      example: example || null
-    };
+    if (isEdit) {
+      // Update: KHÔNG gửi word_index — giữ nguyên giá trị đã có trong Supabase.
+      const payload = {
+        unit,
+        part,
+        kanji: kanji || null,
+        kana,
+        romaji: romaji || null,
+        hanviet: hanviet || null,
+        meaning,
+        example: example || null
+      };
 
-    const res = await fetch(`${ADMIN_CONFIG.supabaseUrl}/rest/v1/${ADMIN_CONFIG.vocabTable}`, {
-      method: 'POST',
-      headers: sbHeaders({ 'Prefer': 'return=representation' }),
-      body: JSON.stringify(payload)
-    });
+      const res = await fetch(
+        `${ADMIN_CONFIG.supabaseUrl}/rest/v1/${ADMIN_CONFIG.vocabTable}?id=eq.${vocabFormState.editingId}`,
+        {
+          method: 'PATCH',
+          headers: sbHeaders({ 'Prefer': 'return=representation' }),
+          body: JSON.stringify(payload)
+        }
+      );
 
-    if (!res.ok) throw new Error(`Lỗi thêm từ vựng: ${res.status}`);
+      if (!res.ok) throw new Error(`Lỗi cập nhật từ vựng: ${res.status}`);
+    } else {
+      // Create: word_index = giá trị đã tính sẵn ở openVocabForm() (tăng dần toàn cục).
+      const payload = {
+        unit,
+        part,
+        word_index: vocabFormState.computedWordIndex,
+        kanji: kanji || null,
+        kana,
+        romaji: romaji || null,
+        hanviet: hanviet || null,
+        meaning,
+        example: example || null
+      };
+
+      const res = await fetch(`${ADMIN_CONFIG.supabaseUrl}/rest/v1/${ADMIN_CONFIG.vocabTable}`, {
+        method: 'POST',
+        headers: sbHeaders({ 'Prefer': 'return=representation' }),
+        body: JSON.stringify(payload)
+      });
+
+      if (!res.ok) throw new Error(`Lỗi thêm từ vựng: ${res.status}`);
+    }
 
     closeVocabForm();
     document.getElementById('vocab-form').reset();
     await loadVocabAdminList();
   } catch (err) {
-    console.error('Lỗi thêm từ vựng:', err);
-    errorEl.textContent = 'Có lỗi khi lưu từ vựng. Vui lòng thử lại.';
+    console.error('Lỗi lưu từ vựng:', err);
+    errorEl.textContent = isEdit ? 'Có lỗi khi cập nhật từ vựng. Vui lòng thử lại.' : 'Có lỗi khi lưu từ vựng. Vui lòng thử lại.';
   } finally {
     submitBtn.disabled = false;
     submitBtn.innerHTML = originalText;
@@ -794,7 +891,7 @@ function initVocabFormControls() {
   document.getElementById('vocab-form-overlay')?.addEventListener('click', closeVocabForm);
   document.getElementById('vocab-unit')?.addEventListener('change', onVocabUnitChange);
   document.getElementById('vocab-part')?.addEventListener('change', onVocabPartChange);
-  document.getElementById('vocab-form')?.addEventListener('submit', submitNewVocab);
+  document.getElementById('vocab-form')?.addEventListener('submit', submitVocabForm);
 }
 
 // ============================================================
@@ -1051,13 +1148,215 @@ function initCategoryManagerControls() {
   document.getElementById('btn-add-unit-category')?.addEventListener('click', addUnitCategoryFromPanel);
 }
 
-// ── STUB: sẽ triển khai đầy đủ ở prompt tiếp theo (sửa/xóa từ vựng) ──
-function editVocab(id) {
-  console.log('[stub] editVocab() sẽ mở panel trượt để sửa id =', id, '— hoàn thiện ở prompt sau');
+// ============================================================
+//  6. IMPORT CSV — parse client-side bằng PapaParse (CDN, xem thẻ
+//  <script> trong index.html), validate rồi bulk insert vào Supabase.
+//  Cột kỳ vọng trong CSV: unit, part, word_index, kanji, kana, romaji,
+//  hanviet, meaning, example — KHÔNG được có cột "id" (id do Supabase
+//  tự sinh, không nhận từ file ngoài).
+// ============================================================
+
+const csvImportState = {
+  rows: []   // dữ liệu đã parse & validate — nguồn thật để bulk insert khi bấm nút Import
+};
+
+function resetCsvImportUI(message) {
+  csvImportState.rows = [];
+  const importBtn = document.getElementById('btn-csv-import');
+  const previewWrap = document.getElementById('csv-preview-wrap');
+  const previewBody = document.getElementById('csv-preview-body');
+  if (importBtn) importBtn.disabled = true;
+  if (previewWrap) previewWrap.style.display = 'none';
+  if (previewBody) previewBody.innerHTML = '';
+  if (message) alert(message);
 }
 
-function deleteVocab(id) {
-  console.log('[stub] deleteVocab() sẽ xóa id =', id, '— hoàn thiện ở prompt sau');
+// Validate toàn bộ rows đã parse từ CSV. Ném lỗi ngay ở dòng đầu tiên sai
+// để người dùng biết chính xác cần sửa gì trong file trước khi thử lại.
+function validateCsvRows(rawRows, fields) {
+  // Không được có cột "id" trong CSV — id/word_index do hệ thống quản lý
+  if (fields.some(f => f.trim().toLowerCase() === 'id')) {
+    throw new Error('File CSV không được có cột "id".');
+  }
+
+  const cleanRows = [];
+  rawRows.forEach((row, idx) => {
+    const lineNo = idx + 2; // +1 vì có header, +1 vì idx bắt đầu từ 0
+
+    const unit = (row.unit || '').trim();
+    const part = (row.part || '').trim();
+    const wordIndexRaw = (row.word_index ?? '').toString().trim();
+
+    if (!unit || !part || !wordIndexRaw) {
+      throw new Error(`Dòng ${lineNo}: thiếu unit/part/word_index.`);
+    }
+
+    const wordIndex = Number(wordIndexRaw);
+    if (!Number.isFinite(wordIndex)) {
+      throw new Error(`Dòng ${lineNo}: word_index "${wordIndexRaw}" không phải là số hợp lệ.`);
+    }
+
+    const kana = (row.kana || '').trim();
+    const meaning = (row.meaning || '').trim();
+    if (!kana) throw new Error(`Dòng ${lineNo}: thiếu Kana.`);
+    if (!meaning) throw new Error(`Dòng ${lineNo}: thiếu Meaning.`);
+
+    cleanRows.push({
+      unit,
+      part,
+      word_index: wordIndex,
+      kanji: (row.kanji || '').trim() || null,
+      kana,
+      romaji: (row.romaji || '').trim() || null,
+      hanviet: (row.hanviet || '').trim() || null,
+      meaning,
+      example: (row.example || '').trim() || null
+    });
+  });
+
+  return cleanRows;
+}
+
+function renderCsvPreview(rows) {
+  const previewWrap = document.getElementById('csv-preview-wrap');
+  const previewBody = document.getElementById('csv-preview-body');
+  if (!previewWrap || !previewBody) return;
+
+  previewBody.innerHTML = rows.map(r => `
+    <tr>
+      <td>${escHtml(r.unit)}</td>
+      <td>${escHtml(r.part)}</td>
+      <td>${escHtml(r.word_index)}</td>
+      <td class="cell-kanji">${escHtml(r.kanji || '—')}</td>
+      <td class="cell-kana">${escHtml(r.kana)}</td>
+      <td>${escHtml(r.romaji || '—')}</td>
+      <td>${escHtml(r.hanviet || '—')}</td>
+      <td>${escHtml(r.meaning)}</td>
+      <td>${escHtml(r.example || '—')}</td>
+    </tr>
+  `).join('');
+
+  previewWrap.style.display = 'block';
+}
+
+// Nút "Xem trước" — parse file CSV đang chọn ở input, validate, hiện bảng preview.
+// Import bị khóa (disabled) cho tới khi có ít nhất 1 lần preview hợp lệ.
+function handleCsvPreviewClick() {
+  const fileInput = document.getElementById('csv-file-input');
+  const file = fileInput?.files?.[0];
+
+  if (!file) {
+    alert('Vui lòng chọn 1 file CSV trước.');
+    return;
+  }
+
+  if (typeof Papa === 'undefined') {
+    alert('❌ Chưa tải được thư viện PapaParse. Kiểm tra thẻ <script> CDN PapaParse trong index.html.');
+    return;
+  }
+
+  Papa.parse(file, {
+    header: true,
+    skipEmptyLines: true,
+    complete: (results) => {
+      try {
+        if (results.errors && results.errors.length > 0) {
+          throw new Error(`Lỗi parse CSV: ${results.errors[0].message}`);
+        }
+        const cleanRows = validateCsvRows(results.data, results.meta.fields || []);
+        if (cleanRows.length === 0) {
+          throw new Error('File CSV không có dòng dữ liệu nào hợp lệ.');
+        }
+        csvImportState.rows = cleanRows;
+        renderCsvPreview(cleanRows);
+        const importBtn = document.getElementById('btn-csv-import');
+        if (importBtn) importBtn.disabled = false;
+      } catch (err) {
+        console.error('Lỗi validate CSV:', err);
+        resetCsvImportUI(`❌ ${err.message}`);
+      }
+    },
+    error: (err) => {
+      console.error('Lỗi đọc file CSV:', err);
+      resetCsvImportUI('❌ Không đọc được file CSV.');
+    }
+  });
+}
+
+// Nút "Import vào Supabase" — bulk insert toàn bộ csvImportState.rows trong 1 request.
+async function handleCsvImportClick() {
+  const importBtn = document.getElementById('btn-csv-import');
+  if (!importBtn) return;
+
+  if (csvImportState.rows.length === 0) {
+    alert('Chưa có dữ liệu hợp lệ để import — bấm "Xem trước" trước.');
+    return;
+  }
+
+  if (!confirm(`Import ${csvImportState.rows.length} dòng từ vựng vào Supabase?`)) return;
+
+  const originalText = importBtn.innerHTML;
+  importBtn.disabled = true;
+  importBtn.innerHTML = 'Đang import...';
+
+  try {
+    const res = await fetch(`${ADMIN_CONFIG.supabaseUrl}/rest/v1/${ADMIN_CONFIG.vocabTable}`, {
+      method: 'POST',
+      headers: sbHeaders({ 'Prefer': 'return=minimal' }),
+      body: JSON.stringify(csvImportState.rows)
+    });
+
+    if (!res.ok) throw new Error(`Lỗi import: ${res.status}`);
+
+    alert(`✅ Đã import thành công ${csvImportState.rows.length} từ vựng.`);
+
+    resetCsvImportUI();
+    const fileInput = document.getElementById('csv-file-input');
+    if (fileInput) fileInput.value = '';
+
+    await loadVocabAdminList();
+  } catch (err) {
+    console.error('Lỗi import CSV vào Supabase:', err);
+    alert('❌ Lỗi khi import dữ liệu vào Supabase. Vui lòng kiểm tra lại file rồi thử lại.');
+  } finally {
+    importBtn.disabled = false;
+    importBtn.innerHTML = originalText;
+  }
+}
+
+function initCsvImportControls() {
+  document.getElementById('btn-csv-preview')?.addEventListener('click', handleCsvPreviewClick);
+  document.getElementById('btn-csv-import')?.addEventListener('click', handleCsvImportClick);
+  // Chọn file mới -> xóa preview/kết quả validate cũ, tránh import nhầm dữ liệu của file trước
+  document.getElementById('csv-file-input')?.addEventListener('change', () => resetCsvImportUI());
+}
+
+// Xóa 1 từ vựng. Hỏi xác nhận trước vì thao tác không hoàn tác được và sẽ
+// để lại "lỗ hổng" trong dãy word_index — CHẤP NHẬN ĐƯỢC theo yêu cầu, vì
+// không dồn lại số thứ tự các từ còn lại (audio cũ đặt tên theo word_index
+// cũ, dồn số sẽ làm sai lệch toàn bộ file audio đã có).
+async function deleteVocab(id) {
+  const row = vocabAdminState.currentRows.find(r => r.id === id);
+  const label = row ? (row.kanji && row.kanji !== '—' ? row.kanji : row.kana) : `#${id}`;
+
+  const confirmed = confirm(
+    `Xóa từ vựng "${label}"?\n\nLưu ý: word_index của từ này sẽ để trống (không dồn lại số thứ tự các từ khác), vì file audio cũ đã đặt tên theo word_index này.`
+  );
+  if (!confirmed) return;
+
+  try {
+    const res = await fetch(`${ADMIN_CONFIG.supabaseUrl}/rest/v1/${ADMIN_CONFIG.vocabTable}?id=eq.${id}`, {
+      method: 'DELETE',
+      headers: sbHeaders()
+    });
+
+    if (!res.ok) throw new Error(`Lỗi xóa từ vựng: ${res.status}`);
+
+    await loadVocabAdminList();
+  } catch (err) {
+    console.error('Lỗi xóa từ vựng:', err);
+    alert('❌ Lỗi khi xóa từ vựng. Vui lòng thử lại.');
+  }
 }
 
 // ============================================================
@@ -1070,5 +1369,6 @@ document.addEventListener('DOMContentLoaded', () => {
   initVocabFilters();
   initVocabFormControls();
   initCategoryManagerControls();
+  initCsvImportControls();
   initAdminAuth();
 });
