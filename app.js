@@ -867,24 +867,44 @@ function runAutoplayCycle(partKey, token) {
   // An toàn: một số trình duyệt không bắn 'error' đáng tin cậy khi file audio
   // không tồn tại (404) — audio "treo" im lặng mãi mãi, không phát cũng không
   // báo lỗi, khiến autoplay bị đứng lại ở đúng từ đó thay vì đi tiếp.
-  // Dùng 1 timeout an toàn: nếu sau một khoảng thời gian hợp lý mà track vẫn
-  // chưa kết thúc/báo lỗi, coi như hỏng và tự động nhảy sang track kế tiếp.
+  //
+  // Thay vì dùng 1 mốc thời gian cố định (sẽ cắt ngang các file dài hơn mốc
+  // đó), ta theo dõi "có tiến triển hay không": mỗi khi trình duyệt xác nhận
+  // đã load được audio (loadedmetadata/canplay) hoặc đang thực sự phát tiến
+  // (timeupdate), ta reset lại đồng hồ đếm ngược. Track chỉ bị coi là "treo"
+  // và tự động bỏ qua khi KHÔNG có bất kỳ tiến triển nào trong suốt một
+  // khoảng thời gian — tức file thực sự lỗi/không tồn tại — nên file audio
+  // dài bao nhiêu cũng luôn được phát trọn vẹn.
+  const STALL_LIMIT_MS = 6000;
   let advanced = false;
-  const advanceOnce = () => {
+  let watchdog = null;
+
+  const clearWatchdog = () => { if (watchdog) { clearTimeout(watchdog); watchdog = null; } };
+  const resetWatchdog = () => {
+    clearWatchdog();
+    watchdog = setTimeout(advanceOnce, STALL_LIMIT_MS);
+  };
+
+  function advanceOnce() {
     if (advanced || token !== state.autoplayToken) return;
     advanced = true;
-    clearTimeout(stuckTimer);
+    clearWatchdog();
     if (row) row.classList.remove('playing');
     state.playlistIndex++;
     setTimeout(() => runAutoplayCycle(partKey, token), 400);
-  };
+  }
 
-  const stuckTimer = setTimeout(advanceOnce, 6000);
+  resetWatchdog();
 
   state.currentAudio.onended = advanceOnce;
   state.currentAudio.onerror = advanceOnce;
-  state.currentAudio.onstalled = advanceOnce;
   state.currentAudio.onabort = advanceOnce;
+
+  // Có tiến triển thật sự -> reset đồng hồ, không cắt ngang track đang phát
+  state.currentAudio.onloadedmetadata = resetWatchdog;
+  state.currentAudio.oncanplay = resetWatchdog;
+  state.currentAudio.ontimeupdate = resetWatchdog;
+  state.currentAudio.onplaying = resetWatchdog;
 
   state.currentAudio.play().catch(advanceOnce);
 }
