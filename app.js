@@ -489,6 +489,15 @@ function switchMainSection(sectionId) {
 
 function s(v) { return (v !== undefined && v !== null && v !== '') ? String(v) : '—'; }
 
+// Từ chỉ có Kana (không có Kanji) sẽ có w.kanji là null/undefined/'' hoặc '—'
+// Dùng hàm này thay vì so sánh trực tiếp `w.kanji !== '—'` để tránh hiển thị "null".
+function hasKanji(w) {
+  return !!(w && w.kanji && w.kanji !== '—');
+}
+function displayKanjiOrKana(w) {
+  return hasKanji(w) ? w.kanji : w.kana;
+}
+
 function escAttr(v) {
   return String(v === undefined || v === null ? '' : v)
     .replace(/\\/g, '\\\\')
@@ -780,23 +789,36 @@ function buildWorkspacePanels(partKey, activeTab) {
 
 function stopAllAudio() {
   state.isAutoplay = false;
+  // Tăng token để "vô hiệu hóa" mọi callback (onended/onerror/setTimeout) của
+  // audio cũ đang bay lơ lửng — tránh việc chúng vẫn chạy tiếp sau khi đã stop.
+  state.autoplayToken = (state.autoplayToken || 0) + 1;
   document.querySelectorAll("[id^='btn-autoplay-']").forEach(b => b.textContent = '▶ Autoplay Audio');
   document.querySelectorAll('.word-table tbody tr').forEach(r => r.classList.remove('playing'));
+  stopCurrentAudio();
+}
+
+// Dừng hẳn audio hiện tại: pause + gỡ toàn bộ handler + clear src, để tránh
+// tình trạng audio cũ vẫn tiếp tục tải/phát ngầm và bắn onended muộn sau khi
+// track kế tiếp đã bắt đầu (nguyên nhân gây phát đè / nhảy cóc bài).
+function stopCurrentAudio() {
   if (state.currentAudio) {
+    state.currentAudio.onended = null;
+    state.currentAudio.onerror = null;
     state.currentAudio.pause();
+    state.currentAudio.src = '';
     state.currentAudio = null;
   }
 }
 
 function playSingleAudio(wordId, path, partKey) {
   if (state.isAutoplay) stopAllAudio();
-  
+
   document.querySelectorAll('.word-table tbody tr').forEach(r => r.classList.remove('playing'));
   const row = document.getElementById(`row-${partKey}-${wordId}`);
   if (row) row.classList.add('playing');
 
-  if (state.currentAudio) state.currentAudio.pause();
-  
+  stopCurrentAudio();
+
   state.currentAudio = new Audio(path);
   state.currentAudio.onended = () => { if (row) row.classList.remove('playing'); };
   state.currentAudio.onerror = () => { if (row) row.classList.remove('playing'); };
@@ -805,9 +827,10 @@ function playSingleAudio(wordId, path, partKey) {
 
 function toggleAutoplay(partKey) {
   if (state.isAutoplay) { stopAllAudio(); return; }
-  if (state.currentAudio) state.currentAudio.pause();
-  
+  stopCurrentAudio();
+
   state.isAutoplay = true;
+  state.autoplayToken = (state.autoplayToken || 0) + 1;
   const btn = document.getElementById(`btn-autoplay-${partKey}`);
   if (btn) btn.textContent = '⏹ Stop Autoplay';
 
@@ -817,11 +840,16 @@ function toggleAutoplay(partKey) {
   state.playlist = words.map(w => ({ id: w.id, path: buildAudioPath(w) }));
   state.playlistIndex = 0;
   
-  runAutoplayCycle(partKey);
+  runAutoplayCycle(partKey, state.autoplayToken);
 }
 
-function runAutoplayCycle(partKey) {
-  if (!state.isAutoplay || state.playlistIndex >= state.playlist.length) { stopAllAudio(); return; }
+function runAutoplayCycle(partKey, token) {
+  // Nếu đã stop hoặc một chu kỳ autoplay mới khác đã bắt đầu (token đổi),
+  // bỏ qua ngay — đây là chốt chặn chính chống việc 2 audio chạy song song.
+  if (!state.isAutoplay || token !== state.autoplayToken || state.playlistIndex >= state.playlist.length) {
+    stopAllAudio();
+    return;
+  }
 
   document.querySelectorAll('.word-table tbody tr').forEach(r => r.classList.remove('playing'));
   const targetItem = state.playlist[state.playlistIndex];
@@ -831,20 +859,26 @@ function runAutoplayCycle(partKey) {
     row.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
 
+  // Dừng dứt điểm audio của track trước khi tạo audio mới cho track tiếp theo.
+  stopCurrentAudio();
+
   state.currentAudio = new Audio(targetItem.path);
   state.currentAudio.onended = () => {
+    if (token !== state.autoplayToken) return;
     if (row) row.classList.remove('playing');
     state.playlistIndex++;
-    setTimeout(() => runAutoplayCycle(partKey), 800);
+    setTimeout(() => runAutoplayCycle(partKey, token), 800);
   };
   state.currentAudio.onerror = () => {
+    if (token !== state.autoplayToken) return;
     if (row) row.classList.remove('playing');
     state.playlistIndex++;
-    runAutoplayCycle(partKey);
+    runAutoplayCycle(partKey, token);
   };
   state.currentAudio.play().catch(() => {
+    if (token !== state.autoplayToken) return;
     state.playlistIndex++;
-    runAutoplayCycle(partKey);
+    runAutoplayCycle(partKey, token);
   });
 }
 
@@ -949,7 +983,7 @@ function renderFlashcardReport(partKey) {
 
   let listItemsHtml = fState.notYetList.map(w => `
     <div class="notyet-item">
-      <span><strong>${w.kanji !== '—' ? w.kanji : w.kana}</strong> (${w.kana})</span>
+      <span><strong>${displayKanjiOrKana(w)}</strong>${hasKanji(w) ? ` (${w.kana})` : ''}</span>
       <span style="color:var(--vermillion); text-align:right;">${w.meaning}</span>
     </div>
   `).join('');
@@ -990,8 +1024,14 @@ function changeQuizMode(partKey, newMode) {
 
 function initQuizEngine(partKey, mode = 'k2m') {
   const [u, p] = partKey.split('_');
-  const words = _shuffle(getWords(u, p)); 
-  
+  let words = _shuffle(getWords(u, p));
+
+  // Kanji ➔ Meaning: ẩn các từ chỉ có Kana (không có Kanji) vì không phù hợp
+  // với dạng câu hỏi này (tránh hiển thị "null"/kana thay Kanji).
+  if (mode === 'k2m') {
+    words = words.filter(w => hasKanji(w));
+  }
+
   state.quizState[partKey] = {
     index: 0,
     score: 0,
@@ -1006,18 +1046,18 @@ function initQuizEngine(partKey, mode = 'k2m') {
         case 'f2k':
           questionMain = w.kana;
           questionSub = w.meaning;
-          correctAnswer = w.kanji !== '—' ? w.kanji : w.kana;
-          optionPool = vocabularyData.map(item => item.kanji !== '—' ? item.kanji : item.kana);
+          correctAnswer = displayKanjiOrKana(w);
+          optionPool = vocabularyData.map(item => displayKanjiOrKana(item));
           break;
         case 'm2k':
           questionMain = w.meaning;
           questionSub = `(${w.hanviet})`;
-          correctAnswer = w.kanji !== '—' ? w.kanji : w.kana;
-          optionPool = vocabularyData.map(item => item.kanji !== '—' ? item.kanji : item.kana);
+          correctAnswer = displayKanjiOrKana(w);
+          optionPool = vocabularyData.map(item => displayKanjiOrKana(item));
           break;
         case 'k2m':
         default:
-          questionMain = w.kanji !== '—' ? w.kanji : w.kana;
+          questionMain = w.kanji;
           questionSub = w.kana;
           correctAnswer = w.meaning;
           optionPool = vocabularyData.map(item => item.meaning);
@@ -1364,7 +1404,7 @@ function renderReviewReport() {
 
   let listItemsHtml = rState.notYetList.map(w => `
     <div class="notyet-item">
-      <span><strong>${w.kanji !== '—' ? w.kanji : w.kana}</strong> (${w.kana})</span>
+      <span><strong>${displayKanjiOrKana(w)}</strong>${hasKanji(w) ? ` (${w.kana})` : ''}</span>
       <span style="color:var(--vermillion); text-align:right;">${w.meaning}</span>
     </div>
   `).join('');
