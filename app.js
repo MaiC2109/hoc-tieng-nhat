@@ -863,23 +863,30 @@ function runAutoplayCycle(partKey, token) {
   stopCurrentAudio();
 
   state.currentAudio = new Audio(targetItem.path);
-  state.currentAudio.onended = () => {
-    if (token !== state.autoplayToken) return;
+
+  // An toàn: một số trình duyệt không bắn 'error' đáng tin cậy khi file audio
+  // không tồn tại (404) — audio "treo" im lặng mãi mãi, không phát cũng không
+  // báo lỗi, khiến autoplay bị đứng lại ở đúng từ đó thay vì đi tiếp.
+  // Dùng 1 timeout an toàn: nếu sau một khoảng thời gian hợp lý mà track vẫn
+  // chưa kết thúc/báo lỗi, coi như hỏng và tự động nhảy sang track kế tiếp.
+  let advanced = false;
+  const advanceOnce = () => {
+    if (advanced || token !== state.autoplayToken) return;
+    advanced = true;
+    clearTimeout(stuckTimer);
     if (row) row.classList.remove('playing');
     state.playlistIndex++;
-    setTimeout(() => runAutoplayCycle(partKey, token), 800);
+    setTimeout(() => runAutoplayCycle(partKey, token), 400);
   };
-  state.currentAudio.onerror = () => {
-    if (token !== state.autoplayToken) return;
-    if (row) row.classList.remove('playing');
-    state.playlistIndex++;
-    runAutoplayCycle(partKey, token);
-  };
-  state.currentAudio.play().catch(() => {
-    if (token !== state.autoplayToken) return;
-    state.playlistIndex++;
-    runAutoplayCycle(partKey, token);
-  });
+
+  const stuckTimer = setTimeout(advanceOnce, 6000);
+
+  state.currentAudio.onended = advanceOnce;
+  state.currentAudio.onerror = advanceOnce;
+  state.currentAudio.onstalled = advanceOnce;
+  state.currentAudio.onabort = advanceOnce;
+
+  state.currentAudio.play().catch(advanceOnce);
 }
 
 function initFlashcardEngine(partKey) {
