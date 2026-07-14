@@ -743,6 +743,44 @@ body {
   padding: 7px 10px;
 }
 
+/* ============================================================
+   SECTION: HỌC VIÊN — bảng chọn hàng, khu vực Chi tiết học viên
+   ============================================================ */
+.admin-vocab-table tbody tr.student-row {
+  cursor: pointer;
+}
+
+.admin-vocab-table tbody tr.student-row.active-row {
+  background: var(--verm-glow);
+}
+
+.student-progress-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 18px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.student-progress-name {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.student-progress-level {
+  font-size: 12.5px;
+  color: var(--ink-mute);
+  margin-top: 2px;
+}
+
+.student-progress-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
 @media (max-width: 860px) {
   .admin-sidebar {
     width: 64px;

@@ -219,9 +219,70 @@
 
         </section>
 
-        <!-- ═══ SECTION: HỌC VIÊN (nội dung thêm ở Bước 3) ═══ -->
+        <!-- ═══ SECTION: HỌC VIÊN ═══ -->
         <section class="admin-section" id="section-students" data-section="students">
-          <div class="empty-state" style="padding:60px 0;">Nội dung quản lý Học viên sẽ thêm ở bước sau.</div>
+
+          <div class="admin-vocab-toolbar">
+            <div class="admin-filter-group">
+              <input type="text" id="student-search-input" class="admin-select" placeholder="🔍 Tìm theo tên..." style="min-width:220px;" />
+            </div>
+            <div class="admin-toolbar-actions">
+              <button class="btn btn-primary" id="btn-add-student" onclick="openStudentForm()">
+                <i class="ti ti-user-plus"></i> Cập nhật thông tin học viên
+              </button>
+            </div>
+          </div>
+
+          <div class="admin-panel-card admin-table-card">
+            <div class="admin-table-scroll">
+              <table class="admin-vocab-table">
+                <thead>
+                  <tr>
+                    <th>Tên</th>
+                    <th style="width:100px;">Level</th>
+                    <th style="width:160px;">% Vocab</th>
+                  </tr>
+                </thead>
+                <tbody id="student-table-body">
+                  <tr>
+                    <td colspan="3"><div class="empty-state">Đang tải dữ liệu...</div></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Khu vực Chi tiết học viên — component dùng chung với Dashboard học viên tự xem -->
+          <div id="student-progress-view" class="admin-panel-card admin-table-card" style="display:none;">
+            <div class="student-progress-header">
+              <div>
+                <div class="student-progress-name" id="sp-student-name">—</div>
+                <div class="student-progress-level" id="sp-student-level">—</div>
+              </div>
+            </div>
+
+            <div class="student-progress-stats-grid">
+              <div class="admin-stat-card">
+                <div class="admin-stat-icon vocab"><i class="ti ti-book-2"></i></div>
+                <div style="flex:1;">
+                  <div class="admin-stat-value" id="sp-vocab-fraction">—</div>
+                  <div class="admin-stat-label">Vocab đã học</div>
+                  <div class="progress-bar-mini" style="width:100%; margin-top:8px;">
+                    <div class="progress-bar-mini-fill" id="sp-vocab-progress-fill" style="width:0%"></div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="admin-stat-card">
+                <div class="admin-stat-icon students"><i class="ti ti-clock-hour-4"></i></div>
+                <div>
+                  <div class="admin-stat-value" id="sp-due-today">—</div>
+                  <div class="admin-stat-label">Cần ôn hôm nay</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
         </section>
 
       </div>
@@ -335,6 +396,57 @@
       </div>
 
       <div id="category-list" class="admin-category-list"></div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════
+       PANEL TRƯỢT: CẬP NHẬT THÔNG TIN HỌC VIÊN
+       Không có ô password — tài khoản phải được tạo trước bằng tay
+       trong Supabase Dashboard, form này chỉ bổ sung/cập nhật hồ sơ
+       (profiles) khớp theo email đã tồn tại.
+  ════════════════════════════════════════════════════════════ -->
+  <div id="student-form-overlay" class="admin-overlay" style="display:none;"></div>
+
+  <div id="student-form-panel" class="admin-slide-panel" style="display:none;">
+    <div class="admin-slide-panel-header">
+      <h3>Cập nhật thông tin học viên</h3>
+      <button type="button" class="admin-slide-close-btn" id="student-form-close-btn">
+        <i class="ti ti-x"></i>
+      </button>
+    </div>
+
+    <div class="admin-slide-panel-body">
+      <form id="student-form">
+        <div class="admin-form-group">
+          <label for="student-email">Email</label>
+          <input type="email" id="student-email" placeholder="hocvien@example.com" required />
+          <p class="admin-hint-text">Dùng để tìm đúng tài khoản đã tạo sẵn qua Supabase Dashboard. Tài khoản phải tồn tại trước.</p>
+        </div>
+
+        <div class="admin-form-group">
+          <label for="student-fullname">Họ và tên</label>
+          <input type="text" id="student-fullname" placeholder="Nguyễn Văn A" required />
+        </div>
+
+        <div class="admin-form-group">
+          <label for="student-level">JLPT Level</label>
+          <select id="student-level" required>
+            <option value="">— Chọn Level —</option>
+            <option value="N5">N5</option>
+            <option value="N4">N4</option>
+            <option value="N3">N3</option>
+            <option value="N2">N2</option>
+            <option value="N1">N1</option>
+          </select>
+        </div>
+
+        <div id="student-form-error" class="admin-login-error"></div>
+
+        <div class="admin-form-actions">
+          <button type="button" class="btn btn-outline" id="student-form-cancel-btn">Hủy</button>
+          <button type="submit" class="btn btn-primary" id="student-form-submit-btn">Lưu thông tin</button>
+        </div>
+      </form>
     </div>
   </div>
 

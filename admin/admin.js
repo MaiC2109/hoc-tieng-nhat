@@ -11,7 +11,10 @@ const ADMIN_CONFIG = {
   supabaseUrl: "https://hzecdpnmegfwbximgqlv.supabase.co",
   supabaseAnonKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh6ZWNkcG5tZWdmd2J4aW1ncWx2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMyMTEwNTEsImV4cCI6MjA5ODc4NzA1MX0.esdOJo7gvQXLJjG94PUQ_rghTfGCAAaYzdP3l-j3u-s",
   vocabTable: "vocabulary",
-  profilesTable: "profiles"
+  profilesTable: "profiles",
+  // Bảng lưu tiến độ SRS theo từng học viên: unique(user_id, vocab_id),
+  // có cột due_date để tính "Cần ôn hôm nay" (due_date <= hôm nay)
+  srsProgressTable: "vocab_srs_progress"
 };
 
 // Chỉ 1 tài khoản admin cụ thể được phép vào — kiểm tra khớp email sau khi
@@ -202,6 +205,8 @@ function switchAdminSection(sectionKey) {
     loadRecentActivity();
   } else if (sectionKey === 'vocab') {
     populateVocabFilterDropdowns().then(loadVocabAdminList);
+  } else if (sectionKey === 'students') {
+    loadStudentAdminList();
   }
 }
 
@@ -1360,6 +1365,274 @@ async function deleteVocab(id) {
 }
 
 // ============================================================
+//  8. HỌC VIÊN — danh sách + tìm kiếm + Chi tiết học viên (SRS)
+//  loadStudentDetail(userId, isAdminView) tính % Vocab và số từ cần
+//  ôn hôm nay trực tiếp từ vocab_srs_progress — hàm này viết để dùng
+//  chung được với Dashboard học viên tự xem (Prompt 3.3), nên không
+//  phụ thuộc gì vào state riêng của Admin ngoài tham số truyền vào.
+// ============================================================
+
+const studentAdminState = {
+  currentRows: [],   // toàn bộ profiles fetch được, dùng để filter tìm kiếm + tra khi mở form/detail
+  activeStudentId: null
+};
+
+async function loadStudentAdminList() {
+  const tbody = document.getElementById('student-table-body');
+  if (tbody) {
+    tbody.innerHTML = `<tr><td colspan="3"><div class="empty-state">Đang tải dữ liệu...</div></td></tr>`;
+  }
+
+  try {
+    const { data: rows, error } = await supabaseClient
+      .from(ADMIN_CONFIG.profilesTable)
+      .select('id, full_name, jlpt_level')
+      .order('full_name', { ascending: true });
+
+    if (error) throw error;
+
+    studentAdminState.currentRows = rows;
+
+    // Tổng số từ vựng — dùng làm mẫu số mặc định (định nghĩa "đã học" hiện
+    // tại giống module Vocab: 1 dòng trong vocab_srs_progress = đã học/ôn
+    // ít nhất 1 lần, không phân biệt theo cấp độ ở view danh sách này).
+    const totalVocab = await fetchTableCount(ADMIN_CONFIG.vocabTable) || 0;
+    await Promise.all(rows.map(async (r) => {
+      try {
+        r._learnedCount = await countStudentLearnedVocab(r.id);
+      } catch (err) {
+        console.error(`Lỗi đếm vocab đã học cho học viên ${r.id}:`, err);
+        r._learnedCount = null;
+      }
+    }));
+    studentAdminState._totalVocab = totalVocab;
+
+    renderStudentAdminTable(rows);
+  } catch (err) {
+    console.error('Lỗi tải danh sách học viên:', err);
+    if (tbody) {
+      tbody.innerHTML = `<tr><td colspan="3"><div class="empty-state">❌ Không tải được danh sách học viên.</div></td></tr>`;
+    }
+  }
+}
+
+// Đếm số từ vựng học viên đã có trong vocab_srs_progress (đã học/ôn ít
+// nhất 1 lần — unique(user_id, vocab_id) nên không đếm trùng). Đây là
+// định nghĩa "đã học" mà module Vocab hiện tại đang dùng (srMarkWordsAsLearned
+// ghi 1 dòng ngay khi từ được đưa vào phiên Flashcard đầu tiên).
+async function countStudentLearnedVocab(userId) {
+  const { count, error } = await supabaseClient
+    .from(ADMIN_CONFIG.srsProgressTable)
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', userId);
+
+  if (error) throw error;
+  return count || 0;
+}
+
+// Đếm số từ đã đến hạn ôn hôm nay (due_date <= hôm nay) cho 1 học viên.
+async function countStudentDueToday(userId) {
+  const today = new Date().toISOString().split('T')[0];
+  const { count, error } = await supabaseClient
+    .from(ADMIN_CONFIG.srsProgressTable)
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .lte('due_date', today);
+
+  if (error) throw error;
+  return count || 0;
+}
+
+// Tổng số từ vựng theo đúng cấp độ (jlpt_level) học viên đang học — dùng
+// làm mẫu số ở khu vực Chi tiết học viên, khác với tổng toàn bộ vocab dùng
+// ở bảng danh sách. Nếu học viên chưa có level hoặc bảng vocabulary chưa có
+// cột level, fallback về tổng toàn bộ vocab.
+async function countVocabByLevel(jlptLevel) {
+  if (!jlptLevel) return await fetchTableCount(ADMIN_CONFIG.vocabTable) || 0;
+
+  try {
+    const { count, error } = await supabaseClient
+      .from(ADMIN_CONFIG.vocabTable)
+      .select('id', { count: 'exact', head: true })
+      .eq('level', jlptLevel);
+
+    if (error) throw error;
+    return count || 0;
+  } catch (err) {
+    console.error('Lỗi đếm vocab theo level, dùng tổng toàn bộ thay thế:', err);
+    return await fetchTableCount(ADMIN_CONFIG.vocabTable) || 0;
+  }
+}
+
+function renderStudentAdminTable(rows) {
+  const tbody = document.getElementById('student-table-body');
+  if (!tbody) return;
+
+  const keyword = (document.getElementById('student-search-input')?.value || '').trim().toLowerCase();
+  const filtered = keyword
+    ? rows.filter(r => (r.full_name || '').toLowerCase().includes(keyword))
+    : rows;
+
+  if (filtered.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="3"><div class="empty-state">Không tìm thấy học viên nào.</div></td></tr>`;
+    return;
+  }
+
+  const total = studentAdminState._totalVocab || 0;
+
+  tbody.innerHTML = filtered.map(r => {
+    const learned = r._learnedCount;
+    const pct = (learned !== null && total > 0) ? Math.round((learned / total) * 100) : 0;
+    const pctLabel = learned !== null ? `${pct}%` : '—';
+    const activeClass = r.id === studentAdminState.activeStudentId ? 'active-row' : '';
+
+    return `
+      <tr class="student-row ${activeClass}" onclick="selectStudentRow('${r.id}')">
+        <td>${escHtml(r.full_name || '(chưa có tên)')}</td>
+        <td>${escHtml(r.jlpt_level || '—')}</td>
+        <td>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <div class="progress-bar-mini" style="width:70px;">
+              <div class="progress-bar-mini-fill" style="width:${pct}%"></div>
+            </div>
+            <span style="font-size:12px; color:var(--ink-mute);">${pctLabel}</span>
+          </div>
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
+
+function initStudentSearch() {
+  const input = document.getElementById('student-search-input');
+  if (!input) return;
+  input.addEventListener('input', () => renderStudentAdminTable(studentAdminState.currentRows));
+}
+
+// Click 1 hàng trong bảng -> mở khu vực Chi tiết học viên bên dưới, cuộn tới đúng vị trí
+async function selectStudentRow(userId) {
+  studentAdminState.activeStudentId = userId;
+  renderStudentAdminTable(studentAdminState.currentRows);
+
+  const row = studentAdminState.currentRows.find(r => r.id === userId);
+  if (!row) return;
+
+  const view = document.getElementById('student-progress-view');
+  if (view) view.style.display = 'block';
+
+  document.getElementById('sp-student-name').textContent = row.full_name || '(chưa có tên)';
+  document.getElementById('sp-student-level').textContent = row.jlpt_level ? `Level ${row.jlpt_level}` : 'Chưa có level';
+  document.getElementById('sp-vocab-fraction').textContent = 'Đang tải...';
+  document.getElementById('sp-vocab-progress-fill').style.width = '0%';
+  document.getElementById('sp-due-today').textContent = '—';
+
+  view.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+  try {
+    await loadStudentDetail(userId, true, row.jlpt_level);
+  } catch (err) {
+    console.error('Lỗi tải chi tiết học viên:', err);
+    document.getElementById('sp-vocab-fraction').textContent = '❌ Lỗi tải dữ liệu';
+  }
+}
+
+// Dùng chung cho Admin xem (isAdminView=true mặc định, ghi vào #sp-*) và
+// Dashboard học viên tự xem (Prompt 3.3 gọi loadStudentDetail(userId) với
+// isAdminView=false hoặc bỏ qua render DOM #sp-*, tự xử lý UI riêng).
+async function loadStudentDetail(userId, isAdminView = true, jlptLevel = null) {
+  const totalVocab = await countVocabByLevel(jlptLevel);
+
+  const [learnedCount, dueToday] = await Promise.all([
+    countStudentLearnedVocab(userId),
+    countStudentDueToday(userId)
+  ]);
+
+  if (isAdminView) {
+    const pct = totalVocab > 0 ? Math.round((learnedCount / totalVocab) * 100) : 0;
+    document.getElementById('sp-vocab-fraction').textContent = `${learnedCount}/${totalVocab}`;
+    document.getElementById('sp-vocab-progress-fill').style.width = `${pct}%`;
+    document.getElementById('sp-due-today').textContent = dueToday;
+  }
+
+  return { totalVocab, learnedCount, dueToday };
+}
+
+// ── FORM "CẬP NHẬT THÔNG TIN HỌC VIÊN" ──────────────────────
+
+function openStudentForm() {
+  const panel = document.getElementById('student-form-panel');
+  const overlay = document.getElementById('student-form-overlay');
+  const form = document.getElementById('student-form');
+  const errorEl = document.getElementById('student-form-error');
+
+  form.reset();
+  errorEl.textContent = '';
+
+  overlay.style.display = 'block';
+  panel.style.display = 'flex';
+}
+
+function closeStudentForm() {
+  document.getElementById('student-form-overlay').style.display = 'none';
+  document.getElementById('student-form-panel').style.display = 'none';
+}
+
+// Update trực tiếp vào bảng profiles theo email nhập trong form — KHÔNG
+// tạo tài khoản mới. Nếu data trả về rỗng (không có dòng nào khớp email)
+// nghĩa là tài khoản chưa tồn tại -> báo lỗi rõ ràng, không âm thầm tạo mới.
+async function submitStudentInfo(e) {
+  e.preventDefault();
+
+  const errorEl = document.getElementById('student-form-error');
+  const submitBtn = document.getElementById('student-form-submit-btn');
+  errorEl.textContent = '';
+
+  const email = document.getElementById('student-email').value.trim();
+  const fullName = document.getElementById('student-fullname').value.trim();
+  const jlptLevel = document.getElementById('student-level').value;
+
+  if (!email || !fullName || !jlptLevel) {
+    errorEl.textContent = 'Vui lòng nhập đầy đủ Email, Họ tên và Level.';
+    return;
+  }
+
+  submitBtn.disabled = true;
+  const originalText = submitBtn.innerHTML;
+  submitBtn.innerHTML = 'Đang lưu...';
+
+  try {
+    const { data, error } = await supabaseClient
+      .from(ADMIN_CONFIG.profilesTable)
+      .update({ full_name: fullName, jlpt_level: jlptLevel })
+      .eq('email', email)
+      .select();
+
+    if (error) throw error;
+
+    if (!data || data.length === 0) {
+      errorEl.textContent = 'Không tìm thấy tài khoản với email này — hãy tạo tài khoản trước trong Supabase Dashboard (Authentication → Users).';
+      return;
+    }
+
+    closeStudentForm();
+    await loadStudentAdminList();
+  } catch (err) {
+    console.error('Lỗi lưu thông tin học viên:', err);
+    errorEl.textContent = 'Có lỗi khi lưu thông tin học viên. Vui lòng thử lại.';
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.innerHTML = originalText;
+  }
+}
+
+function initStudentFormControls() {
+  document.getElementById('student-form-close-btn')?.addEventListener('click', closeStudentForm);
+  document.getElementById('student-form-cancel-btn')?.addEventListener('click', closeStudentForm);
+  document.getElementById('student-form-overlay')?.addEventListener('click', closeStudentForm);
+  document.getElementById('student-form')?.addEventListener('submit', submitStudentInfo);
+}
+
+// ============================================================
 //  KHỞI TẠO
 // ============================================================
 document.addEventListener('DOMContentLoaded', () => {
@@ -1370,5 +1643,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initVocabFormControls();
   initCategoryManagerControls();
   initCsvImportControls();
+  initStudentSearch();
+  initStudentFormControls();
   initAdminAuth();
 });
