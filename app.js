@@ -474,15 +474,14 @@ function startUI() {
 // ============================================================
 //  DASHBOARD HỌC VIÊN — tự xem tiến độ (% Vocab đã học, số từ cần
 //  ôn hôm nay). Logic tính toán copy/refactor nguyên từ admin/admin.js
-//  (loadStudentDetail, countStudentLearnedVocab, countStudentDueToday,
-//  countVocabByLevel) để đảm bảo cùng 1 định nghĩa "đã học"/"đến hạn"
-//  giữa Admin xem và học viên tự xem — không viết lại logic từ đầu.
-//  Render vào đúng #student-progress-view (dùng chung markup/CSS với
-//  Admin, xem admin.css + index.html section #section-dashboard).
+//  (loadStudentDetail, countStudentLearnedVocab, countStudentDueToday)
+//  để đảm bảo cùng 1 định nghĩa "đã học"/"đến hạn" giữa Admin xem và
+//  học viên tự xem. full_name/jlpt_level nằm ở bảng student_profiles
+//  (nối qua student_profiles.id = profiles.id = auth.users.id), email
+//  nằm ở bảng profiles/lấy trực tiếp từ session (currentUser.email).
+//  Render vào #student-progress-view (dùng chung markup/CSS với Admin).
 // ============================================================
 
-// Đếm số từ vựng học viên đã có trong vocab_srs_progress (đã học/ôn ít
-// nhất 1 lần — unique(user_id, vocab_id) nên không đếm trùng).
 async function countStudentLearnedVocab(userId) {
   const { count, error } = await supabaseClient
     .from('vocab_srs_progress')
@@ -493,7 +492,6 @@ async function countStudentLearnedVocab(userId) {
   return count || 0;
 }
 
-// Đếm số từ đã đến hạn ôn hôm nay (due_date <= hôm nay) cho 1 học viên.
 async function countStudentDueToday(userId) {
   const today = new Date().toISOString().split('T')[0];
   const { count, error } = await supabaseClient
@@ -507,9 +505,8 @@ async function countStudentDueToday(userId) {
 }
 
 // Tổng số từ vựng — dùng vocabularyData đã load sẵn trong state (initApp)
-// thay vì gọi lại Supabase, vì phía học viên đã có toàn bộ dữ liệu này rồi.
-// Nếu có jlptLevel và vocabularyData có cột level thì lọc theo level, nếu
-// không thì fallback về tổng toàn bộ (giữ đúng logic countVocabByLevel bên admin.js).
+// thay vì gọi lại Supabase. Lọc theo level nếu vocabularyData có cột level,
+// nếu không thì fallback về tổng toàn bộ.
 function countVocabByLevelLocal(jlptLevel) {
   if (typeof window.vocabularyData === 'undefined') return 0;
   if (!jlptLevel) return window.vocabularyData.length;
@@ -521,8 +518,7 @@ function countVocabByLevelLocal(jlptLevel) {
 }
 
 // Dùng chung với Admin (admin/admin.js): isAdminView=false khi học viên tự
-// xem — Phase 1 chưa có phần UI nào cần ẩn/hiện riêng, nhưng giữ tham số
-// này để chuẩn bị Phase 3 (vd nút "hẹn lịch test lại" chỉ hiện ở Admin).
+// xem — giữ tham số này để chuẩn bị Phase 3.
 async function loadStudentDetail(userId, isAdminView = true, jlptLevel = null) {
   const totalVocab = countVocabByLevelLocal(jlptLevel);
 
@@ -531,8 +527,6 @@ async function loadStudentDetail(userId, isAdminView = true, jlptLevel = null) {
     countStudentDueToday(userId)
   ]);
 
-  // Render vào #student-progress-view — cùng id với bản Admin nên UI tái
-  // sử dụng được nguyên vẹn dù isAdminView là true hay false.
   const pct = totalVocab > 0 ? Math.round((learnedCount / totalVocab) * 100) : 0;
   const fractionEl = document.getElementById('sp-vocab-fraction');
   const fillEl = document.getElementById('sp-vocab-progress-fill');
@@ -544,10 +538,9 @@ async function loadStudentDetail(userId, isAdminView = true, jlptLevel = null) {
   return { totalVocab, learnedCount, dueToday };
 }
 
-// Mở trang #dashboard — lấy userId từ session hiện tại (supabase.auth.getUser())
-// thay vì Admin chọn tay, rồi gọi loadStudentDetail(userId, false).
+// Mở trang #dashboard — lấy userId từ session hiện tại rồi gọi loadStudentDetail(userId, false).
 async function openDashboard() {
-  switchMainSection('dashboard'); // chuyển panel + active đúng nút nav nhờ data-section="dashboard"
+  switchMainSection('dashboard');
 
   const nameEl = document.getElementById('sp-student-name');
   const levelEl = document.getElementById('sp-student-level');
@@ -564,18 +557,20 @@ async function openDashboard() {
     const userId = userData?.user?.id;
     if (!userId) throw new Error('Không tìm thấy phiên đăng nhập hiện tại.');
 
-    // Lấy full_name/jlpt_level từ bảng profiles để hiện header + lọc vocab theo level.
-    const { data: profile, error: profileError } = await supabaseClient
-      .from('profiles')
+    // full_name/jlpt_level nằm ở student_profiles, KHÔNG phải profiles.
+    // student_profiles có thể chưa có dòng cho user này (chưa được Admin
+    // cập nhật hồ sơ) -> dùng maybeSingle() để không lỗi khi rỗng.
+    const { data: studentProfile, error: profileError } = await supabaseClient
+      .from('student_profiles')
       .select('full_name, jlpt_level')
       .eq('id', userId)
-      .single();
+      .maybeSingle();
     if (profileError) throw profileError;
 
-    if (nameEl) nameEl.textContent = profile?.full_name || currentUser?.email || '(chưa có tên)';
-    if (levelEl) levelEl.textContent = profile?.jlpt_level ? `Level ${profile.jlpt_level}` : 'Chưa có level';
+    if (nameEl) nameEl.textContent = studentProfile?.full_name || currentUser?.email || '(chưa có tên)';
+    if (levelEl) levelEl.textContent = studentProfile?.jlpt_level ? `Level ${studentProfile.jlpt_level}` : 'Chưa có level';
 
-    await loadStudentDetail(userId, false, profile?.jlpt_level || null);
+    await loadStudentDetail(userId, false, studentProfile?.jlpt_level || null);
   } catch (err) {
     console.error('Lỗi tải Dashboard:', err);
     if (fractionEl) fractionEl.textContent = '❌ Lỗi tải dữ liệu';
