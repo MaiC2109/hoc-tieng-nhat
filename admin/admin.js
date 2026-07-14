@@ -12,6 +12,7 @@ const ADMIN_CONFIG = {
   supabaseAnonKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh6ZWNkcG5tZWdmd2J4aW1ncWx2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMyMTEwNTEsImV4cCI6MjA5ODc4NzA1MX0.esdOJo7gvQXLJjG94PUQ_rghTfGCAAaYzdP3l-j3u-s",
   vocabTable: "vocabulary",
   profilesTable: "profiles",
+  studentProfilesTable: "student_profiles",
   // Bảng lưu tiến độ SRS theo từng học viên: unique(user_id, vocab_id),
   // có cột due_date để tính "Cần ôn hôm nay" (due_date <= hôm nay)
   srsProgressTable: "vocab_srs_progress"
@@ -1384,20 +1385,39 @@ async function loadStudentAdminList() {
   }
 
   try {
-    const { data: rows, error } = await supabaseClient
-      .from(ADMIN_CONFIG.profilesTable)
-      .select('id, full_name, jlpt_level')
-      .order('full_name', { ascending: true });
+    // student_profiles.id có FK trỏ tới auth.users.id (không trỏ tới
+    // profiles.id), nên PostgREST KHÔNG nhận diện được quan hệ profiles <->
+    // student_profiles để dùng cú pháp embed join. Query 2 bảng riêng rồi
+    // merge bằng JS theo id (giá trị UUID giống nhau vì cùng là auth.users.id).
+    const [profilesRes, studentProfilesRes] = await Promise.all([
+      supabaseClient.from(ADMIN_CONFIG.profilesTable).select('id, email'),
+      supabaseClient.from(ADMIN_CONFIG.studentProfilesTable).select('id, full_name, jlpt_level, is_active')
+    ]);
 
-    if (error) throw error;
+    if (profilesRes.error) throw profilesRes.error;
+    if (studentProfilesRes.error) throw studentProfilesRes.error;
 
-    studentAdminState.currentRows = rows;
+    const studentProfileMap = new Map(studentProfilesRes.data.map(sp => [sp.id, sp]));
+
+    const flatRows = profilesRes.data.map(r => {
+      const sp = studentProfileMap.get(r.id);
+      return {
+        id: r.id,
+        email: r.email,
+        full_name: sp?.full_name || '',
+        jlpt_level: sp?.jlpt_level || ''
+      };
+    });
+
+    flatRows.sort((a, b) => (a.full_name || a.email || '').localeCompare(b.full_name || b.email || '', 'vi'));
+
+    studentAdminState.currentRows = flatRows;
 
     // Tổng số từ vựng — dùng làm mẫu số mặc định (định nghĩa "đã học" hiện
     // tại giống module Vocab: 1 dòng trong vocab_srs_progress = đã học/ôn
     // ít nhất 1 lần, không phân biệt theo cấp độ ở view danh sách này).
     const totalVocab = await fetchTableCount(ADMIN_CONFIG.vocabTable) || 0;
-    await Promise.all(rows.map(async (r) => {
+    await Promise.all(flatRows.map(async (r) => {
       try {
         r._learnedCount = await countStudentLearnedVocab(r.id);
       } catch (err) {
@@ -1407,7 +1427,7 @@ async function loadStudentAdminList() {
     }));
     studentAdminState._totalVocab = totalVocab;
 
-    renderStudentAdminTable(rows);
+    renderStudentAdminTable(flatRows);
   } catch (err) {
     console.error('Lỗi tải danh sách học viên:', err);
     if (tbody) {
@@ -1577,9 +1597,10 @@ function closeStudentForm() {
   document.getElementById('student-form-panel').style.display = 'none';
 }
 
-// Update trực tiếp vào bảng profiles theo email nhập trong form — KHÔNG
-// tạo tài khoản mới. Nếu data trả về rỗng (không có dòng nào khớp email)
-// nghĩa là tài khoản chưa tồn tại -> báo lỗi rõ ràng, không âm thầm tạo mới.
+// 1) Tìm id tài khoản theo email trong bảng profiles (id = auth.users.id).
+//    Nếu không có -> báo lỗi rõ ràng, KHÔNG tạo tài khoản mới.
+// 2) Upsert (không phải update) vào student_profiles theo id đó, vì bảng
+//    này đang trống — user có thể chưa từng có dòng nào trong đó.
 async function submitStudentInfo(e) {
   e.preventDefault();
 
@@ -1601,18 +1622,25 @@ async function submitStudentInfo(e) {
   submitBtn.innerHTML = 'Đang lưu...';
 
   try {
-    const { data, error } = await supabaseClient
+    const { data: profileRows, error: findError } = await supabaseClient
       .from(ADMIN_CONFIG.profilesTable)
-      .update({ full_name: fullName, jlpt_level: jlptLevel })
-      .eq('email', email)
-      .select();
+      .select('id')
+      .eq('email', email);
 
-    if (error) throw error;
+    if (findError) throw findError;
 
-    if (!data || data.length === 0) {
+    if (!profileRows || profileRows.length === 0) {
       errorEl.textContent = 'Không tìm thấy tài khoản với email này — hãy tạo tài khoản trước trong Supabase Dashboard (Authentication → Users).';
       return;
     }
+
+    const userId = profileRows[0].id;
+
+    const { error: upsertError } = await supabaseClient
+      .from(ADMIN_CONFIG.studentProfilesTable)
+      .upsert({ id: userId, full_name: fullName, jlpt_level: jlptLevel }, { onConflict: 'id' });
+
+    if (upsertError) throw upsertError;
 
     closeStudentForm();
     await loadStudentAdminList();
