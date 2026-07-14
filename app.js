@@ -153,19 +153,12 @@ function logDeviceVisit() {
 }
 
 // 2. Cấu hình — tập trung toàn bộ thông tin kết nối tại đây
-// ⚠️ FILE NÀY DÀNH CHO MÔI TRƯỜNG TEST/STAGING — trỏ vào Supabase project
-// Test (hzecdpnmegfwbximgqlv), KHÔNG PHẢI Production. Khi merge/deploy lên
-// Production, nhớ đổi lại supabaseUrl/supabaseAnonKey (và các URL REST bên
-// dưới) sang project Production (zlblylqosqwnhudeivpt).
 const STUDENT_CONFIG = {
-  // Supabase (Test/Staging)
-  supabaseUrl: "https://hzecdpnmegfwbximgqlv.supabase.co",
-  supabaseAnonKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh6ZWNkcG5tZWdmd2J4aW1ncWx2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMyMTEwNTEsImV4cCI6MjA5ODc4NzA1MX0.esdOJo7gvQXLJjG94PUQ_rghTfGCAAaYzdP3l-j3u-s",
-  // URL đầy đủ đến bảng vocabulary trong Supabase
-  vocabUrl: "https://hzecdpnmegfwbximgqlv.supabase.co/rest/v1/vocabulary?order=id.asc",
-  // URL đến bảng device_logs
-  deviceLogUrl: "https://hzecdpnmegfwbximgqlv.supabase.co/rest/v1/device_logs",
-  // Google Script (giữ lại để ghi điểm quiz nếu vẫn dùng) — không liên quan Supabase env
+  // Supabase (Production)
+  supabaseUrl: "https://zlblylqosqwnhudeivpt.supabase.co",
+  supabaseAnonKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpsYmx5bHFvc3F3bmh1ZGVpdnB0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI1Mzk0NjUsImV4cCI6MjA5ODExNTQ2NX0.Xa8FblRuypm_eHMGz8GrCpwloKnzjgjTu8z_1ivS8_4",
+  vocabUrl: "https://zlblylqosqwnhudeivpt.supabase.co/rest/v1/vocabulary?order=id.asc",
+  deviceLogUrl: "https://zlblylqosqwnhudeivpt.supabase.co/rest/v1/device_logs",
   googleScriptUrl: "https://script.google.com/macros/s/AKfycbzwmTFWowwaAVQ-ZLmk3cveLH8l9Bi7rJZk6TDE2ikNnjlwB36Rn0a5An0PgmQu1Rag2w/exec"
 };
 
@@ -478,6 +471,117 @@ function startUI() {
   }
 }
 // Kích hoạt khi trang web tải xong
+// ============================================================
+//  DASHBOARD HỌC VIÊN — tự xem tiến độ (% Vocab đã học, số từ cần
+//  ôn hôm nay). Logic tính toán copy/refactor nguyên từ admin/admin.js
+//  (loadStudentDetail, countStudentLearnedVocab, countStudentDueToday,
+//  countVocabByLevel) để đảm bảo cùng 1 định nghĩa "đã học"/"đến hạn"
+//  giữa Admin xem và học viên tự xem — không viết lại logic từ đầu.
+//  Render vào đúng #student-progress-view (dùng chung markup/CSS với
+//  Admin, xem admin.css + index.html section #section-dashboard).
+// ============================================================
+
+// Đếm số từ vựng học viên đã có trong vocab_srs_progress (đã học/ôn ít
+// nhất 1 lần — unique(user_id, vocab_id) nên không đếm trùng).
+async function countStudentLearnedVocab(userId) {
+  const { count, error } = await supabaseClient
+    .from('vocab_srs_progress')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', userId);
+
+  if (error) throw error;
+  return count || 0;
+}
+
+// Đếm số từ đã đến hạn ôn hôm nay (due_date <= hôm nay) cho 1 học viên.
+async function countStudentDueToday(userId) {
+  const today = new Date().toISOString().split('T')[0];
+  const { count, error } = await supabaseClient
+    .from('vocab_srs_progress')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .lte('due_date', today);
+
+  if (error) throw error;
+  return count || 0;
+}
+
+// Tổng số từ vựng — dùng vocabularyData đã load sẵn trong state (initApp)
+// thay vì gọi lại Supabase, vì phía học viên đã có toàn bộ dữ liệu này rồi.
+// Nếu có jlptLevel và vocabularyData có cột level thì lọc theo level, nếu
+// không thì fallback về tổng toàn bộ (giữ đúng logic countVocabByLevel bên admin.js).
+function countVocabByLevelLocal(jlptLevel) {
+  if (typeof window.vocabularyData === 'undefined') return 0;
+  if (!jlptLevel) return window.vocabularyData.length;
+
+  const hasLevelField = window.vocabularyData.some(w => w.level !== undefined);
+  if (!hasLevelField) return window.vocabularyData.length;
+
+  return window.vocabularyData.filter(w => w.level === jlptLevel).length;
+}
+
+// Dùng chung với Admin (admin/admin.js): isAdminView=false khi học viên tự
+// xem — Phase 1 chưa có phần UI nào cần ẩn/hiện riêng, nhưng giữ tham số
+// này để chuẩn bị Phase 3 (vd nút "hẹn lịch test lại" chỉ hiện ở Admin).
+async function loadStudentDetail(userId, isAdminView = true, jlptLevel = null) {
+  const totalVocab = countVocabByLevelLocal(jlptLevel);
+
+  const [learnedCount, dueToday] = await Promise.all([
+    countStudentLearnedVocab(userId),
+    countStudentDueToday(userId)
+  ]);
+
+  // Render vào #student-progress-view — cùng id với bản Admin nên UI tái
+  // sử dụng được nguyên vẹn dù isAdminView là true hay false.
+  const pct = totalVocab > 0 ? Math.round((learnedCount / totalVocab) * 100) : 0;
+  const fractionEl = document.getElementById('sp-vocab-fraction');
+  const fillEl = document.getElementById('sp-vocab-progress-fill');
+  const dueEl = document.getElementById('sp-due-today');
+  if (fractionEl) fractionEl.textContent = `${learnedCount}/${totalVocab}`;
+  if (fillEl) fillEl.style.width = `${pct}%`;
+  if (dueEl) dueEl.textContent = dueToday;
+
+  return { totalVocab, learnedCount, dueToday };
+}
+
+// Mở trang #dashboard — lấy userId từ session hiện tại (supabase.auth.getUser())
+// thay vì Admin chọn tay, rồi gọi loadStudentDetail(userId, false).
+async function openDashboard() {
+  switchMainSection('dashboard'); // chuyển panel + active đúng nút nav nhờ data-section="dashboard"
+
+  const nameEl = document.getElementById('sp-student-name');
+  const levelEl = document.getElementById('sp-student-level');
+  const fractionEl = document.getElementById('sp-vocab-fraction');
+  const dueEl = document.getElementById('sp-due-today');
+
+  if (fractionEl) fractionEl.textContent = 'Đang tải...';
+  if (dueEl) dueEl.textContent = '—';
+
+  try {
+    const { data: userData, error: userError } = await supabaseClient.auth.getUser();
+    if (userError) throw userError;
+
+    const userId = userData?.user?.id;
+    if (!userId) throw new Error('Không tìm thấy phiên đăng nhập hiện tại.');
+
+    // Lấy full_name/jlpt_level từ bảng profiles để hiện header + lọc vocab theo level.
+    const { data: profile, error: profileError } = await supabaseClient
+      .from('profiles')
+      .select('full_name, jlpt_level')
+      .eq('id', userId)
+      .single();
+    if (profileError) throw profileError;
+
+    if (nameEl) nameEl.textContent = profile?.full_name || currentUser?.email || '(chưa có tên)';
+    if (levelEl) levelEl.textContent = profile?.jlpt_level ? `Level ${profile.jlpt_level}` : 'Chưa có level';
+
+    await loadStudentDetail(userId, false, profile?.jlpt_level || null);
+  } catch (err) {
+    console.error('Lỗi tải Dashboard:', err);
+    if (fractionEl) fractionEl.textContent = '❌ Lỗi tải dữ liệu';
+  }
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   logDeviceVisit(); // ghi nhận thiết bị mỗi lần học viên mở app — không chặn luồng chính
   initLoginForm();  // gắn sự kiện submit cho form đăng nhập
@@ -495,6 +599,15 @@ function switchMainSection(sectionId) {
 }
 
 function s(v) { return (v !== undefined && v !== null && v !== '') ? String(v) : '—'; }
+
+// Từ chỉ có Kana (không có Kanji) sẽ có w.kanji là null/undefined/'' hoặc '—'
+// Dùng hàm này thay vì so sánh trực tiếp `w.kanji !== '—'` để tránh hiển thị "null".
+function hasKanji(w) {
+  return !!(w && w.kanji && w.kanji !== '—');
+}
+function displayKanjiOrKana(w) {
+  return hasKanji(w) ? w.kanji : w.kana;
+}
 
 function escAttr(v) {
   return String(v === undefined || v === null ? '' : v)
@@ -787,23 +900,36 @@ function buildWorkspacePanels(partKey, activeTab) {
 
 function stopAllAudio() {
   state.isAutoplay = false;
+  // Tăng token để "vô hiệu hóa" mọi callback (onended/onerror/setTimeout) của
+  // audio cũ đang bay lơ lửng — tránh việc chúng vẫn chạy tiếp sau khi đã stop.
+  state.autoplayToken = (state.autoplayToken || 0) + 1;
   document.querySelectorAll("[id^='btn-autoplay-']").forEach(b => b.textContent = '▶ Autoplay Audio');
   document.querySelectorAll('.word-table tbody tr').forEach(r => r.classList.remove('playing'));
+  stopCurrentAudio();
+}
+
+// Dừng hẳn audio hiện tại: pause + gỡ toàn bộ handler + clear src, để tránh
+// tình trạng audio cũ vẫn tiếp tục tải/phát ngầm và bắn onended muộn sau khi
+// track kế tiếp đã bắt đầu (nguyên nhân gây phát đè / nhảy cóc bài).
+function stopCurrentAudio() {
   if (state.currentAudio) {
+    state.currentAudio.onended = null;
+    state.currentAudio.onerror = null;
     state.currentAudio.pause();
+    state.currentAudio.src = '';
     state.currentAudio = null;
   }
 }
 
 function playSingleAudio(wordId, path, partKey) {
   if (state.isAutoplay) stopAllAudio();
-  
+
   document.querySelectorAll('.word-table tbody tr').forEach(r => r.classList.remove('playing'));
   const row = document.getElementById(`row-${partKey}-${wordId}`);
   if (row) row.classList.add('playing');
 
-  if (state.currentAudio) state.currentAudio.pause();
-  
+  stopCurrentAudio();
+
   state.currentAudio = new Audio(path);
   state.currentAudio.onended = () => { if (row) row.classList.remove('playing'); };
   state.currentAudio.onerror = () => { if (row) row.classList.remove('playing'); };
@@ -812,9 +938,10 @@ function playSingleAudio(wordId, path, partKey) {
 
 function toggleAutoplay(partKey) {
   if (state.isAutoplay) { stopAllAudio(); return; }
-  if (state.currentAudio) state.currentAudio.pause();
-  
+  stopCurrentAudio();
+
   state.isAutoplay = true;
+  state.autoplayToken = (state.autoplayToken || 0) + 1;
   const btn = document.getElementById(`btn-autoplay-${partKey}`);
   if (btn) btn.textContent = '⏹ Stop Autoplay';
 
@@ -824,11 +951,16 @@ function toggleAutoplay(partKey) {
   state.playlist = words.map(w => ({ id: w.id, path: buildAudioPath(w) }));
   state.playlistIndex = 0;
   
-  runAutoplayCycle(partKey);
+  runAutoplayCycle(partKey, state.autoplayToken);
 }
 
-function runAutoplayCycle(partKey) {
-  if (!state.isAutoplay || state.playlistIndex >= state.playlist.length) { stopAllAudio(); return; }
+function runAutoplayCycle(partKey, token) {
+  // Nếu đã stop hoặc một chu kỳ autoplay mới khác đã bắt đầu (token đổi),
+  // bỏ qua ngay — đây là chốt chặn chính chống việc 2 audio chạy song song.
+  if (!state.isAutoplay || token !== state.autoplayToken || state.playlistIndex >= state.playlist.length) {
+    stopAllAudio();
+    return;
+  }
 
   document.querySelectorAll('.word-table tbody tr').forEach(r => r.classList.remove('playing'));
   const targetItem = state.playlist[state.playlistIndex];
@@ -838,21 +970,54 @@ function runAutoplayCycle(partKey) {
     row.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
 
+  // Dừng dứt điểm audio của track trước khi tạo audio mới cho track tiếp theo.
+  stopCurrentAudio();
+
   state.currentAudio = new Audio(targetItem.path);
-  state.currentAudio.onended = () => {
+
+  // An toàn: một số trình duyệt không bắn 'error' đáng tin cậy khi file audio
+  // không tồn tại (404) — audio "treo" im lặng mãi mãi, không phát cũng không
+  // báo lỗi, khiến autoplay bị đứng lại ở đúng từ đó thay vì đi tiếp.
+  //
+  // Thay vì dùng 1 mốc thời gian cố định (sẽ cắt ngang các file dài hơn mốc
+  // đó), ta theo dõi "có tiến triển hay không": mỗi khi trình duyệt xác nhận
+  // đã load được audio (loadedmetadata/canplay) hoặc đang thực sự phát tiến
+  // (timeupdate), ta reset lại đồng hồ đếm ngược. Track chỉ bị coi là "treo"
+  // và tự động bỏ qua khi KHÔNG có bất kỳ tiến triển nào trong suốt một
+  // khoảng thời gian — tức file thực sự lỗi/không tồn tại — nên file audio
+  // dài bao nhiêu cũng luôn được phát trọn vẹn.
+  const STALL_LIMIT_MS = 6000;
+  let advanced = false;
+  let watchdog = null;
+
+  const clearWatchdog = () => { if (watchdog) { clearTimeout(watchdog); watchdog = null; } };
+  const resetWatchdog = () => {
+    clearWatchdog();
+    watchdog = setTimeout(advanceOnce, STALL_LIMIT_MS);
+  };
+
+  function advanceOnce() {
+    if (advanced || token !== state.autoplayToken) return;
+    advanced = true;
+    clearWatchdog();
     if (row) row.classList.remove('playing');
     state.playlistIndex++;
-    setTimeout(() => runAutoplayCycle(partKey), 800);
-  };
-  state.currentAudio.onerror = () => {
-    if (row) row.classList.remove('playing');
-    state.playlistIndex++;
-    runAutoplayCycle(partKey);
-  };
-  state.currentAudio.play().catch(() => {
-    state.playlistIndex++;
-    runAutoplayCycle(partKey);
-  });
+    setTimeout(() => runAutoplayCycle(partKey, token), 400);
+  }
+
+  resetWatchdog();
+
+  state.currentAudio.onended = advanceOnce;
+  state.currentAudio.onerror = advanceOnce;
+  state.currentAudio.onabort = advanceOnce;
+
+  // Có tiến triển thật sự -> reset đồng hồ, không cắt ngang track đang phát
+  state.currentAudio.onloadedmetadata = resetWatchdog;
+  state.currentAudio.oncanplay = resetWatchdog;
+  state.currentAudio.ontimeupdate = resetWatchdog;
+  state.currentAudio.onplaying = resetWatchdog;
+
+  state.currentAudio.play().catch(advanceOnce);
 }
 
 function initFlashcardEngine(partKey) {
@@ -956,7 +1121,7 @@ function renderFlashcardReport(partKey) {
 
   let listItemsHtml = fState.notYetList.map(w => `
     <div class="notyet-item">
-      <span><strong>${w.kanji !== '—' ? w.kanji : w.kana}</strong> (${w.kana})</span>
+      <span><strong>${displayKanjiOrKana(w)}</strong>${hasKanji(w) ? ` (${w.kana})` : ''}</span>
       <span style="color:var(--vermillion); text-align:right;">${w.meaning}</span>
     </div>
   `).join('');
@@ -997,8 +1162,14 @@ function changeQuizMode(partKey, newMode) {
 
 function initQuizEngine(partKey, mode = 'k2m') {
   const [u, p] = partKey.split('_');
-  const words = _shuffle(getWords(u, p)); 
-  
+  let words = _shuffle(getWords(u, p));
+
+  // Kanji ➔ Meaning: ẩn các từ chỉ có Kana (không có Kanji) vì không phù hợp
+  // với dạng câu hỏi này (tránh hiển thị "null"/kana thay Kanji).
+  if (mode === 'k2m') {
+    words = words.filter(w => hasKanji(w));
+  }
+
   state.quizState[partKey] = {
     index: 0,
     score: 0,
@@ -1013,18 +1184,18 @@ function initQuizEngine(partKey, mode = 'k2m') {
         case 'f2k':
           questionMain = w.kana;
           questionSub = w.meaning;
-          correctAnswer = w.kanji !== '—' ? w.kanji : w.kana;
-          optionPool = vocabularyData.map(item => item.kanji !== '—' ? item.kanji : item.kana);
+          correctAnswer = displayKanjiOrKana(w);
+          optionPool = vocabularyData.map(item => displayKanjiOrKana(item));
           break;
         case 'm2k':
           questionMain = w.meaning;
           questionSub = `(${w.hanviet})`;
-          correctAnswer = w.kanji !== '—' ? w.kanji : w.kana;
-          optionPool = vocabularyData.map(item => item.kanji !== '—' ? item.kanji : item.kana);
+          correctAnswer = displayKanjiOrKana(w);
+          optionPool = vocabularyData.map(item => displayKanjiOrKana(item));
           break;
         case 'k2m':
         default:
-          questionMain = w.kanji !== '—' ? w.kanji : w.kana;
+          questionMain = w.kanji;
           questionSub = w.kana;
           correctAnswer = w.meaning;
           optionPool = vocabularyData.map(item => item.meaning);
@@ -1371,7 +1542,7 @@ function renderReviewReport() {
 
   let listItemsHtml = rState.notYetList.map(w => `
     <div class="notyet-item">
-      <span><strong>${w.kanji !== '—' ? w.kanji : w.kana}</strong> (${w.kana})</span>
+      <span><strong>${displayKanjiOrKana(w)}</strong>${hasKanji(w) ? ` (${w.kana})` : ''}</span>
       <span style="color:var(--vermillion); text-align:right;">${w.meaning}</span>
     </div>
   `).join('');
