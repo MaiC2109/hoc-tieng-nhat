@@ -12,210 +12,63 @@ const state = {
 };
 
 // ============================================================
-//  SPACED REPETITION MODULE (SM-2 rút gọn, lưu Supabase)
-//  Bảng: vocab_srs_progress
-//    (user_id, vocab_id, ease_factor, interval_days, due_date, last_reviewed_at)
-//  Công thức tính interval GIỮ NGUYÊN như bản localStorage cũ:
-//    - ease_factor cột này được tái sử dụng để lưu "reps" (số lần đã ôn
-//      đúng liên tiếp) — không đổi logic tính, chỉ đổi nơi lưu.
-//    - interval_days = SR_STEPS_DAYS[reps] (3 bước đầu) rồi nhân
-//      SR_GROWTH_FACTOR cho các lần sau, y hệt bản cũ.
-//  Toàn bộ state SRS được cache trong bộ nhớ (biến JS, KHÔNG dùng
-//  localStorage/sessionStorage) sau khi tải 1 lần từ Supabase lúc app khởi động.
+//  SPACED REPETITION MODULE (SM-2 rút gọn, lưu localStorage)
+//  Key lưu: 'sr_vocab' -> { [wordId]: { interval, reps, dueDate } }
 // ============================================================
+const SR_STORAGE_KEY = 'sr_vocab';
 const SR_STEPS_DAYS = [1, 3, 7]; // 3 lần ôn đầu cố định, sau đó nhân hệ số
 const SR_GROWTH_FACTOR = 2.2;
-const SR_TABLE = 'vocab_srs_progress';
-
-// Cache trong bộ nhớ (thay cho localStorage): { [vocabId]: { interval, reps, dueDate } }
-// Nạp 1 lần từ Supabase khi có user đăng nhập (srLoadFromSupabase), sau đó
-// mọi hàm đọc (srGetDueWords, srCountDueWords...) dùng cache này cho nhanh,
-// mọi hàm ghi (srMarkWordsAsLearned, srUpdateWordState) update cache + upsert Supabase song song.
-state.srCache = {};
-state.srUserId = null; // set bởi srInit() sau khi lấy được user hiện tại
 
 function _srToday() {
   return new Date().toISOString().split('T')[0]; // 'YYYY-MM-DD'
 }
 
-// Lấy Supabase client dùng chung cho toàn app. Ưu tiên window.supabaseClient
-// nếu đã được khởi tạo sẵn (vd trong 1 file auth.js riêng); nếu chưa có,
-// tự khởi tạo bằng SDK supabase-js (yêu cầu thẻ <script> CDN @supabase/supabase-js
-// đã có trong index.html, giống cách admin.js đang làm).
-function _srGetClient() {
-  if (window.supabaseClient) return window.supabaseClient;
-  if (window.supabase && window.supabase.createClient) {
-    window.supabaseClient = window.supabase.createClient(
-      STUDENT_CONFIG.supabaseUrl,
-      STUDENT_CONFIG.supabaseAnonKey
-    );
-    return window.supabaseClient;
+function _srGetAll() {
+  try {
+    return JSON.parse(localStorage.getItem(SR_STORAGE_KEY) || '{}');
+  } catch (e) {
+    console.error('Lỗi đọc sr_vocab:', e);
+    return {};
   }
-  return null;
 }
 
-// Khởi tạo module SRS: lấy user hiện tại, chạy migrate 1 lần nếu cần,
-// rồi nạp toàn bộ tiến độ SRS của user đó vào cache bộ nhớ.
-// Gọi hàm này sau khi học viên đăng nhập thành công (vd cuối luồng auth,
-// trước hoặc trong startUI()).
-async function srInit() {
-  const client = _srGetClient();
-  if (!client) {
-    console.error('Chưa có Supabase client cho SRS (thiếu SDK hoặc chưa đăng nhập).');
-    return;
-  }
-
-  try {
-    const { data: { user }, error } = await client.auth.getUser();
-    if (error || !user) {
-      console.error('SRS: chưa có user đăng nhập, bỏ qua khởi tạo.', error);
-      return;
-    }
-    state.srUserId = user.id;
-
-    // Migrate 1 lần duy nhất từ localStorage cũ (nếu còn) sang Supabase
-    await migrateSrsFromLocalStorage(client, user.id);
-
-    // Nạp toàn bộ tiến độ hiện có của user vào cache bộ nhớ
-    await srLoadFromSupabase(client, user.id);
-  } catch (e) {
-    console.error('Lỗi khởi tạo SRS:', e);
-  }
-
-  updateReviewBadge();
-}
-
-// Nạp toàn bộ dòng vocab_srs_progress của user vào state.srCache
-async function srLoadFromSupabase(client, userId) {
-  const { data, error } = await client
-    .from(SR_TABLE)
-    .select('vocab_id, ease_factor, interval_days, due_date, last_reviewed_at')
-    .eq('user_id', userId);
-
-  if (error) {
-    console.error('Lỗi tải vocab_srs_progress:', error);
-    return;
-  }
-
-  const cache = {};
-  (data || []).forEach(row => {
-    cache[String(row.vocab_id)] = {
-      interval: row.interval_days,
-      reps: row.ease_factor, // cột ease_factor được tái sử dụng để lưu "reps", xem ghi chú đầu file
-      dueDate: row.due_date,
-      lastReviewedAt: row.last_reviewed_at
-    };
-  });
-  state.srCache = cache;
-}
-
-// Migrate dữ liệu SRS cũ từ localStorage ('sr_vocab') sang Supabase — chỉ
-// chạy 1 lần cho mỗi trình duyệt (đánh dấu bằng localStorage 'srs_migrated').
-// Sau khi migrate xong (hoặc không có gì để migrate), set cờ 'srs_migrated'
-// rồi xóa hẳn key 'sr_vocab' cũ — từ đây trở đi module SRS không đọc/ghi
-// localStorage cho dữ liệu SRS nữa.
-async function migrateSrsFromLocalStorage(client, userId) {
-  if (localStorage.getItem('srs_migrated') === 'true') return;
-
-  let legacyData = {};
-  try {
-    legacyData = JSON.parse(localStorage.getItem('sr_vocab') || '{}');
-  } catch (e) {
-    console.error('Lỗi đọc dữ liệu sr_vocab cũ khi migrate:', e);
-    legacyData = {};
-  }
-
-  const wordIds = Object.keys(legacyData);
-  if (wordIds.length === 0) {
-    localStorage.setItem('srs_migrated', 'true');
-    localStorage.removeItem('sr_vocab');
-    return;
-  }
-
-  const rows = wordIds.map(id => {
-    const st = legacyData[id];
-    return {
-      user_id: userId,
-      vocab_id: Number(id),
-      ease_factor: st.reps || 0,       // tái sử dụng cột này để lưu "reps", xem ghi chú đầu file
-      interval_days: st.interval || 1,
-      due_date: st.dueDate || _srToday(),
-      last_reviewed_at: new Date().toISOString()
-    };
-  });
-
-  try {
-    const { error } = await client
-      .from(SR_TABLE)
-      .upsert(rows, { onConflict: 'user_id,vocab_id' });
-
-    if (error) {
-      console.error('Lỗi migrate SRS lên Supabase:', error);
-      return; // không đánh dấu đã migrate nếu upsert thất bại, để lần sau thử lại
-    }
-
-    localStorage.setItem('srs_migrated', 'true');
-    localStorage.removeItem('sr_vocab');
-    console.log(`✅ Đã migrate ${rows.length} từ SRS từ localStorage lên Supabase.`);
-  } catch (e) {
-    console.error('Lỗi migrate SRS lên Supabase:', e);
-  }
+function _srSaveAll(data) {
+  localStorage.setItem(SR_STORAGE_KEY, JSON.stringify(data));
 }
 
 // Đánh dấu một danh sách từ (vd: cả 1 Part) là "đã học lần đầu",
-// chỉ áp dụng cho những từ CHƯA có tiến độ trong cache — không ghi đè từ đã có lịch sử ôn.
-async function srMarkWordsAsLearned(words) {
-  const client = _srGetClient();
-  if (!client || !state.srUserId) return;
-
-  const newRows = [];
+// chỉ áp dụng cho những từ CHƯA có trong sr_vocab — không ghi đè từ đã có lịch sử ôn.
+function srMarkWordsAsLearned(words) {
+  const data = _srGetAll();
+  let changed = false;
   words.forEach(w => {
     const id = String(w.id);
-    if (!state.srCache[id]) {
+    if (!data[id]) {
       const due = new Date();
       due.setDate(due.getDate() + SR_STEPS_DAYS[0]); // ôn lại sau 1 ngày
-      const dueDateStr = due.toISOString().split('T')[0];
-      const nowIso = new Date().toISOString();
-
-      state.srCache[id] = { interval: SR_STEPS_DAYS[0], reps: 0, dueDate: dueDateStr, lastReviewedAt: nowIso };
-      newRows.push({
-        user_id: state.srUserId,
-        vocab_id: w.id,
-        ease_factor: 0,
-        interval_days: SR_STEPS_DAYS[0],
-        due_date: dueDateStr,
-        last_reviewed_at: nowIso
-      });
+      data[id] = { interval: SR_STEPS_DAYS[0], reps: 0, dueDate: due.toISOString().split('T')[0] };
+      changed = true;
     }
   });
-
-  if (newRows.length === 0) return;
-
-  try {
-    const { error } = await client
-      .from(SR_TABLE)
-      .upsert(newRows, { onConflict: 'user_id,vocab_id' });
-    if (error) console.error('Lỗi lưu srMarkWordsAsLearned lên Supabase:', error);
-  } catch (e) {
-    console.error('Lỗi lưu srMarkWordsAsLearned lên Supabase:', e);
-  }
+  if (changed) _srSaveAll(data);
 }
 
 // Cập nhật trạng thái ôn tập của 1 từ sau khi học viên trả lời (Đã thuộc / Chưa thuộc)
-// Logic interval GIỮ NGUYÊN như bản cũ:
+// Logic interval:
 //   Lần học đầu tiên (srMarkWordsAsLearned): interval=1, reps=0, dueDate=ngày mai
 //   Tick Remember lần 1 (reps=0 → 1): interval = SR_STEPS_DAYS[1] = 3 ngày
 //   Tick Remember lần 2 (reps=1 → 2): interval = SR_STEPS_DAYS[2] = 7 ngày
 //   Tick Remember lần 3+ (reps≥2)   : interval *= SR_GROWTH_FACTOR
 //   Tick Not Yet bất kỳ lúc nào     : interval reset về 1 ngày
-async function srUpdateWordState(wordId, isCorrect) {
-  const client = _srGetClient();
-  if (!client || !state.srUserId) return;
-
+function srUpdateWordState(wordId, isCorrect) {
+  const data = _srGetAll();
   const id = String(wordId);
-  const st = state.srCache[id] || { interval: 0, reps: 0 };
+  const st = data[id] || { interval: 0, reps: 0 };
 
   if (isCorrect) {
+    // reps hiện tại đã là "số lần đã ôn đúng từ trước" — dùng làm chỉ số cho bước KẾ TIẾP
+    // SR_STEPS_DAYS[0]=1 là interval của lần học đầu (set bởi srMarkWordsAsLearned),
+    // nên lần đúng đầu tiên cần nhảy lên SR_STEPS_DAYS[1]=3, tức index = reps + 1
     const nextIndex = st.reps + 1;
     st.interval = nextIndex < SR_STEPS_DAYS.length
       ? SR_STEPS_DAYS[nextIndex]
@@ -229,38 +82,19 @@ async function srUpdateWordState(wordId, isCorrect) {
   const due = new Date();
   due.setDate(due.getDate() + st.interval);
   st.dueDate = due.toISOString().split('T')[0];
-  st.lastReviewedAt = new Date().toISOString();
 
-  // Cập nhật cache bộ nhớ ngay lập tức (UI phản hồi tức thì, không chờ network)
-  state.srCache[id] = st;
-
-  // Ghi lên Supabase (upsert theo user_id + vocab_id)
-  try {
-    const { error } = await client
-      .from(SR_TABLE)
-      .upsert({
-        user_id: state.srUserId,
-        vocab_id: Number(wordId),
-        ease_factor: st.reps,
-        interval_days: st.interval,
-        due_date: st.dueDate,
-        last_reviewed_at: st.lastReviewedAt
-      }, { onConflict: 'user_id,vocab_id' });
-
-    if (error) console.error('Lỗi cập nhật vocab_srs_progress:', error);
-  } catch (e) {
-    console.error('Lỗi cập nhật vocab_srs_progress:', e);
-  }
+  data[id] = st;
+  _srSaveAll(data);
 }
 
 // Lấy danh sách từ đến hạn ôn hôm nay, từ toàn bộ vocabularyData đã load
-// (đọc từ cache bộ nhớ, đã được nạp sẵn bởi srInit() -> srLoadFromSupabase())
 function srGetDueWords() {
   if (typeof window.vocabularyData === 'undefined') return [];
+  const data = _srGetAll();
   const today = _srToday();
 
   return window.vocabularyData.filter(w => {
-    const st = state.srCache[String(w.id)];
+    const st = data[String(w.id)];
     if (!st || !st.dueDate) return false; // chưa từng học -> không tính vào "ôn tập"
     return st.dueDate <= today;
   });
@@ -320,9 +154,7 @@ function logDeviceVisit() {
 
 // 2. Cấu hình — tập trung toàn bộ thông tin kết nối tại đây
 const STUDENT_CONFIG = {
-  // ⚠️ TẠM THỜI trỏ sang project TEST (hzecdpnmegfwbximgqlv) để test SRS
-  // vì bảng vocab_srs_progress hiện chỉ mới tạo ở Test. Nhớ đổi lại về
-  // Production (zlblylqosqwnhudeivpt) trước khi deploy thật cho học viên.
+  // Supabase (Production)
   supabaseUrl: "https://hzecdpnmegfwbximgqlv.supabase.co",
   supabaseAnonKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh6ZWNkcG5tZWdmd2J4aW1ncWx2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMyMTEwNTEsImV4cCI6MjA5ODc4NzA1MX0.esdOJo7gvQXLJjG94PUQ_rghTfGCAAaYzdP3l-j3u-s",
   vocabUrl: "https://hzecdpnmegfwbximgqlv.supabase.co/rest/v1/vocabulary?order=id.asc",
@@ -568,62 +400,27 @@ function _srDebugLog(msg) {
 }
 
 // Nút 1: ép toàn bộ từ đã học về due = hôm nay, để vào "Ôn tập" thấy ngay
-// (cập nhật cache bộ nhớ + ghi thẳng lên Supabase, không còn localStorage)
-async function srDebugForceAllDueToday() {
-  const client = _srGetClient();
-  if (!client || !state.srUserId) { _srDebugLog('⚠️ Chưa có user đăng nhập.'); return; }
-
+function srDebugForceAllDueToday() {
+  const data = _srGetAll();
   const today = _srToday();
-  const ids = Object.keys(state.srCache);
-  if (ids.length === 0) { _srDebugLog('(chưa có từ nào trong vocab_srs_progress)'); return; }
-
-  ids.forEach(id => { state.srCache[id].dueDate = today; });
-
-  const rows = ids.map(id => ({
-    user_id: state.srUserId,
-    vocab_id: Number(id),
-    ease_factor: state.srCache[id].reps,
-    interval_days: state.srCache[id].interval,
-    due_date: today,
-    last_reviewed_at: state.srCache[id].lastReviewedAt || new Date().toISOString()
-  }));
-
-  const { error } = await client.from(SR_TABLE).upsert(rows, { onConflict: 'user_id,vocab_id' });
-  if (error) { _srDebugLog(`❌ Lỗi ghi Supabase: ${error.message}`); return; }
-
+  const count = Object.keys(data).length;
+  Object.keys(data).forEach(id => { data[id].dueDate = today; });
+  _srSaveAll(data);
   updateReviewBadge();
-  _srDebugLog(`✅ Đã ép ${ids.length} từ về dueDate = ${today}.\nBấm "Ôn tập hôm nay" trên nav để kiểm tra.`);
+  _srDebugLog(`✅ Đã ép ${count} từ về dueDate = ${today}.\nBấm "Ôn tập hôm nay" trên nav để kiểm tra.`);
 }
 
 // Nút 2: giả lập N ngày trôi qua (đẩy lùi dueDate của toàn bộ từ về quá khứ)
-async function srDebugSimulateDaysPassed() {
-  const client = _srGetClient();
-  if (!client || !state.srUserId) { _srDebugLog('⚠️ Chưa có user đăng nhập.'); return; }
-
+function srDebugSimulateDaysPassed() {
   const n = parseInt(prompt('Giả lập đã trôi qua bao nhiêu ngày?', '7'), 10);
   if (isNaN(n)) return;
-
-  const ids = Object.keys(state.srCache);
-  if (ids.length === 0) { _srDebugLog('(chưa có từ nào trong vocab_srs_progress)'); return; }
-
-  const rows = ids.map(id => {
-    const d = new Date(state.srCache[id].dueDate);
+  const data = _srGetAll();
+  Object.keys(data).forEach(id => {
+    const d = new Date(data[id].dueDate);
     d.setDate(d.getDate() - n);
-    const newDue = d.toISOString().split('T')[0];
-    state.srCache[id].dueDate = newDue;
-    return {
-      user_id: state.srUserId,
-      vocab_id: Number(id),
-      ease_factor: state.srCache[id].reps,
-      interval_days: state.srCache[id].interval,
-      due_date: newDue,
-      last_reviewed_at: state.srCache[id].lastReviewedAt || new Date().toISOString()
-    };
+    data[id].dueDate = d.toISOString().split('T')[0];
   });
-
-  const { error } = await client.from(SR_TABLE).upsert(rows, { onConflict: 'user_id,vocab_id' });
-  if (error) { _srDebugLog(`❌ Lỗi ghi Supabase: ${error.message}`); return; }
-
+  _srSaveAll(data);
   updateReviewBadge();
   _srDebugLog(`✅ Đã đẩy lùi dueDate của toàn bộ từ về sớm hơn ${n} ngày.\nSố từ đến hạn ngay bây giờ: ${srCountDueWords()}`);
 }
@@ -638,42 +435,33 @@ function srDebugRunFullTest() {
   srRunFullTestSuite();
 }
 
-// Nút 4: xem nhanh dữ liệu hiện có (từ cache bộ nhớ, đã nạp từ Supabase), không cần mở Console
+// Nút 4: xem nhanh dữ liệu hiện có, không cần mở Console
 function srDebugInspect() {
+  const data = _srGetAll();
   const today = _srToday();
-  const lines = Object.entries(state.srCache).map(([id, st]) => {
+  const lines = Object.entries(data).map(([id, st]) => {
     const isDue = st.dueDate <= today ? '🔴 ĐẾN HẠN' : '⚪ chưa';
     return `${id}: interval=${st.interval} reps=${st.reps} due=${st.dueDate} ${isDue}`;
   });
-  _srDebugLog(lines.length ? lines.join('\n') : '(chưa có từ nào trong vocab_srs_progress)');
+  _srDebugLog(lines.length ? lines.join('\n') : '(chưa có từ nào trong sr_vocab)');
 }
 
-// Nút 5: dọn sạch để test lại từ đầu — xóa toàn bộ dòng của user hiện tại
-// trong vocab_srs_progress trên Supabase (không còn localStorage để xóa).
-async function srDebugClearAll() {
-  const client = _srGetClient();
-  if (!client || !state.srUserId) { _srDebugLog('⚠️ Chưa có user đăng nhập.'); return; }
-  if (!confirm('Xóa toàn bộ dữ liệu Spaced Repetition của tài khoản này trên Supabase?')) return;
-
-  const { error } = await client.from(SR_TABLE).delete().eq('user_id', state.srUserId);
-  if (error) { _srDebugLog(`❌ Lỗi xóa Supabase: ${error.message}`); return; }
-
-  state.srCache = {};
+// Nút 5: dọn sạch để test lại từ đầu
+function srDebugClearAll() {
+  if (!confirm('Xóa toàn bộ dữ liệu Spaced Repetition? (chỉ ảnh hưởng máy/trình duyệt này)')) return;
+  localStorage.removeItem(SR_STORAGE_KEY);
   updateReviewBadge();
-  _srDebugLog('🗑️ Đã xóa sạch vocab_srs_progress cho user hiện tại.');
+  _srDebugLog('🗑️ Đã xóa sạch sr_vocab.');
 }
 
 
-async function startUI() {
+function startUI() {
   const units = getUnits();
   if (units.length > 0) {
     state.activeUnit = units[0];
     renderUnitTabs(units);
     renderUnitContent();
     updateGlobalProgress();
-    // Nạp tiến độ SRS từ Supabase (kèm migrate 1 lần từ localStorage cũ nếu còn)
-    // trước khi tính badge, để số từ "đến hạn hôm nay" chính xác ngay từ đầu.
-    await srInit();
     updateReviewBadge(); // hiện số từ cần ôn hôm nay (Spaced Repetition), an toàn nếu badge chưa có trong HTML
     switchMainSection('vocab'); // panel mặc định khi mở app — thay cho class "active" viết cứng trong HTML
     renderDebugPanel(); // chỉ hiện khi URL có ?debug=sr, không ảnh hưởng học viên bình thường
@@ -688,9 +476,8 @@ async function startUI() {
 //  ôn hôm nay). Logic tính toán copy/refactor nguyên từ admin/admin.js
 //  (loadStudentDetail, countStudentLearnedVocab, countStudentDueToday)
 //  để đảm bảo cùng 1 định nghĩa "đã học"/"đến hạn" giữa Admin xem và
-//  học viên tự xem. full_name/jlpt_level nằm ở bảng student_profiles
-//  (nối qua student_profiles.id = profiles.id = auth.users.id), email
-//  nằm ở bảng profiles/lấy trực tiếp từ session (currentUser.email).
+//  học viên tự xem. email/full_name/jlpt_level đều nằm chung trong
+//  bảng profiles (đã gộp, không còn bảng student_profiles riêng).
 //  Render vào #student-progress-view (dùng chung markup/CSS với Admin).
 // ============================================================
 
@@ -769,20 +556,18 @@ async function openDashboard() {
     const userId = userData?.user?.id;
     if (!userId) throw new Error('Không tìm thấy phiên đăng nhập hiện tại.');
 
-    // full_name/jlpt_level nằm ở student_profiles, KHÔNG phải profiles.
-    // student_profiles có thể chưa có dòng cho user này (chưa được Admin
-    // cập nhật hồ sơ) -> dùng maybeSingle() để không lỗi khi rỗng.
-    const { data: studentProfile, error: profileError } = await supabaseClient
-      .from('student_profiles')
+    // profiles đã gộp đủ cột — không cần bảng student_profiles riêng nữa.
+    const { data: profile, error: profileError } = await supabaseClient
+      .from('profiles')
       .select('full_name, jlpt_level')
       .eq('id', userId)
       .maybeSingle();
     if (profileError) throw profileError;
 
-    if (nameEl) nameEl.textContent = studentProfile?.full_name || currentUser?.email || '(chưa có tên)';
-    if (levelEl) levelEl.textContent = studentProfile?.jlpt_level ? `Level ${studentProfile.jlpt_level}` : 'Chưa có level';
+    if (nameEl) nameEl.textContent = profile?.full_name || currentUser?.email || '(chưa có tên)';
+    if (levelEl) levelEl.textContent = profile?.jlpt_level ? `Level ${profile.jlpt_level}` : 'Chưa có level';
 
-    await loadStudentDetail(userId, false, studentProfile?.jlpt_level || null);
+    await loadStudentDetail(userId, false, profile?.jlpt_level || null);
   } catch (err) {
     console.error('Lỗi tải Dashboard:', err);
     if (fractionEl) fractionEl.textContent = '❌ Lỗi tải dữ liệu';
