@@ -59,31 +59,40 @@
 
     <nav class="main-nav">
       <button class="main-nav-btn" data-section="vocab" onclick="switchMainSection('vocab')">
-        <span class="nav-icon">📖</span> Vocab
+        Vocab
       </button>
       <button class="main-nav-btn" data-section="review" onclick="openReviewToday()">
-        <span class="nav-icon">🔁</span> Review
+        Review
         <span id="review-due-badge" class="nav-badge" style="display:none;"></span>
       </button>
-      <button class="main-nav-btn" data-section="dashboard" onclick="openDashboard()">
-        <span class="nav-icon">📊</span> Dashboard
-      </button>
       <button class="main-nav-btn" data-section="grammar" disabled>
-        <span class="nav-icon">✍️</span> Grammar
+        Grammar
         <span class="badge-soon">Soon</span>
       </button>
       <button class="main-nav-btn" data-section="kanji" disabled>
-        <span class="nav-icon">漢</span> Kanji
+        Kanji
         <span class="badge-soon">Soon</span>
       </button>
     </nav>
 
   <div class="header-right">
-  <div class="progress-container">
-    <button id="sync-btn" onclick="syncData()" title="Cập nhật dữ liệu mới">🔄</button>
-    <button id="logout-btn" onclick="logoutUser()" title="Đăng xuất" class="btn btn-outline" style="padding:6px 12px; font-size:12px;">Logout</button>
+    <div class="account-menu" id="account-menu">
+      <button class="main-nav-btn account-menu-trigger" id="account-menu-trigger" onclick="toggleAccountMenu()">
+        Account
+      </button>
+      <div class="account-menu-dropdown" id="account-menu-dropdown" style="display:none;">
+        <button class="account-menu-item" data-section="dashboard" onclick="openDashboard(); closeAccountMenu();">
+          Dashboard
+        </button>
+        <button class="account-menu-item" onclick="syncData(); closeAccountMenu();">
+          Update data
+        </button>
+        <button class="account-menu-item" onclick="logoutUser(); closeAccountMenu();">
+          Logout
+        </button>
+      </div>
+    </div>
   </div>
-</div>
   </header>
 
   <div class="app-body">
@@ -162,5 +171,25 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="app.js"></script>
+<script>
+  // Toggle dropdown "Account" ở góc phải header — logic UI thuần túy,
+  // không liên quan Supabase nên để riêng ở đây thay vì app.js.
+  function toggleAccountMenu() {
+    const dropdown = document.getElementById('account-menu-dropdown');
+    if (!dropdown) return;
+    dropdown.style.display = dropdown.style.display === 'none' ? 'flex' : 'none';
+  }
+
+  function closeAccountMenu() {
+    const dropdown = document.getElementById('account-menu-dropdown');
+    if (dropdown) dropdown.style.display = 'none';
+  }
+
+  // Đóng dropdown khi click ra ngoài
+  document.addEventListener('click', (e) => {
+    const menu = document.getElementById('account-menu');
+    if (menu && !menu.contains(e.target)) closeAccountMenu();
+  });
+</script>
 </body>
 </html>
