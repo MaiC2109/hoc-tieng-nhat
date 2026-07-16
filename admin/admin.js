@@ -171,6 +171,21 @@ function initAdminLogoutButton() {
   if (btn) btn.addEventListener('click', logoutAdmin);
 }
 
+// Toggle hiện/ẩn mật khẩu ở form đăng nhập — chỉ đổi type input + icon,
+// không lưu trạng thái vào đâu cả (không cần thiết, chỉ là UI tạm thời).
+function initLoginPasswordToggle() {
+  const toggleBtn = document.getElementById('login-password-toggle');
+  const passwordInput = document.getElementById('login-password');
+  if (!toggleBtn || !passwordInput) return;
+
+  toggleBtn.addEventListener('click', () => {
+    const isHidden = passwordInput.type === 'password';
+    passwordInput.type = isHidden ? 'text' : 'password';
+    toggleBtn.innerHTML = isHidden ? '<i class="ti ti-eye-off"></i>' : '<i class="ti ti-eye"></i>';
+    toggleBtn.setAttribute('aria-label', isHidden ? 'Ẩn mật khẩu' : 'Hiện mật khẩu');
+  });
+}
+
 // ============================================================
 //  2. ĐIỀU HƯỚNG SIDEBAR — chuyển đổi giữa 3 section
 // ============================================================
@@ -333,8 +348,11 @@ async function loadRecentActivity() {
 //  chỉ là stub để nút bấm không báo lỗi Console, chưa có tác dụng thật.
 // ============================================================
 
+const VOCAB_PAGE_SIZE = 50;
+
 const vocabAdminState = {
-  currentRows: []   // kết quả fetch mới nhất theo filter hiện tại — dùng để render bảng + tra cứu khi sửa/xóa
+  currentRows: [],  // kết quả fetch mới nhất theo filter hiện tại — dùng để render bảng + tra cứu khi sửa/xóa
+  currentPage: 1     // trang hiện tại (bắt đầu từ 1) — reset về 1 mỗi khi filter/list đổi
 };
 
 // ── DANH MỤC UNIT/PART (bảng units/parts riêng, xem units_parts_schema.sql) ──
@@ -444,26 +462,44 @@ async function loadVocabAdminList() {
 
     const rows = await res.json();
     vocabAdminState.currentRows = rows;
-    renderVocabAdminTable(rows);
+    vocabAdminState.currentPage = 1; // reset về trang 1 mỗi khi tải lại danh sách (đổi filter, thêm/sửa/xóa...)
+    renderVocabAdminTable();
   } catch (err) {
     console.error('Lỗi tải danh sách từ vựng:', err);
     if (tbody) {
-      tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state">❌ Không tải được danh sách từ vựng.</div></td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state">❌ Không tải được danh sách từ vựng.</div></td></tr>`;
     }
+    const pagEl = document.getElementById('vocab-pagination');
+    if (pagEl) pagEl.style.display = 'none';
   }
 }
 
-function renderVocabAdminTable(rows) {
+// Render đúng 1 trang (VOCAB_PAGE_SIZE dòng) của vocabAdminState.currentRows,
+// dựa theo vocabAdminState.currentPage. STT hiển thị = word_index của từ đó
+// (không phải số thứ tự trang), theo đúng yêu cầu.
+function renderVocabAdminTable() {
   const tbody = document.getElementById('vocab-table-body');
+  const pagEl = document.getElementById('vocab-pagination');
   if (!tbody) return;
 
-  if (rows.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state">Không có từ vựng nào khớp bộ lọc.</div></td></tr>`;
+  const allRows = vocabAdminState.currentRows;
+
+  if (allRows.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state">Không có từ vựng nào khớp bộ lọc.</div></td></tr>`;
+    if (pagEl) pagEl.style.display = 'none';
     return;
   }
 
-  tbody.innerHTML = rows.map(r => `
+  const totalPages = Math.max(1, Math.ceil(allRows.length / VOCAB_PAGE_SIZE));
+  if (vocabAdminState.currentPage > totalPages) vocabAdminState.currentPage = totalPages;
+  if (vocabAdminState.currentPage < 1) vocabAdminState.currentPage = 1;
+
+  const startIdx = (vocabAdminState.currentPage - 1) * VOCAB_PAGE_SIZE;
+  const pageRows = allRows.slice(startIdx, startIdx + VOCAB_PAGE_SIZE);
+
+  tbody.innerHTML = pageRows.map(r => `
     <tr>
+      <td>${escHtml(r.word_index)}</td>
       <td class="cell-kanji">${escHtml(r.kanji || '—')}</td>
       <td class="cell-kana">${escHtml(r.kana || '—')}</td>
       <td>${escHtml(r.meaning || '—')}</td>
@@ -481,6 +517,44 @@ function renderVocabAdminTable(rows) {
       </td>
     </tr>
   `).join('');
+
+  renderVocabPagination(allRows.length, totalPages);
+}
+
+function renderVocabPagination(totalRows, totalPages) {
+  const pagEl = document.getElementById('vocab-pagination');
+  const infoEl = document.getElementById('vocab-pagination-info');
+  const currentEl = document.getElementById('vocab-pagination-current');
+  const prevBtn = document.getElementById('vocab-page-prev');
+  const nextBtn = document.getElementById('vocab-page-next');
+  if (!pagEl) return;
+
+  if (totalPages <= 1) {
+    pagEl.style.display = 'none';
+    return;
+  }
+
+  const page = vocabAdminState.currentPage;
+  const startIdx = (page - 1) * VOCAB_PAGE_SIZE + 1;
+  const endIdx = Math.min(page * VOCAB_PAGE_SIZE, totalRows);
+
+  pagEl.style.display = 'flex';
+  if (infoEl) infoEl.textContent = `Hiển thị ${startIdx}–${endIdx} / ${totalRows} từ`;
+  if (currentEl) currentEl.textContent = `Trang ${page} / ${totalPages}`;
+  if (prevBtn) prevBtn.disabled = page <= 1;
+  if (nextBtn) nextBtn.disabled = page >= totalPages;
+}
+
+function goToVocabPage(delta) {
+  vocabAdminState.currentPage += delta;
+  renderVocabAdminTable();
+  const tableCard = document.querySelector('.admin-table-card');
+  if (tableCard) tableCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function initVocabPaginationControls() {
+  document.getElementById('vocab-page-prev')?.addEventListener('click', () => goToVocabPage(-1));
+  document.getElementById('vocab-page-next')?.addEventListener('click', () => goToVocabPage(1));
 }
 
 // Gắn sự kiện onchange cho 2 dropdown filter — mỗi lần đổi giá trị đều gọi
@@ -1645,10 +1719,12 @@ function initStudentFormControls() {
 // ============================================================
 document.addEventListener('DOMContentLoaded', () => {
   initAdminLoginForm();
+  initLoginPasswordToggle();
   initAdminLogoutButton();
   initAdminNav();
   initVocabFilters();
   initVocabFormControls();
+  initVocabPaginationControls();
   initCategoryManagerControls();
   initCsvImportControls();
   initStudentSearch();

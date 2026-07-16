@@ -36,7 +36,12 @@
         </div>
         <div class="admin-form-group">
           <label for="login-password">Mật khẩu</label>
-          <input type="password" id="login-password" name="password" placeholder="••••••••" autocomplete="current-password" />
+          <div class="admin-password-wrap">
+            <input type="password" id="login-password" name="password" placeholder="••••••••" autocomplete="current-password" />
+            <button type="button" id="login-password-toggle" class="admin-password-toggle-btn" aria-label="Hiện/ẩn mật khẩu" tabindex="-1">
+              <i class="ti ti-eye"></i>
+            </button>
+          </div>
         </div>
 
         <div id="admin-login-error" class="admin-login-error"></div>
@@ -159,6 +164,7 @@
               <table class="admin-vocab-table">
                 <thead>
                   <tr>
+                    <th style="width:56px;">STT</th>
                     <th>Kanji</th>
                     <th>Kana</th>
                     <th>Meaning</th>
@@ -169,10 +175,22 @@
                 </thead>
                 <tbody id="vocab-table-body">
                   <tr>
-                    <td colspan="6"><div class="empty-state">Đang tải dữ liệu...</div></td>
+                    <td colspan="7"><div class="empty-state">Đang tải dữ liệu...</div></td>
                   </tr>
                 </tbody>
               </table>
+            </div>
+            <div class="admin-pagination" id="vocab-pagination" style="display:none;">
+              <span class="admin-pagination-info" id="vocab-pagination-info"></span>
+              <div class="admin-pagination-controls">
+                <button type="button" class="admin-row-action-btn" id="vocab-page-prev" title="Trang trước">
+                  <i class="ti ti-chevron-left"></i>
+                </button>
+                <span class="admin-pagination-current" id="vocab-pagination-current"></span>
+                <button type="button" class="admin-row-action-btn" id="vocab-page-next" title="Trang sau">
+                  <i class="ti ti-chevron-right"></i>
+                </button>
+              </div>
             </div>
           </div>
 
