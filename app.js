@@ -1381,7 +1381,7 @@ function updateGlobalProgress() {
 
 function syncData() {
   const btn = document.getElementById('sync-btn');
-  btn.classList.add('rotating'); // Bắt đầu hiệu ứng xoay
+  btn?.classList.add('rotating'); // Bắt đầu hiệu ứng xoay (an toàn nếu #sync-btn không tồn tại trong HTML)
   
   // Thông báo cho người dùng
   const progressEl = document.getElementById('global-progress');
@@ -1393,7 +1393,7 @@ function syncData() {
 
   // Gọi lại hàm initApp để tải mới hoàn toàn
   initApp().then(() => {
-    btn.classList.remove('rotating'); // Dừng xoay khi xong
+    btn?.classList.remove('rotating'); // Dừng xoay khi xong (an toàn nếu #sync-btn không tồn tại)
   });
 }
 
