@@ -8,7 +8,8 @@ const state = {
   quizState: {},
   flashcardState: {},
   currentAudio: null,
-  reviewFlashcardState: null // trạng thái riêng cho phiên Ôn tập (Spaced Repetition)
+  reviewFlashcardState: null, // trạng thái riêng cho phiên Ôn tập (Spaced Repetition)
+  currentUser: null // { id, access_token } của học viên đã đăng nhập, set bởi getCurrentSession()
 };
 
 // ============================================================
@@ -154,12 +155,11 @@ function logDeviceVisit() {
 
 // 2. Cấu hình — tập trung toàn bộ thông tin kết nối tại đây
 const STUDENT_CONFIG = {
-  // Supabase (Production)
+  // Supabase (Test)
   supabaseUrl: "https://hzecdpnmegfwbximgqlv.supabase.co",
   supabaseAnonKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh6ZWNkcG5tZWdmd2J4aW1ncWx2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMyMTEwNTEsImV4cCI6MjA5ODc4NzA1MX0.esdOJo7gvQXLJjG94PUQ_rghTfGCAAaYzdP3l-j3u-s",
   vocabUrl: "https://hzecdpnmegfwbximgqlv.supabase.co/rest/v1/vocabulary?order=id.asc",
-  deviceLogUrl: "https://hzecdpnmegfwbximgqlv.supabase.co/rest/v1/device_logs",
-  googleScriptUrl: "https://script.google.com/macros/s/AKfycbzwmTFWowwaAVQ-ZLmk3cveLH8l9Bi7rJZk6TDE2ikNnjlwB36Rn0a5An0PgmQu1Rag2w/exec"
+  deviceLogUrl: "https://hzecdpnmegfwbximgqlv.supabase.co/rest/v1/device_logs"
 };
 
 // ============================================================
@@ -290,6 +290,44 @@ async function logoutUser() {
 
 // Tên cột Supabase phải khớp với: id, unit, part, kanji, kana, romaji, hanviet, meaning, example, audio
 
+// Lấy session hiện tại (nếu học viên đã đăng nhập) và lưu tối giản vào state —
+// chỉ giữ id + access_token, không lưu cả object session để tránh phình state.
+// supabaseClient ở đây tái sử dụng client đã khởi tạo sẵn ở lớp SUPABASE AUTH
+// phía trên (không tạo thêm client thứ 2).
+async function getCurrentSession() {
+  try {
+    const { data: { session }, error } = await supabaseClient.auth.getSession();
+    if (error) throw error;
+
+    if (session && session.user) {
+      state.currentUser = {
+        id: session.user.id,
+        access_token: session.access_token
+      };
+    } else {
+      state.currentUser = null;
+    }
+  } catch (e) {
+    console.error('Lỗi lấy session hiện tại:', e);
+    state.currentUser = null;
+  }
+}
+
+// Header dùng chung cho các request REST tới Supabase cần xác thực người dùng
+// (insert/upsert vào vocab_srs_progress, vocab_review_log, v.v. ở các bước sau).
+// Nếu chưa có session (chưa đăng nhập), fallback về anon key cho Authorization.
+function sbAuthHeaders() {
+  const token = (state.currentUser && state.currentUser.access_token)
+    ? state.currentUser.access_token
+    : STUDENT_CONFIG.supabaseAnonKey;
+
+  return {
+    'apikey': STUDENT_CONFIG.supabaseAnonKey,
+    'Authorization': `Bearer ${token}`,
+    'Content-Type': 'application/json'
+  };
+}
+
 // 3. Nạp dữ liệu từ Supabase
 async function initApp() {
   const progressEl = document.getElementById('global-progress');
@@ -302,6 +340,7 @@ async function initApp() {
 
   if (cachedData && cacheTime && (Date.now() - parseInt(cacheTime) < ONE_HOUR)) {
     window.vocabularyData = JSON.parse(cachedData);
+    await getCurrentSession();
     startUI();
     return;
   }
@@ -328,12 +367,14 @@ async function initApp() {
     localStorage.setItem('vocab_cache', JSON.stringify(window.vocabularyData));
     localStorage.setItem('vocab_cache_time', Date.now().toString());
 
+    await getCurrentSession();
     startUI();
   } catch (err) {
     console.error("Lỗi tải:", err);
     // Fallback: nếu có cache cũ (dù hết hạn) thì vẫn dùng, tránh trang trắng
     if (cachedData) {
       window.vocabularyData = JSON.parse(cachedData);
+      await getCurrentSession();
       startUI();
       if (progressEl) progressEl.textContent = '⚠️ Dùng dữ liệu cũ (offline)';
     } else {
@@ -1097,6 +1138,22 @@ function evaluateFlashcard(partKey, isRemembered) {
   // Spaced Repetition: ghi nhận kết quả để tính lại lịch ôn tiếp theo cho từ này
   srUpdateWordState(currentWord.id, isRemembered);
 
+  // Ghi log hoạt động vào vocab_review_log — chỉ 1 lần khi phiên Flashcard
+  // hoàn tất (không ghi mỗi thẻ), chỉ ghi khi đã đăng nhập.
+  if (fState.index + 1 >= fState.cards.length) {
+    if (state.currentUser) {
+      fetch(`${STUDENT_CONFIG.supabaseUrl}/rest/v1/vocab_review_log`, {
+        method: 'POST',
+        headers: sbAuthHeaders(),
+        body: JSON.stringify({
+          user_id: state.currentUser.id,
+          vocab_id: currentWord.id,
+          reviewed_at: new Date().toISOString().split('T')[0]
+        })
+      }).catch(err => console.error('Lỗi ghi vocab_review_log:', err));
+    }
+  }
+
   if (fState.index + 1 < fState.cards.length) {
     fState.index++;
     renderFlashcard(partKey);
@@ -1308,26 +1365,33 @@ function evaluateQuizEnd(partKey) {
   updateGlobalProgress();
   refreshBadgeOnAccordion(partKey, score, total);
 
-  // ─── ĐOẠN CODE TỰ ĐỘNG GỬI ĐIỂM LÊN GOOGLE SHEETS ĐƯỢC CHÈN VÀO ĐÂY ───
-  if (STUDENT_CONFIG.googleScriptUrl && STUDENT_CONFIG.googleScriptUrl !== "") {
-    const payload = {
-      studentName: STUDENT_CONFIG.studentName,
-      partKey: partKey, 
-      quizMode: quiz.quizMode === 'k2m' ? 'Kanji -> Meaning' : (quiz.quizMode === 'f2k' ? 'Kana -> Kanji' : 'Meaning -> Kanji'),
-      scoreText: `${score}/${total}`,
-      accuracy: `${pct}%`
-    };
+  // Ghi log kết quả Quiz lên Supabase — nhánh riêng, không chặn luồng render UI phía dưới.
+  if (state.currentUser) {
+    const attemptsPayload = quiz.questions.map(q => ({
+      user_id: state.currentUser.id,
+      vocab_id: q.word.id,
+      is_correct: q.status === 'correct'
+    }));
 
-    fetch(STUDENT_CONFIG.googleScriptUrl, {
-      method: "POST",
-      mode: "no-cors", 
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
-    })
-    .then(() => console.log("Gửi điểm thành công về Google Sheets!"))
-    .catch(err => console.error("Lỗi gửi điểm:", err));
+    fetch(`${STUDENT_CONFIG.supabaseUrl}/rest/v1/quiz_attempts`, {
+      method: 'POST',
+      headers: sbAuthHeaders(),
+      body: JSON.stringify(attemptsPayload)
+    }).catch(err => console.error('Lỗi ghi quiz_attempts:', err));
+
+    // 1 dòng đại diện vào vocab_review_log để ngày đó tính vào streak
+    if (quiz.questions.length > 0) {
+      fetch(`${STUDENT_CONFIG.supabaseUrl}/rest/v1/vocab_review_log`, {
+        method: 'POST',
+        headers: sbAuthHeaders(),
+        body: JSON.stringify({
+          user_id: state.currentUser.id,
+          vocab_id: quiz.questions[0].word.id,
+          reviewed_at: new Date().toISOString().split('T')[0]
+        })
+      }).catch(err => console.error('Lỗi ghi vocab_review_log:', err));
+    }
   }
-  // ───────────────────────────────────────────────────────────────────
 
   let emoji = '🎉'; let title = 'Excellent Work!';
   if (pct < 50) { emoji = '🩹'; title = 'Keep Practicing!'; } else if (pct < 80) { emoji = '👍'; title = 'Good Effort!'; }
@@ -1381,7 +1445,7 @@ function updateGlobalProgress() {
 
 function syncData() {
   const btn = document.getElementById('sync-btn');
-  btn.classList.add('rotating'); // Bắt đầu hiệu ứng xoay
+  btn?.classList.add('rotating'); // Bắt đầu hiệu ứng xoay (an toàn nếu #sync-btn không tồn tại trong HTML)
   
   // Thông báo cho người dùng
   const progressEl = document.getElementById('global-progress');
@@ -1393,7 +1457,7 @@ function syncData() {
 
   // Gọi lại hàm initApp để tải mới hoàn toàn
   initApp().then(() => {
-    btn.classList.remove('rotating'); // Dừng xoay khi xong
+    btn?.classList.remove('rotating'); // Dừng xoay khi xong (an toàn nếu #sync-btn không tồn tại)
   });
 }
 
@@ -1514,6 +1578,21 @@ function evaluateReviewFlashcard(isRemembered) {
 
   // Đây là bước quan trọng nhất: cập nhật lại lịch ôn tiếp theo cho từ này
   srUpdateWordState(currentWord.id, isRemembered);
+
+  // Ghi log hoạt động ôn tập hôm nay vào vocab_review_log — chỉ ghi khi đã
+  // đăng nhập; không kiểm tra trùng, cho phép nhiều dòng cùng ngày vì chỉ
+  // cần biết "ngày đó có hoạt động hay không".
+  if (state.currentUser) {
+    fetch(`${STUDENT_CONFIG.supabaseUrl}/rest/v1/vocab_review_log`, {
+      method: 'POST',
+      headers: sbAuthHeaders(),
+      body: JSON.stringify({
+        user_id: state.currentUser.id,
+        vocab_id: currentWord.id,
+        reviewed_at: new Date().toISOString().split('T')[0]
+      })
+    }).catch(err => console.error('Lỗi ghi vocab_review_log:', err));
+  }
 
   if (rState.index + 1 < rState.cards.length) {
     rState.index++;
