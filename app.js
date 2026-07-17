@@ -506,12 +506,112 @@ function startUI() {
     updateReviewBadge(); // hiện số từ cần ôn hôm nay (Spaced Repetition), an toàn nếu badge chưa có trong HTML
     switchMainSection('vocab'); // panel mặc định khi mở app — thay cho class "active" viết cứng trong HTML
     renderDebugPanel(); // chỉ hiện khi URL có ?debug=sr, không ảnh hưởng học viên bình thường
+
+    // Streak: chỉ tải khi đã đăng nhập, không chặn phần render UI phía trên
+    if (state.currentUser) {
+      loadStreakData(state.currentUser.id);
+    }
+
     // Ẩn loading nếu bạn có dùng overlay
     const overlay = document.getElementById('loading-overlay');
     if (overlay) overlay.style.display = 'none';
   }
 }
-// Kích hoạt khi trang web tải xong
+
+// ============================================================
+//  STREAK (chuỗi ngày học liên tiếp)
+// ============================================================
+
+// Hàm thuần — không đụng DOM, không phụ thuộc state/app cụ thể, có thể copy
+// nguyên sang cả app.js và admin.js (không import, dùng độc lập ở mỗi file).
+//
+// Input:  dateStrings — mảng string dạng "YYYY-MM-DD" (vd: lấy từ cột
+//         reviewed_at của bảng vocab_review_log, có thể trùng lặp, không
+//         cần sắp xếp trước).
+// Output: { streak: number, activeDatesSet: Set<string> }
+//         - activeDatesSet: Set các ngày duy nhất (đã khử trùng) từ input.
+//         - streak: số ngày liên tiếp có hoạt động, đếm ngược từ hôm nay.
+//           Nếu hôm nay chưa có hoạt động (chưa học/ôn gì hôm nay), streak
+//           vẫn được tính bắt đầu từ hôm qua (không bị mất streak chỉ vì
+//           chưa mở app hôm nay) — dừng đếm ngay khi gặp 1 ngày trống.
+function computeStreakFromDates(dateStrings) {
+  const activeDatesSet = new Set(dateStrings);
+  const toDateStr = (d) => d.toISOString().split('T')[0];
+  let cursor = new Date();
+  cursor.setHours(0, 0, 0, 0);
+  let streak = 0;
+  // Nếu hôm nay chưa có hoạt động, lùi mốc bắt đầu đếm về hôm qua,
+  // không tính hôm nay là ngày "gãy" streak.
+  if (!activeDatesSet.has(toDateStr(cursor))) {
+    cursor.setDate(cursor.getDate() - 1);
+  }
+  while (activeDatesSet.has(toDateStr(cursor))) {
+    streak++;
+    cursor.setDate(cursor.getDate() - 1);
+  }
+  return { streak, activeDatesSet };
+}
+
+// Fetch dữ liệu hoạt động 30 ngày gần nhất của user từ 2 nguồn (Review
+// flashcard + Quiz), hợp nhất ngày, tính streak, render vào #streak-summary.
+async function loadStreakData(userId) {
+  const summaryEl = document.getElementById('streak-summary');
+  const gridEl = document.getElementById('streak-grid');
+
+  try {
+    const since = new Date();
+    since.setDate(since.getDate() - 30);
+    const sinceStr = since.toISOString().split('T')[0];
+
+    const reviewLogUrl = `${STUDENT_CONFIG.supabaseUrl}/rest/v1/vocab_review_log?user_id=eq.${userId}&reviewed_at=gte.${sinceStr}&select=reviewed_at`;
+    const quizAttemptsUrl = `${STUDENT_CONFIG.supabaseUrl}/rest/v1/quiz_attempts?user_id=eq.${userId}&answered_at=gte.${sinceStr}&select=answered_at`;
+
+    const [reviewRes, quizRes] = await Promise.all([
+      fetch(reviewLogUrl, { headers: sbAuthHeaders() }),
+      fetch(quizAttemptsUrl, { headers: sbAuthHeaders() })
+    ]);
+
+    if (!reviewRes.ok) throw new Error(`Lỗi tải vocab_review_log: ${reviewRes.status}`);
+    if (!quizRes.ok) throw new Error(`Lỗi tải quiz_attempts: ${quizRes.status}`);
+
+    const reviewRows = await reviewRes.json();
+    const quizRows = await quizRes.json();
+
+    // reviewed_at đã là "YYYY-MM-DD" (date). answered_at là timestamptz -> cắt lấy phần ngày.
+    const reviewDates = reviewRows.map(r => r.reviewed_at);
+    const quizDates = quizRows.map(r => String(r.answered_at).split('T')[0]);
+
+    const allDates = [...reviewDates, ...quizDates];
+    const { streak, activeDatesSet } = computeStreakFromDates(allDates);
+
+    if (summaryEl) {
+      summaryEl.textContent = streak > 0
+        ? `🔥 ${streak} ngày liên tục`
+        : 'Bắt đầu chuỗi ngày học của bạn!';
+    }
+
+    // Render lưới 30 ô — mỗi ô là 1 ngày, từ 29 ngày trước đến hôm nay (trái -> phải).
+    if (gridEl) {
+      const cells = [];
+      for (let i = 29; i >= 0; i--) {
+        const d = new Date();
+        d.setDate(d.getDate() - i);
+        const dStr = d.toISOString().split('T')[0];
+        const isActive = activeDatesSet.has(dStr);
+        cells.push(`<div class="streak-cell ${isActive ? 'active' : ''}" title="${dStr}"></div>`);
+      }
+      gridEl.innerHTML = cells.join('');
+    }
+  } catch (err) {
+    console.error('Lỗi tải dữ liệu streak:', err);
+    if (summaryEl) {
+      summaryEl.textContent = '—';
+    }
+    if (gridEl) {
+      gridEl.innerHTML = '';
+    }
+  }
+}
 // ============================================================
 //  DASHBOARD HỌC VIÊN — tự xem tiến độ (% Vocab đã học, số từ cần
 //  ôn hôm nay). Logic tính toán copy/refactor nguyên từ admin/admin.js

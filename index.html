@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&family=Inter:wght@300;400;500;600;700&family=Noto+Serif+JP:wght@400;700&display=swap" rel="stylesheet" />
-  
+
   <link rel="stylesheet" href="style.css" />
   <!-- Tái sử dụng CSS #student-progress-view / .admin-stat-* đã viết cho trang Admin,
        không viết lại CSS mới trùng lặp cho Dashboard học viên. -->
@@ -16,12 +16,6 @@
 </head>
 <body>
 
-  <!-- ════════════════════════════════════════════════════════════
-       MÀN HÌNH ĐĂNG NHẬP
-       Hiển thị mặc định, che toàn bộ nội dung học tập cho đến khi
-       đăng nhập thành công qua Supabase Auth (logic thêm ở app.js).
-       Tái sử dụng token màu/spacing/shadow/radius đã có trong style.css.
-  ════════════════════════════════════════════════════════════ -->
   <div id="login-screen" class="login-screen">
     <div class="login-box">
       <div class="logo-mark">語</div>
@@ -47,11 +41,6 @@
     </div>
   </div>
 
-  <!-- ════════════════════════════════════════════════════════════
-       TOÀN BỘ NỘI DUNG HỌC TẬP — ẩn mặc định (style="display:none;")
-       cho đến khi đăng nhập thành công, lúc đó app.js sẽ show #app-root
-       và ẩn #login-screen.
-  ════════════════════════════════════════════════════════════ -->
   <div id="app-root" style="display:none;">
 
 <div id="loading-overlay" class="loading-overlay">
@@ -70,31 +59,40 @@
 
     <nav class="main-nav">
       <button class="main-nav-btn" data-section="vocab" onclick="switchMainSection('vocab')">
-        <span class="nav-icon">📖</span> Vocab
+        Vocab
       </button>
       <button class="main-nav-btn" data-section="review" onclick="openReviewToday()">
-        <span class="nav-icon">🔁</span> Review
+        Review
         <span id="review-due-badge" class="nav-badge" style="display:none;"></span>
       </button>
-      <button class="main-nav-btn" data-section="dashboard" onclick="openDashboard()">
-        <span class="nav-icon">📊</span> Dashboard
-      </button>
       <button class="main-nav-btn" data-section="grammar" disabled>
-        <span class="nav-icon">✍️</span> Grammar
+        Grammar
         <span class="badge-soon">Soon</span>
       </button>
       <button class="main-nav-btn" data-section="kanji" disabled>
-        <span class="nav-icon">漢</span> Kanji
+        Kanji
         <span class="badge-soon">Soon</span>
       </button>
     </nav>
 
   <div class="header-right">
-  <div class="progress-container">
-    <button id="sync-btn" onclick="syncData()" title="Cập nhật dữ liệu mới">🔄</button>
-    <button id="logout-btn" onclick="logoutUser()" title="Đăng xuất" class="btn btn-outline" style="padding:6px 12px; font-size:12px;">Logout</button>
+    <div class="account-menu" id="account-menu">
+      <button class="main-nav-btn account-menu-trigger" id="account-menu-trigger" onclick="toggleAccountMenu()">
+        Account
+      </button>
+      <div class="account-menu-dropdown" id="account-menu-dropdown" style="display:none;">
+        <button class="account-menu-item" data-section="dashboard" onclick="openDashboard(); closeAccountMenu();">
+          Dashboard
+        </button>
+        <button class="account-menu-item" onclick="syncData(); closeAccountMenu();">
+          Update data
+        </button>
+        <button class="account-menu-item" onclick="logoutUser(); closeAccountMenu();">
+          Logout
+        </button>
+      </div>
+    </div>
   </div>
-</div>
   </header>
 
   <div class="app-body">
@@ -108,6 +106,8 @@
         <div class="review-page-header">
           <h2>🔁 Ôn tập hôm nay</h2>
           <p>Những từ đã đến hạn ôn lại, dựa trên tiến độ ghi nhớ của riêng bạn.</p>
+          <div id="streak-summary" class="streak-badge">—</div>
+          <div id="streak-grid" class="streak-grid"></div>
         </div>
         <div id="review-zone"></div>
       </div>
@@ -120,8 +120,6 @@
           <p>Tổng quan tiến độ học từ vựng của riêng bạn.</p>
         </div>
 
-        <!-- Tái sử dụng đúng cấu trúc/CSS #student-progress-view đã viết cho Admin
-             (xem admin.css) — cùng id/class để không phải viết CSS mới trùng lặp. -->
         <div id="student-progress-view" class="admin-panel-card admin-table-card" style="display:block; max-width:640px; margin:0 auto;">
           <div class="student-progress-header">
             <div>
@@ -172,10 +170,28 @@
   </div>
 
   </div>
-  <!-- kết thúc #app-root -->
 
-<!-- Supabase JS SDK — dùng cho Supabase Auth (đăng nhập/đăng xuất/session) -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="app.js"></script>
+<script>
+  // Toggle dropdown "Account" ở góc phải header — logic UI thuần túy,
+  // không liên quan Supabase nên để riêng ở đây thay vì app.js.
+  function toggleAccountMenu() {
+    const dropdown = document.getElementById('account-menu-dropdown');
+    if (!dropdown) return;
+    dropdown.style.display = dropdown.style.display === 'none' ? 'flex' : 'none';
+  }
+
+  function closeAccountMenu() {
+    const dropdown = document.getElementById('account-menu-dropdown');
+    if (dropdown) dropdown.style.display = 'none';
+  }
+
+  // Đóng dropdown khi click ra ngoài
+  document.addEventListener('click', (e) => {
+    const menu = document.getElementById('account-menu');
+    if (menu && !menu.contains(e.target)) closeAccountMenu();
+  });
+</script>
 </body>
 </html>
