@@ -8,7 +8,9 @@ const state = {
   quizState: {},
   flashcardState: {},
   currentAudio: null,
-  reviewFlashcardState: null // trạng thái riêng cho phiên Ôn tập (Spaced Repetition)
+  reviewFlashcardState: null, // trạng thái riêng cho phiên Ôn tập (Spaced Repetition)
+  currentUser: null, // { id, access_token } của học viên đã đăng nhập, set bởi getCurrentSession()
+  sessionStartTimes: {} // { [partKey|'review']: ISOString } — thời điểm bắt đầu phiên Flashcard/Quiz/Review
 };
 
 // ============================================================
@@ -154,12 +156,11 @@ function logDeviceVisit() {
 
 // 2. Cấu hình — tập trung toàn bộ thông tin kết nối tại đây
 const STUDENT_CONFIG = {
-  // Supabase (Production)
-  supabaseUrl: "https://zlblylqosqwnhudeivpt.supabase.co",
-  supabaseAnonKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpsYmx5bHFvc3F3bmh1ZGVpdnB0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI1Mzk0NjUsImV4cCI6MjA5ODExNTQ2NX0.Xa8FblRuypm_eHMGz8GrCpwloKnzjgjTu8z_1ivS8_4",
-  vocabUrl: "https://zlblylqosqwnhudeivpt.supabase.co/rest/v1/vocabulary?order=id.asc",
-  deviceLogUrl: "https://zlblylqosqwnhudeivpt.supabase.co/rest/v1/device_logs",
-  googleScriptUrl: "https://script.google.com/macros/s/AKfycbzwmTFWowwaAVQ-ZLmk3cveLH8l9Bi7rJZk6TDE2ikNnjlwB36Rn0a5An0PgmQu1Rag2w/exec"
+  // Supabase (Test)
+  supabaseUrl: "https://hzecdpnmegfwbximgqlv.supabase.co",
+  supabaseAnonKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh6ZWNkcG5tZWdmd2J4aW1ncWx2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMyMTEwNTEsImV4cCI6MjA5ODc4NzA1MX0.esdOJo7gvQXLJjG94PUQ_rghTfGCAAaYzdP3l-j3u-s",
+  vocabUrl: "https://hzecdpnmegfwbximgqlv.supabase.co/rest/v1/vocabulary?order=id.asc",
+  deviceLogUrl: "https://hzecdpnmegfwbximgqlv.supabase.co/rest/v1/device_logs"
 };
 
 // ============================================================
@@ -290,6 +291,44 @@ async function logoutUser() {
 
 // Tên cột Supabase phải khớp với: id, unit, part, kanji, kana, romaji, hanviet, meaning, example, audio
 
+// Lấy session hiện tại (nếu học viên đã đăng nhập) và lưu tối giản vào state —
+// chỉ giữ id + access_token, không lưu cả object session để tránh phình state.
+// supabaseClient ở đây tái sử dụng client đã khởi tạo sẵn ở lớp SUPABASE AUTH
+// phía trên (không tạo thêm client thứ 2).
+async function getCurrentSession() {
+  try {
+    const { data: { session }, error } = await supabaseClient.auth.getSession();
+    if (error) throw error;
+
+    if (session && session.user) {
+      state.currentUser = {
+        id: session.user.id,
+        access_token: session.access_token
+      };
+    } else {
+      state.currentUser = null;
+    }
+  } catch (e) {
+    console.error('Lỗi lấy session hiện tại:', e);
+    state.currentUser = null;
+  }
+}
+
+// Header dùng chung cho các request REST tới Supabase cần xác thực người dùng
+// (insert/upsert vào vocab_srs_progress, vocab_review_log, v.v. ở các bước sau).
+// Nếu chưa có session (chưa đăng nhập), fallback về anon key cho Authorization.
+function sbAuthHeaders() {
+  const token = (state.currentUser && state.currentUser.access_token)
+    ? state.currentUser.access_token
+    : STUDENT_CONFIG.supabaseAnonKey;
+
+  return {
+    'apikey': STUDENT_CONFIG.supabaseAnonKey,
+    'Authorization': `Bearer ${token}`,
+    'Content-Type': 'application/json'
+  };
+}
+
 // 3. Nạp dữ liệu từ Supabase
 async function initApp() {
   const progressEl = document.getElementById('global-progress');
@@ -302,6 +341,7 @@ async function initApp() {
 
   if (cachedData && cacheTime && (Date.now() - parseInt(cacheTime) < ONE_HOUR)) {
     window.vocabularyData = JSON.parse(cachedData);
+    await getCurrentSession();
     startUI();
     return;
   }
@@ -328,12 +368,14 @@ async function initApp() {
     localStorage.setItem('vocab_cache', JSON.stringify(window.vocabularyData));
     localStorage.setItem('vocab_cache_time', Date.now().toString());
 
+    await getCurrentSession();
     startUI();
   } catch (err) {
     console.error("Lỗi tải:", err);
     // Fallback: nếu có cache cũ (dù hết hạn) thì vẫn dùng, tránh trang trắng
     if (cachedData) {
       window.vocabularyData = JSON.parse(cachedData);
+      await getCurrentSession();
       startUI();
       if (progressEl) progressEl.textContent = '⚠️ Dùng dữ liệu cũ (offline)';
     } else {
@@ -465,12 +507,213 @@ function startUI() {
     updateReviewBadge(); // hiện số từ cần ôn hôm nay (Spaced Repetition), an toàn nếu badge chưa có trong HTML
     switchMainSection('vocab'); // panel mặc định khi mở app — thay cho class "active" viết cứng trong HTML
     renderDebugPanel(); // chỉ hiện khi URL có ?debug=sr, không ảnh hưởng học viên bình thường
+
+    // Streak: chỉ tải khi đã đăng nhập, không chặn phần render UI phía trên
+    if (state.currentUser) {
+      loadStreakData(state.currentUser.id);
+    }
+
     // Ẩn loading nếu bạn có dùng overlay
     const overlay = document.getElementById('loading-overlay');
     if (overlay) overlay.style.display = 'none';
   }
 }
-// Kích hoạt khi trang web tải xong
+
+// ============================================================
+//  STREAK (chuỗi ngày học liên tiếp)
+// ============================================================
+
+// Hàm thuần — không đụng DOM, không phụ thuộc state/app cụ thể, có thể copy
+// nguyên sang cả app.js và admin.js (không import, dùng độc lập ở mỗi file).
+//
+// Input:  dateStrings — mảng string dạng "YYYY-MM-DD" (vd: lấy từ cột
+//         reviewed_at của bảng vocab_review_log, có thể trùng lặp, không
+//         cần sắp xếp trước).
+// Output: { streak: number, activeDatesSet: Set<string> }
+//         - activeDatesSet: Set các ngày duy nhất (đã khử trùng) từ input.
+//         - streak: số ngày liên tiếp có hoạt động, đếm ngược từ hôm nay.
+//           Nếu hôm nay chưa có hoạt động (chưa học/ôn gì hôm nay), streak
+//           vẫn được tính bắt đầu từ hôm qua (không bị mất streak chỉ vì
+//           chưa mở app hôm nay) — dừng đếm ngay khi gặp 1 ngày trống.
+function computeStreakFromDates(dateStrings) {
+  const activeDatesSet = new Set(dateStrings);
+  const toDateStr = (d) => d.toISOString().split('T')[0];
+  let cursor = new Date();
+  cursor.setHours(0, 0, 0, 0);
+  let streak = 0;
+  // Nếu hôm nay chưa có hoạt động, lùi mốc bắt đầu đếm về hôm qua,
+  // không tính hôm nay là ngày "gãy" streak.
+  if (!activeDatesSet.has(toDateStr(cursor))) {
+    cursor.setDate(cursor.getDate() - 1);
+  }
+  while (activeDatesSet.has(toDateStr(cursor))) {
+    streak++;
+    cursor.setDate(cursor.getDate() - 1);
+  }
+  return { streak, activeDatesSet };
+}
+
+// Hàm thuần — nhận mảng ngày "YYYY-MM-DD" (có thể trùng lặp, không cần sort
+// trước), trả về số nguyên = độ dài chuỗi ngày liên tiếp DÀI NHẤT từng có
+// trong toàn bộ lịch sử (không nhất thiết phải liên quan tới "hôm nay",
+// khác với computeStreakFromDates() ở trên).
+function computeBestStreak(dateStrings) {
+  const uniqueDates = [...new Set(dateStrings)].sort();
+  if (uniqueDates.length === 0) return 0;
+
+  let best = 1;
+  let current = 1;
+
+  for (let i = 1; i < uniqueDates.length; i++) {
+    const prev = new Date(uniqueDates[i - 1]);
+    const cur = new Date(uniqueDates[i]);
+    const diffDays = Math.round((cur - prev) / 86400000);
+
+    if (diffDays === 1) {
+      current++;
+    } else if (diffDays > 1) {
+      current = 1;
+    }
+    // diffDays === 0 (trùng ngày, không nên xảy ra vì đã unique) -> bỏ qua
+
+    if (current > best) best = current;
+  }
+
+  return best;
+}
+
+// Fetch dữ liệu hoạt động của user từ 2 nguồn (Review flashcard + Quiz):
+// - 90 ngày gần nhất -> streak hiện tại + heatmap 90 ô, 5 mức độ (Prompt 7.4).
+// - Toàn bộ lịch sử (không giới hạn ngày) -> best streak (Prompt 7.1).
+// - study_sessions 7 ngày gần nhất -> phút học, số phiên, số từ đã ôn tuần này (Prompt 7.2).
+async function loadStreakData(userId) {
+  const summaryEl = document.getElementById('streak-summary');
+  const gridEl = document.getElementById('streak-grid');
+  const currentStreakEl = document.getElementById('streak-current');
+  const bestStreakEl = document.getElementById('streak-best');
+
+  try {
+    const since = new Date();
+    since.setDate(since.getDate() - 90);
+    const sinceStr = since.toISOString().split('T')[0];
+
+    const reviewLogUrl = `${STUDENT_CONFIG.supabaseUrl}/rest/v1/vocab_review_log?user_id=eq.${userId}&reviewed_at=gte.${sinceStr}&select=reviewed_at`;
+    const quizAttemptsUrl = `${STUDENT_CONFIG.supabaseUrl}/rest/v1/quiz_attempts?user_id=eq.${userId}&answered_at=gte.${sinceStr}&select=answered_at`;
+
+    // Toàn bộ lịch sử, không có điều kiện gte -> dùng cho computeBestStreak()
+    const reviewLogAllUrl = `${STUDENT_CONFIG.supabaseUrl}/rest/v1/vocab_review_log?user_id=eq.${userId}&select=reviewed_at`;
+    const quizAttemptsAllUrl = `${STUDENT_CONFIG.supabaseUrl}/rest/v1/quiz_attempts?user_id=eq.${userId}&select=answered_at`;
+
+    const [reviewRes, quizRes, reviewAllRes, quizAllRes] = await Promise.all([
+      fetch(reviewLogUrl, { headers: sbAuthHeaders() }),
+      fetch(quizAttemptsUrl, { headers: sbAuthHeaders() }),
+      fetch(reviewLogAllUrl, { headers: sbAuthHeaders() }),
+      fetch(quizAttemptsAllUrl, { headers: sbAuthHeaders() })
+    ]);
+
+    if (!reviewRes.ok) throw new Error(`Lỗi tải vocab_review_log: ${reviewRes.status}`);
+    if (!quizRes.ok) throw new Error(`Lỗi tải quiz_attempts: ${quizRes.status}`);
+    if (!reviewAllRes.ok) throw new Error(`Lỗi tải vocab_review_log (toàn bộ): ${reviewAllRes.status}`);
+    if (!quizAllRes.ok) throw new Error(`Lỗi tải quiz_attempts (toàn bộ): ${quizAllRes.status}`);
+
+    const reviewRows = await reviewRes.json();
+    const quizRows = await quizRes.json();
+    const reviewAllRows = await reviewAllRes.json();
+    const quizAllRows = await quizAllRes.json();
+
+    // reviewed_at đã là "YYYY-MM-DD" (date). answered_at là timestamptz -> cắt lấy phần ngày.
+    const reviewDates = reviewRows.map(r => r.reviewed_at);
+    const quizDates = quizRows.map(r => String(r.answered_at).split('T')[0]);
+    const allDates = [...reviewDates, ...quizDates];
+
+    // Đếm số dòng log/ngày (gộp cả 2 nguồn) -> dùng để tính mức độ đậm nhạt ô heatmap.
+    const dateCountMap = new Map();
+    allDates.forEach(d => {
+      dateCountMap.set(d, (dateCountMap.get(d) || 0) + 1);
+    });
+
+    const { streak } = computeStreakFromDates(allDates);
+
+    // Best streak — dùng toàn bộ lịch sử, không giới hạn 90 ngày
+    const reviewDatesAll = reviewAllRows.map(r => r.reviewed_at);
+    const quizDatesAll = quizAllRows.map(r => String(r.answered_at).split('T')[0]);
+    const bestStreak = computeBestStreak([...reviewDatesAll, ...quizDatesAll]);
+
+    if (summaryEl) {
+      summaryEl.textContent = streak > 0
+        ? `🔥 ${streak} ngày liên tục`
+        : 'Bắt đầu chuỗi ngày học của bạn!';
+    }
+
+    if (currentStreakEl) currentStreakEl.textContent = streak;
+    if (bestStreakEl) bestStreakEl.textContent = bestStreak;
+
+    // Render heatmap 90 ô — mỗi ô là 1 ngày, từ 89 ngày trước đến hôm nay.
+    // Mức độ (level-0 .. level-4) tính theo % so với count cao nhất trong tập dữ liệu.
+    if (gridEl) {
+      const maxCount = Math.max(0, ...dateCountMap.values());
+
+      const getLevel = (count) => {
+        if (count === 0 || maxCount === 0) return 0;
+        const pct = count / maxCount;
+        if (pct <= 0.25) return 1;
+        if (pct <= 0.50) return 2;
+        if (pct <= 0.75) return 3;
+        return 4;
+      };
+
+      const cells = [];
+      for (let i = 89; i >= 0; i--) {
+        const d = new Date();
+        d.setDate(d.getDate() - i);
+        const dStr = d.toISOString().split('T')[0];
+        const count = dateCountMap.get(dStr) || 0;
+        const level = getLevel(count);
+        cells.push(`<div class="streak-cell level-${level}" title="${dStr}: ${count} hoạt động"></div>`);
+      }
+      gridEl.innerHTML = cells.join('');
+    }
+  } catch (err) {
+    console.error('Lỗi tải dữ liệu streak:', err);
+    if (summaryEl) {
+      summaryEl.textContent = '—';
+    }
+    if (currentStreakEl) currentStreakEl.textContent = '—';
+    if (bestStreakEl) bestStreakEl.textContent = '—';
+    if (gridEl) {
+      gridEl.innerHTML = '';
+    }
+  }
+
+  // study_sessions 7 ngày gần nhất — phút học, số phiên, số từ đã ôn tuần này.
+  // Tách try/catch riêng để lỗi ở phần này không làm hỏng phần streak phía trên.
+  try {
+    const since7 = new Date();
+    since7.setDate(since7.getDate() - 7);
+    const since7Str = since7.toISOString();
+
+    const sessionsUrl = `${STUDENT_CONFIG.supabaseUrl}/rest/v1/study_sessions?user_id=eq.${userId}&started_at=gte.${since7Str}&select=session_type,word_count,duration_seconds`;
+    const res = await fetch(sessionsUrl, { headers: sbAuthHeaders() });
+    if (!res.ok) throw new Error(`Lỗi tải study_sessions: ${res.status}`);
+
+    const rows = await res.json();
+
+    const totalMinutes = Math.round(
+      rows.reduce((sum, r) => sum + (r.duration_seconds || 0), 0) / 60
+    );
+    const totalSessions = rows.length;
+    const totalWords = rows.reduce((sum, r) => sum + (r.word_count || 0), 0);
+
+    // #streak-week hiện số phút học tuần này (chỉ 1 ô theo HTML Prompt 7.3) —
+    // số phiên/số từ vẫn tính sẵn ở đây, log ra console để dùng khi có thêm ô hiển thị.
+    const weekEl = document.getElementById('streak-week');
+    if (weekEl) weekEl.textContent = `${totalMinutes} phút`;
+
+    console.log(`[study_sessions 7 ngày] phiên: ${totalSessions}, từ đã ôn: ${totalWords}, phút: ${totalMinutes}`);
+  } catch (err) {
+    console.error('Lỗi tải thống kê study_sessions 7 ngày:', err);
+  }
+}
 // ============================================================
 //  DASHBOARD HỌC VIÊN — tự xem tiến độ (% Vocab đã học, số từ cần
 //  ôn hôm nay). Logic tính toán copy/refactor nguyên từ admin/admin.js
@@ -644,7 +887,10 @@ function buildAudioPath(wordObj) {
   if (wordObj.audio) return `audio/${wordObj.audio}`;
   const u = _digits(wordObj.unit);
   const p = _digits(wordObj.part);
-  return `audio/u${u}_p${p}_word-${wordObj.id}.mp3`;
+  // Dùng word_index (không phải id) để khớp đúng quy ước đặt tên file audio
+  // mà admin.js đang hướng dẫn học viên/admin khi thu âm (buildAudioFilenamePreview).
+  // id và word_index có thể lệch nhau sau khi xóa từ/import CSV, nên KHÔNG dùng id ở đây.
+  return `audio/u${u}_p${p}_word-${wordObj.word_index}.mp3`;
 }
 
 function getUnits() {
@@ -1013,6 +1259,8 @@ function runAutoplayCycle(partKey, token) {
 }
 
 function initFlashcardEngine(partKey) {
+  state.sessionStartTimes[partKey] = new Date().toISOString();
+
   const [u, p] = partKey.split('_');
   const words = _shuffle(getWords(u, p)).slice(0, 20); 
 
@@ -1097,6 +1345,35 @@ function evaluateFlashcard(partKey, isRemembered) {
   // Spaced Repetition: ghi nhận kết quả để tính lại lịch ôn tiếp theo cho từ này
   srUpdateWordState(currentWord.id, isRemembered);
 
+  // Ghi log hoạt động vào vocab_review_log — chỉ 1 lần khi phiên Flashcard
+  // hoàn tất (không ghi mỗi thẻ), chỉ ghi khi đã đăng nhập.
+  if (fState.index + 1 >= fState.cards.length) {
+    if (state.currentUser) {
+      fetch(`${STUDENT_CONFIG.supabaseUrl}/rest/v1/vocab_review_log`, {
+        method: 'POST',
+        headers: sbAuthHeaders(),
+        body: JSON.stringify({
+          user_id: state.currentUser.id,
+          vocab_id: currentWord.id,
+          reviewed_at: new Date().toISOString().split('T')[0]
+        })
+      }).catch(err => console.error('Lỗi ghi vocab_review_log:', err));
+
+      fetch(`${STUDENT_CONFIG.supabaseUrl}/rest/v1/study_sessions`, {
+        method: 'POST',
+        headers: sbAuthHeaders(),
+        body: JSON.stringify({
+          user_id: state.currentUser.id,
+          session_type: 'flashcard',
+          part_key: partKey,
+          word_count: fState.cards.length,
+          started_at: state.sessionStartTimes[partKey],
+          ended_at: new Date().toISOString()
+        })
+      }).catch(err => console.error('Lỗi ghi study_sessions:', err));
+    }
+  }
+
   if (fState.index + 1 < fState.cards.length) {
     fState.index++;
     renderFlashcard(partKey);
@@ -1153,6 +1430,8 @@ function changeQuizMode(partKey, newMode) {
 }
 
 function initQuizEngine(partKey, mode = 'k2m') {
+  state.sessionStartTimes[partKey] = new Date().toISOString();
+
   const [u, p] = partKey.split('_');
   let words = _shuffle(getWords(u, p));
 
@@ -1308,26 +1587,46 @@ function evaluateQuizEnd(partKey) {
   updateGlobalProgress();
   refreshBadgeOnAccordion(partKey, score, total);
 
-  // ─── ĐOẠN CODE TỰ ĐỘNG GỬI ĐIỂM LÊN GOOGLE SHEETS ĐƯỢC CHÈN VÀO ĐÂY ───
-  if (STUDENT_CONFIG.googleScriptUrl && STUDENT_CONFIG.googleScriptUrl !== "") {
-    const payload = {
-      studentName: STUDENT_CONFIG.studentName,
-      partKey: partKey, 
-      quizMode: quiz.quizMode === 'k2m' ? 'Kanji -> Meaning' : (quiz.quizMode === 'f2k' ? 'Kana -> Kanji' : 'Meaning -> Kanji'),
-      scoreText: `${score}/${total}`,
-      accuracy: `${pct}%`
-    };
+  // Ghi log kết quả Quiz lên Supabase — nhánh riêng, không chặn luồng render UI phía dưới.
+  if (state.currentUser) {
+    const attemptsPayload = quiz.questions.map(q => ({
+      user_id: state.currentUser.id,
+      vocab_id: q.word.id,
+      is_correct: q.status === 'correct'
+    }));
 
-    fetch(STUDENT_CONFIG.googleScriptUrl, {
-      method: "POST",
-      mode: "no-cors", 
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
-    })
-    .then(() => console.log("Gửi điểm thành công về Google Sheets!"))
-    .catch(err => console.error("Lỗi gửi điểm:", err));
+    fetch(`${STUDENT_CONFIG.supabaseUrl}/rest/v1/quiz_attempts`, {
+      method: 'POST',
+      headers: sbAuthHeaders(),
+      body: JSON.stringify(attemptsPayload)
+    }).catch(err => console.error('Lỗi ghi quiz_attempts:', err));
+
+    // 1 dòng đại diện vào vocab_review_log để ngày đó tính vào streak
+    if (quiz.questions.length > 0) {
+      fetch(`${STUDENT_CONFIG.supabaseUrl}/rest/v1/vocab_review_log`, {
+        method: 'POST',
+        headers: sbAuthHeaders(),
+        body: JSON.stringify({
+          user_id: state.currentUser.id,
+          vocab_id: quiz.questions[0].word.id,
+          reviewed_at: new Date().toISOString().split('T')[0]
+        })
+      }).catch(err => console.error('Lỗi ghi vocab_review_log:', err));
+    }
+
+    fetch(`${STUDENT_CONFIG.supabaseUrl}/rest/v1/study_sessions`, {
+      method: 'POST',
+      headers: sbAuthHeaders(),
+      body: JSON.stringify({
+        user_id: state.currentUser.id,
+        session_type: 'quiz',
+        part_key: partKey,
+        word_count: quiz.questions.length,
+        started_at: state.sessionStartTimes[partKey],
+        ended_at: new Date().toISOString()
+      })
+    }).catch(err => console.error('Lỗi ghi study_sessions:', err));
   }
-  // ───────────────────────────────────────────────────────────────────
 
   let emoji = '🎉'; let title = 'Excellent Work!';
   if (pct < 50) { emoji = '🩹'; title = 'Keep Practicing!'; } else if (pct < 80) { emoji = '👍'; title = 'Good Effort!'; }
@@ -1421,6 +1720,8 @@ function updateReviewBadge() {
 
 // Mở phiên Ôn tập hôm nay — gọi từ nút nav "Ôn tập hôm nay" trong index.html
 function openReviewToday() {
+  state.sessionStartTimes['review'] = new Date().toISOString();
+
   const zone = document.getElementById('review-zone');
   if (!zone) {
     console.error('Không tìm thấy #review-zone trong HTML. Cần thêm 1 container rỗng với id này.');
@@ -1514,6 +1815,39 @@ function evaluateReviewFlashcard(isRemembered) {
 
   // Đây là bước quan trọng nhất: cập nhật lại lịch ôn tiếp theo cho từ này
   srUpdateWordState(currentWord.id, isRemembered);
+
+  // Ghi log hoạt động ôn tập hôm nay vào vocab_review_log — chỉ ghi khi đã
+  // đăng nhập; không kiểm tra trùng, cho phép nhiều dòng cùng ngày vì chỉ
+  // cần biết "ngày đó có hoạt động hay không".
+  if (state.currentUser) {
+    fetch(`${STUDENT_CONFIG.supabaseUrl}/rest/v1/vocab_review_log`, {
+      method: 'POST',
+      headers: sbAuthHeaders(),
+      body: JSON.stringify({
+        user_id: state.currentUser.id,
+        vocab_id: currentWord.id,
+        reviewed_at: new Date().toISOString().split('T')[0]
+      })
+    }).catch(err => console.error('Lỗi ghi vocab_review_log:', err));
+  }
+
+  // Ghi study_sessions — chỉ 1 lần khi phiên Ôn tập hôm nay hoàn tất.
+  if (rState.index + 1 >= rState.cards.length) {
+    if (state.currentUser) {
+      fetch(`${STUDENT_CONFIG.supabaseUrl}/rest/v1/study_sessions`, {
+        method: 'POST',
+        headers: sbAuthHeaders(),
+        body: JSON.stringify({
+          user_id: state.currentUser.id,
+          session_type: 'review_srs',
+          part_key: null,
+          word_count: rState.cards.length,
+          started_at: state.sessionStartTimes['review'],
+          ended_at: new Date().toISOString()
+        })
+      }).catch(err => console.error('Lỗi ghi study_sessions:', err));
+    }
+  }
 
   if (rState.index + 1 < rState.cards.length) {
     rState.index++;
