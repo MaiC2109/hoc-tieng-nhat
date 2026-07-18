@@ -887,7 +887,10 @@ function buildAudioPath(wordObj) {
   if (wordObj.audio) return `audio/${wordObj.audio}`;
   const u = _digits(wordObj.unit);
   const p = _digits(wordObj.part);
-  return `audio/u${u}_p${p}_word-${wordObj.id}.mp3`;
+  // Dùng word_index (không phải id) để khớp đúng quy ước đặt tên file audio
+  // mà admin.js đang hướng dẫn khi thu âm (buildAudioFilenamePreview).
+  // id và word_index có thể lệch nhau sau khi xóa từ/import CSV, nên KHÔNG dùng id ở đây.
+  return `audio/u${u}_p${p}_word-${wordObj.word_index}.mp3`;
 }
 
 function getUnits() {
