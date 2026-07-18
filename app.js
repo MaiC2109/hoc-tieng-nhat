@@ -471,6 +471,109 @@ function startUI() {
   }
 }
 // Kích hoạt khi trang web tải xong
+// ============================================================
+//  DASHBOARD HỌC VIÊN — tự xem tiến độ (% Vocab đã học, số từ cần
+//  ôn hôm nay). Logic tính toán copy/refactor nguyên từ admin/admin.js
+//  (loadStudentDetail, countStudentLearnedVocab, countStudentDueToday)
+//  để đảm bảo cùng 1 định nghĩa "đã học"/"đến hạn" giữa Admin xem và
+//  học viên tự xem. email/full_name/jlpt_level đều nằm chung trong
+//  bảng profiles (đã gộp, không còn bảng student_profiles riêng).
+//  Render vào #student-progress-view (dùng chung markup/CSS với Admin).
+// ============================================================
+
+async function countStudentLearnedVocab(userId) {
+  const { count, error } = await supabaseClient
+    .from('vocab_srs_progress')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', userId);
+
+  if (error) throw error;
+  return count || 0;
+}
+
+async function countStudentDueToday(userId) {
+  const today = new Date().toISOString().split('T')[0];
+  const { count, error } = await supabaseClient
+    .from('vocab_srs_progress')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .lte('due_date', today);
+
+  if (error) throw error;
+  return count || 0;
+}
+
+// Tổng số từ vựng — dùng vocabularyData đã load sẵn trong state (initApp)
+// thay vì gọi lại Supabase. Lọc theo level nếu vocabularyData có cột level,
+// nếu không thì fallback về tổng toàn bộ.
+function countVocabByLevelLocal(jlptLevel) {
+  if (typeof window.vocabularyData === 'undefined') return 0;
+  if (!jlptLevel) return window.vocabularyData.length;
+
+  const hasLevelField = window.vocabularyData.some(w => w.level !== undefined);
+  if (!hasLevelField) return window.vocabularyData.length;
+
+  return window.vocabularyData.filter(w => w.level === jlptLevel).length;
+}
+
+// Dùng chung với Admin (admin/admin.js): isAdminView=false khi học viên tự
+// xem — giữ tham số này để chuẩn bị Phase 3.
+async function loadStudentDetail(userId, isAdminView = true, jlptLevel = null) {
+  const totalVocab = countVocabByLevelLocal(jlptLevel);
+
+  const [learnedCount, dueToday] = await Promise.all([
+    countStudentLearnedVocab(userId),
+    countStudentDueToday(userId)
+  ]);
+
+  const pct = totalVocab > 0 ? Math.round((learnedCount / totalVocab) * 100) : 0;
+  const fractionEl = document.getElementById('sp-vocab-fraction');
+  const fillEl = document.getElementById('sp-vocab-progress-fill');
+  const dueEl = document.getElementById('sp-due-today');
+  if (fractionEl) fractionEl.textContent = `${learnedCount}/${totalVocab}`;
+  if (fillEl) fillEl.style.width = `${pct}%`;
+  if (dueEl) dueEl.textContent = dueToday;
+
+  return { totalVocab, learnedCount, dueToday };
+}
+
+// Mở trang #dashboard — lấy userId từ session hiện tại rồi gọi loadStudentDetail(userId, false).
+async function openDashboard() {
+  switchMainSection('dashboard');
+
+  const nameEl = document.getElementById('sp-student-name');
+  const levelEl = document.getElementById('sp-student-level');
+  const fractionEl = document.getElementById('sp-vocab-fraction');
+  const dueEl = document.getElementById('sp-due-today');
+
+  if (fractionEl) fractionEl.textContent = 'Đang tải...';
+  if (dueEl) dueEl.textContent = '—';
+
+  try {
+    const { data: userData, error: userError } = await supabaseClient.auth.getUser();
+    if (userError) throw userError;
+
+    const userId = userData?.user?.id;
+    if (!userId) throw new Error('Không tìm thấy phiên đăng nhập hiện tại.');
+
+    // profiles đã gộp đủ cột — không cần bảng student_profiles riêng nữa.
+    const { data: profile, error: profileError } = await supabaseClient
+      .from('profiles')
+      .select('full_name, jlpt_level')
+      .eq('id', userId)
+      .maybeSingle();
+    if (profileError) throw profileError;
+
+    if (nameEl) nameEl.textContent = profile?.full_name || currentUser?.email || '(chưa có tên)';
+    if (levelEl) levelEl.textContent = profile?.jlpt_level ? `Level ${profile.jlpt_level}` : 'Chưa có level';
+
+    await loadStudentDetail(userId, false, profile?.jlpt_level || null);
+  } catch (err) {
+    console.error('Lỗi tải Dashboard:', err);
+    if (fractionEl) fractionEl.textContent = '❌ Lỗi tải dữ liệu';
+  }
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   logDeviceVisit(); // ghi nhận thiết bị mỗi lần học viên mở app — không chặn luồng chính
   initLoginForm();  // gắn sự kiện submit cho form đăng nhập
@@ -1278,7 +1381,7 @@ function updateGlobalProgress() {
 
 function syncData() {
   const btn = document.getElementById('sync-btn');
-  btn.classList.add('rotating'); // Bắt đầu hiệu ứng xoay
+  btn?.classList.add('rotating'); // Bắt đầu hiệu ứng xoay (an toàn nếu #sync-btn không tồn tại trong HTML)
   
   // Thông báo cho người dùng
   const progressEl = document.getElementById('global-progress');
@@ -1290,7 +1393,7 @@ function syncData() {
 
   // Gọi lại hàm initApp để tải mới hoàn toàn
   initApp().then(() => {
-    btn.classList.remove('rotating'); // Dừng xoay khi xong
+    btn?.classList.remove('rotating'); // Dừng xoay khi xong (an toàn nếu #sync-btn không tồn tại)
   });
 }
 
