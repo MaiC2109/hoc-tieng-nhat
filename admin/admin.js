@@ -1478,7 +1478,7 @@ const studentAdminState = {
 async function loadStudentAdminList() {
   const tbody = document.getElementById('student-table-body');
   if (tbody) {
-    tbody.innerHTML = `<tr><td colspan="3"><div class="empty-state">Đang tải dữ liệu...</div></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="2"><div class="empty-state">Đang tải dữ liệu...</div></td></tr>`;
   }
 
   try {
@@ -1518,7 +1518,7 @@ async function loadStudentAdminList() {
   } catch (err) {
     console.error('Lỗi tải danh sách học viên:', err);
     if (tbody) {
-      tbody.innerHTML = `<tr><td colspan="3"><div class="empty-state">❌ Không tải được danh sách học viên.</div></td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="2"><div class="empty-state">❌ Không tải được danh sách học viên.</div></td></tr>`;
     }
   }
 }
@@ -1581,7 +1581,7 @@ function renderStudentAdminTable(rows) {
     : rows;
 
   if (filtered.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="3"><div class="empty-state">Không tìm thấy học viên nào.</div></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="2"><div class="empty-state">Không tìm thấy học viên nào.</div></td></tr>`;
     return;
   }
 
@@ -1597,6 +1597,9 @@ function renderStudentAdminTable(rows) {
       <tr class="student-row ${activeClass}" onclick="selectStudentRow('${r.id}')">
         <td>${escHtml(r.full_name || '(chưa có tên)')}</td>
         <td>${escHtml(r.jlpt_level || '—')}</td>
+        <!-- Tạm ẩn cột "% Vocab" — xem ghi chú ở loadStudentDetail() /
+             countStudentLearnedVocab(). pct/pctLabel vẫn tính ở trên, giữ
+             nguyên logic, chỉ không render ra DOM ở bước này.
         <td>
           <div style="display:flex; align-items:center; gap:8px;">
             <div class="progress-bar-mini" style="width:70px;">
@@ -1605,6 +1608,7 @@ function renderStudentAdminTable(rows) {
             <span style="font-size:12px; color:var(--ink-mute);">${pctLabel}</span>
           </div>
         </td>
+        -->
       </tr>
     `;
   }).join('');
@@ -1629,8 +1633,9 @@ async function selectStudentRow(userId) {
 
   document.getElementById('sp-student-name').textContent = row.full_name || '(chưa có tên)';
   document.getElementById('sp-student-level').textContent = row.jlpt_level ? `Level ${row.jlpt_level}` : 'Chưa có level';
-  document.getElementById('sp-vocab-fraction').textContent = 'Đang tải...';
-  document.getElementById('sp-vocab-progress-fill').style.width = '0%';
+  // Tạm ẩn "Vocab đã học" — xem ghi chú trong loadStudentDetail() bên dưới.
+  // document.getElementById('sp-vocab-fraction').textContent = 'Đang tải...';
+  // document.getElementById('sp-vocab-progress-fill').style.width = '0%';
   document.getElementById('sp-due-today').textContent = '—';
 
   view.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -1639,7 +1644,7 @@ async function selectStudentRow(userId) {
     await loadStudentDetail(userId, true, row.jlpt_level);
   } catch (err) {
     console.error('Lỗi tải chi tiết học viên:', err);
-    document.getElementById('sp-vocab-fraction').textContent = '❌ Lỗi tải dữ liệu';
+    // document.getElementById('sp-vocab-fraction').textContent = '❌ Lỗi tải dữ liệu';
   }
 }
 
@@ -1655,9 +1660,13 @@ async function loadStudentDetail(userId, isAdminView = true, jlptLevel = null) {
   ]);
 
   if (isAdminView) {
-    const pct = totalVocab > 0 ? Math.round((learnedCount / totalVocab) * 100) : 0;
-    document.getElementById('sp-vocab-fraction').textContent = `${learnedCount}/${totalVocab}`;
-    document.getElementById('sp-vocab-progress-fill').style.width = `${pct}%`;
+    // Tạm ẩn hiển thị "Vocab đã học" — countStudentLearnedVocab() đọc từ
+    // vocab_srs_progress, bảng này chưa được ghi ở đâu trong code hiện tại
+    // nên luôn trả về 0. Giữ nguyên phép tính pct/learnedCount bên dưới
+    // (return vẫn trả đủ dữ liệu), chỉ comment out phần ghi ra DOM.
+    // const pct = totalVocab > 0 ? Math.round((learnedCount / totalVocab) * 100) : 0;
+    // document.getElementById('sp-vocab-fraction').textContent = `${learnedCount}/${totalVocab}`;
+    // document.getElementById('sp-vocab-progress-fill').style.width = `${pct}%`;
     document.getElementById('sp-due-today').textContent = dueToday;
   }
 
