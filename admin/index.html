@@ -36,7 +36,12 @@
         </div>
         <div class="admin-form-group">
           <label for="login-password">Mật khẩu</label>
-          <input type="password" id="login-password" name="password" placeholder="••••••••" autocomplete="current-password" />
+          <div class="admin-password-wrap">
+            <input type="password" id="login-password" name="password" placeholder="••••••••" autocomplete="current-password" />
+            <button type="button" id="login-password-toggle" class="admin-password-toggle-btn" aria-label="Hiện/ẩn mật khẩu" tabindex="-1">
+              <i class="ti ti-eye"></i>
+            </button>
+          </div>
         </div>
 
         <div id="admin-login-error" class="admin-login-error"></div>
@@ -159,6 +164,7 @@
               <table class="admin-vocab-table">
                 <thead>
                   <tr>
+                    <th style="width:56px;">STT</th>
                     <th>Kanji</th>
                     <th>Kana</th>
                     <th>Meaning</th>
@@ -169,10 +175,22 @@
                 </thead>
                 <tbody id="vocab-table-body">
                   <tr>
-                    <td colspan="6"><div class="empty-state">Đang tải dữ liệu...</div></td>
+                    <td colspan="7"><div class="empty-state">Đang tải dữ liệu...</div></td>
                   </tr>
                 </tbody>
               </table>
+            </div>
+            <div class="admin-pagination" id="vocab-pagination" style="display:none;">
+              <span class="admin-pagination-info" id="vocab-pagination-info"></span>
+              <div class="admin-pagination-controls">
+                <button type="button" class="admin-row-action-btn" id="vocab-page-prev" title="Trang trước">
+                  <i class="ti ti-chevron-left"></i>
+                </button>
+                <span class="admin-pagination-current" id="vocab-pagination-current"></span>
+                <button type="button" class="admin-row-action-btn" id="vocab-page-next" title="Trang sau">
+                  <i class="ti ti-chevron-right"></i>
+                </button>
+              </div>
             </div>
           </div>
 
@@ -280,6 +298,31 @@
                   <div class="admin-stat-label">Cần ôn hôm nay</div>
                 </div>
               </div>
+            </div>
+
+            <!-- Streak/Heatmap học viên — port từ #streak-* bên trang học viên tự xem,
+                 render bởi loadStudentStreakDetail(userId) trong admin.js.
+                 Dùng lại y hệt class .streak-badge/.streak-stats-row/.streak-stat-card/
+                 .streak-grid/.streak-cell.level-0..4 đã có trong style.css. -->
+            <div class="student-progress-streak-section" style="margin-top:20px; padding-top:18px; border-top:1px solid var(--border);">
+              <div id="sp-streak-summary" class="streak-badge">—</div>
+
+              <div class="streak-stats-row">
+                <div class="streak-stat-card">
+                  <div class="streak-stat-value" id="sp-streak-current">—</div>
+                  <div class="streak-stat-label">Streak hiện tại</div>
+                </div>
+                <div class="streak-stat-card">
+                  <div class="streak-stat-value" id="sp-streak-best">—</div>
+                  <div class="streak-stat-label">Best streak</div>
+                </div>
+                <div class="streak-stat-card">
+                  <div class="streak-stat-value" id="sp-streak-week">—</div>
+                  <div class="streak-stat-label">Tuần này</div>
+                </div>
+              </div>
+
+              <div id="sp-streak-grid" class="streak-grid"></div>
             </div>
           </div>
 
@@ -454,6 +497,10 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <!-- PapaParse — parse file CSV client-side cho chức năng Import CSV (mục Vocab) -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+  <!-- streak-utils.js: computeStreakFromDates/computeBestStreak dùng chung với app.js —
+       PHẢI load trước admin.js vì loadStudentStreakDetail() (sẽ thêm ở bước sau)
+       gọi thẳng 2 hàm này từ global scope. -->
+  <script src="/streak-utils.js"></script>
   <!-- Logic (Supabase Auth, toggle nav, fetch số liệu...) -->
   <script src="/admin/admin.js"></script>
 </body>

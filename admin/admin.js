@@ -2,14 +2,11 @@
 
 // ============================================================
 //  ADMIN CONFIG
-//  ⚠️ FILE NÀY DÀNH CHO MÔI TRƯỜNG TEST/STAGING — trỏ vào Supabase
-//  project Test (hzecdpnmegfwbximgqlv), KHÔNG PHẢI Production. Khi
-//  deploy thật cho Admin, đổi lại supabaseUrl/supabaseAnonKey sang
-//  project Production (zlblylqosqwnhudeivpt).
+//  Trỏ vào Supabase project Production (zlblylqosqwnhudeivpt).
 // ============================================================
 const ADMIN_CONFIG = {
-  supabaseUrl: "https://hzecdpnmegfwbximgqlv.supabase.co",
-  supabaseAnonKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh6ZWNkcG5tZWdmd2J4aW1ncWx2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMyMTEwNTEsImV4cCI6MjA5ODc4NzA1MX0.esdOJo7gvQXLJjG94PUQ_rghTfGCAAaYzdP3l-j3u-s",
+  supabaseUrl: "https://zlblylqosqwnhudeivpt.supabase.co",
+  supabaseAnonKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpsYmx5bHFvc3F3bmh1ZGVpdnB0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI1Mzk0NjUsImV4cCI6MjA5ODExNTQ2NX0.Xa8FblRuypm_eHMGz8GrCpwloKnzjgjTu8z_1ivS8_4",
   vocabTable: "vocabulary",
   profilesTable: "profiles",
   // Bảng lưu tiến độ SRS theo từng học viên: unique(user_id, vocab_id),
@@ -174,6 +171,21 @@ function initAdminLogoutButton() {
   if (btn) btn.addEventListener('click', logoutAdmin);
 }
 
+// Toggle hiện/ẩn mật khẩu ở form đăng nhập — chỉ đổi type input + icon,
+// không lưu trạng thái vào đâu cả (không cần thiết, chỉ là UI tạm thời).
+function initLoginPasswordToggle() {
+  const toggleBtn = document.getElementById('login-password-toggle');
+  const passwordInput = document.getElementById('login-password');
+  if (!toggleBtn || !passwordInput) return;
+
+  toggleBtn.addEventListener('click', () => {
+    const isHidden = passwordInput.type === 'password';
+    passwordInput.type = isHidden ? 'text' : 'password';
+    toggleBtn.innerHTML = isHidden ? '<i class="ti ti-eye-off"></i>' : '<i class="ti ti-eye"></i>';
+    toggleBtn.setAttribute('aria-label', isHidden ? 'Ẩn mật khẩu' : 'Hiện mật khẩu');
+  });
+}
+
 // ============================================================
 //  2. ĐIỀU HƯỚNG SIDEBAR — chuyển đổi giữa 3 section
 // ============================================================
@@ -336,8 +348,11 @@ async function loadRecentActivity() {
 //  chỉ là stub để nút bấm không báo lỗi Console, chưa có tác dụng thật.
 // ============================================================
 
+const VOCAB_PAGE_SIZE = 50;
+
 const vocabAdminState = {
-  currentRows: []   // kết quả fetch mới nhất theo filter hiện tại — dùng để render bảng + tra cứu khi sửa/xóa
+  currentRows: [],  // kết quả fetch mới nhất theo filter hiện tại — dùng để render bảng + tra cứu khi sửa/xóa
+  currentPage: 1     // trang hiện tại (bắt đầu từ 1) — reset về 1 mỗi khi filter/list đổi
 };
 
 // ── DANH MỤC UNIT/PART (bảng units/parts riêng, xem units_parts_schema.sql) ──
@@ -447,26 +462,44 @@ async function loadVocabAdminList() {
 
     const rows = await res.json();
     vocabAdminState.currentRows = rows;
-    renderVocabAdminTable(rows);
+    vocabAdminState.currentPage = 1; // reset về trang 1 mỗi khi tải lại danh sách (đổi filter, thêm/sửa/xóa...)
+    renderVocabAdminTable();
   } catch (err) {
     console.error('Lỗi tải danh sách từ vựng:', err);
     if (tbody) {
-      tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state">❌ Không tải được danh sách từ vựng.</div></td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state">❌ Không tải được danh sách từ vựng.</div></td></tr>`;
     }
+    const pagEl = document.getElementById('vocab-pagination');
+    if (pagEl) pagEl.style.display = 'none';
   }
 }
 
-function renderVocabAdminTable(rows) {
+// Render đúng 1 trang (VOCAB_PAGE_SIZE dòng) của vocabAdminState.currentRows,
+// dựa theo vocabAdminState.currentPage. STT hiển thị = word_index của từ đó
+// (không phải số thứ tự trang), theo đúng yêu cầu.
+function renderVocabAdminTable() {
   const tbody = document.getElementById('vocab-table-body');
+  const pagEl = document.getElementById('vocab-pagination');
   if (!tbody) return;
 
-  if (rows.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state">Không có từ vựng nào khớp bộ lọc.</div></td></tr>`;
+  const allRows = vocabAdminState.currentRows;
+
+  if (allRows.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state">Không có từ vựng nào khớp bộ lọc.</div></td></tr>`;
+    if (pagEl) pagEl.style.display = 'none';
     return;
   }
 
-  tbody.innerHTML = rows.map(r => `
+  const totalPages = Math.max(1, Math.ceil(allRows.length / VOCAB_PAGE_SIZE));
+  if (vocabAdminState.currentPage > totalPages) vocabAdminState.currentPage = totalPages;
+  if (vocabAdminState.currentPage < 1) vocabAdminState.currentPage = 1;
+
+  const startIdx = (vocabAdminState.currentPage - 1) * VOCAB_PAGE_SIZE;
+  const pageRows = allRows.slice(startIdx, startIdx + VOCAB_PAGE_SIZE);
+
+  tbody.innerHTML = pageRows.map(r => `
     <tr>
+      <td>${escHtml(r.word_index)}</td>
       <td class="cell-kanji">${escHtml(r.kanji || '—')}</td>
       <td class="cell-kana">${escHtml(r.kana || '—')}</td>
       <td>${escHtml(r.meaning || '—')}</td>
@@ -484,6 +517,44 @@ function renderVocabAdminTable(rows) {
       </td>
     </tr>
   `).join('');
+
+  renderVocabPagination(allRows.length, totalPages);
+}
+
+function renderVocabPagination(totalRows, totalPages) {
+  const pagEl = document.getElementById('vocab-pagination');
+  const infoEl = document.getElementById('vocab-pagination-info');
+  const currentEl = document.getElementById('vocab-pagination-current');
+  const prevBtn = document.getElementById('vocab-page-prev');
+  const nextBtn = document.getElementById('vocab-page-next');
+  if (!pagEl) return;
+
+  if (totalPages <= 1) {
+    pagEl.style.display = 'none';
+    return;
+  }
+
+  const page = vocabAdminState.currentPage;
+  const startIdx = (page - 1) * VOCAB_PAGE_SIZE + 1;
+  const endIdx = Math.min(page * VOCAB_PAGE_SIZE, totalRows);
+
+  pagEl.style.display = 'flex';
+  if (infoEl) infoEl.textContent = `Hiển thị ${startIdx}–${endIdx} / ${totalRows} từ`;
+  if (currentEl) currentEl.textContent = `Trang ${page} / ${totalPages}`;
+  if (prevBtn) prevBtn.disabled = page <= 1;
+  if (nextBtn) nextBtn.disabled = page >= totalPages;
+}
+
+function goToVocabPage(delta) {
+  vocabAdminState.currentPage += delta;
+  renderVocabAdminTable();
+  const tableCard = document.querySelector('.admin-table-card');
+  if (tableCard) tableCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function initVocabPaginationControls() {
+  document.getElementById('vocab-page-prev')?.addEventListener('click', () => goToVocabPage(-1));
+  document.getElementById('vocab-page-next')?.addEventListener('click', () => goToVocabPage(1));
 }
 
 // Gắn sự kiện onchange cho 2 dropdown filter — mỗi lần đổi giá trị đều gọi
@@ -1534,6 +1605,16 @@ async function selectStudentRow(userId) {
   document.getElementById('sp-vocab-fraction').textContent = 'Đang tải...';
   document.getElementById('sp-vocab-progress-fill').style.width = '0%';
   document.getElementById('sp-due-today').textContent = '—';
+  const spStreakSummaryEl = document.getElementById('sp-streak-summary');
+  const spStreakCurrentEl = document.getElementById('sp-streak-current');
+  const spStreakBestEl = document.getElementById('sp-streak-best');
+  const spStreakWeekEl = document.getElementById('sp-streak-week');
+  const spStreakGridEl = document.getElementById('sp-streak-grid');
+  if (spStreakSummaryEl) spStreakSummaryEl.textContent = 'Đang tải...';
+  if (spStreakCurrentEl) spStreakCurrentEl.textContent = '—';
+  if (spStreakBestEl) spStreakBestEl.textContent = '—';
+  if (spStreakWeekEl) spStreakWeekEl.textContent = '—';
+  if (spStreakGridEl) spStreakGridEl.innerHTML = '';
 
   view.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
@@ -1542,6 +1623,15 @@ async function selectStudentRow(userId) {
   } catch (err) {
     console.error('Lỗi tải chi tiết học viên:', err);
     document.getElementById('sp-vocab-fraction').textContent = '❌ Lỗi tải dữ liệu';
+  }
+
+  // Tách try/catch riêng — lỗi tải streak không được làm hỏng phần đã tải
+  // thành công ở trên (giống cách app.js tách 2 khối try/catch trong loadStreakData()).
+  try {
+    await loadStudentStreakDetail(userId);
+  } catch (err) {
+    console.error('Lỗi tải streak học viên:', err);
+    if (spStreakSummaryEl) spStreakSummaryEl.textContent = '❌ Lỗi tải dữ liệu';
   }
 }
 
@@ -1564,6 +1654,127 @@ async function loadStudentDetail(userId, isAdminView = true, jlptLevel = null) {
   }
 
   return { totalVocab, learnedCount, dueToday };
+}
+
+// ── STREAK CHO ADMIN XEM 1 HỌC VIÊN BẤT KỲ ──────────────────
+// Port từ loadStreakData(userId) bên app.js (Bước 7), khác 2 điểm:
+//   1. Dùng supabaseClient.from(...) thay vì fetch thô + sbHeaders() —
+//      giống hệt pattern countStudentLearnedVocab()/countStudentDueToday()
+//      ở trên, vì các bảng vocab_review_log/quiz_attempts/study_sessions
+//      có RLS theo user_id, cần đi qua session JWT của admin đang đăng
+//      nhập (được RLS cho phép đọc chéo), không dùng anon key trần.
+//   2. Render vào #sp-streak-* (khu vực Chi tiết học viên bên Admin),
+//      không phải #streak-* (trang học viên tự xem).
+// computeStreakFromDates()/computeBestStreak() lấy từ streak-utils.js
+// (global, đã load trước admin.js — xem admin/index.html).
+async function loadStudentStreakDetail(userId) {
+  const summaryEl = document.getElementById('sp-streak-summary');
+  const gridEl = document.getElementById('sp-streak-grid');
+  const currentStreakEl = document.getElementById('sp-streak-current');
+  const bestStreakEl = document.getElementById('sp-streak-best');
+  const weekEl = document.getElementById('sp-streak-week');
+
+  try {
+    const since = new Date();
+    since.setDate(since.getDate() - 90);
+    const sinceStr = since.toISOString().split('T')[0];
+
+    const [reviewRes, quizRes, reviewAllRes, quizAllRes] = await Promise.all([
+      supabaseClient.from('vocab_review_log').select('reviewed_at').eq('user_id', userId).gte('reviewed_at', sinceStr),
+      supabaseClient.from('quiz_attempts').select('answered_at').eq('user_id', userId).gte('answered_at', sinceStr),
+      supabaseClient.from('vocab_review_log').select('reviewed_at').eq('user_id', userId),
+      supabaseClient.from('quiz_attempts').select('answered_at').eq('user_id', userId)
+    ]);
+
+    if (reviewRes.error) throw reviewRes.error;
+    if (quizRes.error) throw quizRes.error;
+    if (reviewAllRes.error) throw reviewAllRes.error;
+    if (quizAllRes.error) throw quizAllRes.error;
+
+    // reviewed_at đã là "YYYY-MM-DD" (date). answered_at là timestamptz -> cắt lấy phần ngày.
+    const reviewDates = reviewRes.data.map(r => r.reviewed_at);
+    const quizDates = quizRes.data.map(r => String(r.answered_at).split('T')[0]);
+    const allDates = [...reviewDates, ...quizDates];
+
+    // Đếm số dòng log/ngày (gộp cả 2 nguồn) -> dùng để tính mức độ đậm nhạt ô heatmap.
+    const dateCountMap = new Map();
+    allDates.forEach(d => {
+      dateCountMap.set(d, (dateCountMap.get(d) || 0) + 1);
+    });
+
+    const { streak } = computeStreakFromDates(allDates);
+
+    // Best streak — dùng toàn bộ lịch sử, không giới hạn 90 ngày
+    const reviewDatesAll = reviewAllRes.data.map(r => r.reviewed_at);
+    const quizDatesAll = quizAllRes.data.map(r => String(r.answered_at).split('T')[0]);
+    const bestStreak = computeBestStreak([...reviewDatesAll, ...quizDatesAll]);
+
+    if (summaryEl) {
+      summaryEl.textContent = streak > 0
+        ? `🔥 ${streak} ngày liên tục`
+        : 'Chưa có chuỗi ngày học nào';
+    }
+
+    if (currentStreakEl) currentStreakEl.textContent = streak;
+    if (bestStreakEl) bestStreakEl.textContent = bestStreak;
+
+    // Render heatmap 90 ô — mỗi ô là 1 ngày, từ 89 ngày trước đến hôm nay.
+    // Mức độ (level-0 .. level-4) tính theo % so với count cao nhất trong tập dữ liệu.
+    if (gridEl) {
+      const maxCount = Math.max(0, ...dateCountMap.values());
+
+      const getLevel = (count) => {
+        if (count === 0 || maxCount === 0) return 0;
+        const pct = count / maxCount;
+        if (pct <= 0.25) return 1;
+        if (pct <= 0.50) return 2;
+        if (pct <= 0.75) return 3;
+        return 4;
+      };
+
+      const cells = [];
+      for (let i = 89; i >= 0; i--) {
+        const d = new Date();
+        d.setDate(d.getDate() - i);
+        const dStr = d.toISOString().split('T')[0];
+        const count = dateCountMap.get(dStr) || 0;
+        const level = getLevel(count);
+        cells.push(`<div class="streak-cell level-${level}" title="${dStr}: ${count} hoạt động"></div>`);
+      }
+      gridEl.innerHTML = cells.join('');
+    }
+  } catch (err) {
+    console.error('Lỗi tải dữ liệu streak học viên:', err);
+    if (summaryEl) summaryEl.textContent = '—';
+    if (currentStreakEl) currentStreakEl.textContent = '—';
+    if (bestStreakEl) bestStreakEl.textContent = '—';
+    if (gridEl) gridEl.innerHTML = '';
+  }
+
+  // study_sessions 7 ngày gần nhất — phút học tuần này. Tách try/catch riêng
+  // để lỗi ở phần này không làm hỏng phần streak/heatmap phía trên.
+  try {
+    const since7 = new Date();
+    since7.setDate(since7.getDate() - 7);
+    const since7Str = since7.toISOString();
+
+    const { data: rows, error } = await supabaseClient
+      .from('study_sessions')
+      .select('session_type, word_count, duration_seconds')
+      .eq('user_id', userId)
+      .gte('started_at', since7Str);
+
+    if (error) throw error;
+
+    const totalMinutes = Math.round(
+      rows.reduce((sum, r) => sum + (r.duration_seconds || 0), 0) / 60
+    );
+
+    if (weekEl) weekEl.textContent = `${totalMinutes} phút`;
+  } catch (err) {
+    console.error('Lỗi tải thống kê study_sessions 7 ngày của học viên:', err);
+    if (weekEl) weekEl.textContent = '—';
+  }
 }
 
 // ── FORM "CẬP NHẬT THÔNG TIN HỌC VIÊN" ──────────────────────
@@ -1648,10 +1859,12 @@ function initStudentFormControls() {
 // ============================================================
 document.addEventListener('DOMContentLoaded', () => {
   initAdminLoginForm();
+  initLoginPasswordToggle();
   initAdminLogoutButton();
   initAdminNav();
   initVocabFilters();
   initVocabFormControls();
+  initVocabPaginationControls();
   initCategoryManagerControls();
   initCsvImportControls();
   initStudentSearch();
