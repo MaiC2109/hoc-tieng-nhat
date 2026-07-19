@@ -157,10 +157,10 @@ function logDeviceVisit() {
 // 2. Cấu hình — tập trung toàn bộ thông tin kết nối tại đây
 const STUDENT_CONFIG = {
   // Supabase (Test)
-  supabaseUrl: "https://hzecdpnmegfwbximgqlv.supabase.co",
-  supabaseAnonKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh6ZWNkcG5tZWdmd2J4aW1ncWx2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMyMTEwNTEsImV4cCI6MjA5ODc4NzA1MX0.esdOJo7gvQXLJjG94PUQ_rghTfGCAAaYzdP3l-j3u-s",
-  vocabUrl: "https://hzecdpnmegfwbximgqlv.supabase.co/rest/v1/vocabulary?order=id.asc",
-  deviceLogUrl: "https://hzecdpnmegfwbximgqlv.supabase.co/rest/v1/device_logs"
+  supabaseUrl: "https://zlblylqosqwnhudeivpt.supabase.co",
+  supabaseAnonKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpsYmx5bHFvc3F3bmh1ZGVpdnB0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI1Mzk0NjUsImV4cCI6MjA5ODExNTQ2NX0.Xa8FblRuypm_eHMGz8GrCpwloKnzjgjTu8z_1ivS8_4",
+  vocabUrl: "https://zlblylqosqwnhudeivpt.supabase.co/rest/v1/vocabulary?order=id.asc",
+  deviceLogUrl: "https://zlblylqosqwnhudeivpt.supabase.co/rest/v1/device_logs"
 };
 
 // ============================================================
@@ -523,64 +523,10 @@ function startUI() {
 //  STREAK (chuỗi ngày học liên tiếp)
 // ============================================================
 
-// Hàm thuần — không đụng DOM, không phụ thuộc state/app cụ thể, có thể copy
-// nguyên sang cả app.js và admin.js (không import, dùng độc lập ở mỗi file).
-//
-// Input:  dateStrings — mảng string dạng "YYYY-MM-DD" (vd: lấy từ cột
-//         reviewed_at của bảng vocab_review_log, có thể trùng lặp, không
-//         cần sắp xếp trước).
-// Output: { streak: number, activeDatesSet: Set<string> }
-//         - activeDatesSet: Set các ngày duy nhất (đã khử trùng) từ input.
-//         - streak: số ngày liên tiếp có hoạt động, đếm ngược từ hôm nay.
-//           Nếu hôm nay chưa có hoạt động (chưa học/ôn gì hôm nay), streak
-//           vẫn được tính bắt đầu từ hôm qua (không bị mất streak chỉ vì
-//           chưa mở app hôm nay) — dừng đếm ngay khi gặp 1 ngày trống.
-function computeStreakFromDates(dateStrings) {
-  const activeDatesSet = new Set(dateStrings);
-  const toDateStr = (d) => d.toISOString().split('T')[0];
-  let cursor = new Date();
-  cursor.setHours(0, 0, 0, 0);
-  let streak = 0;
-  // Nếu hôm nay chưa có hoạt động, lùi mốc bắt đầu đếm về hôm qua,
-  // không tính hôm nay là ngày "gãy" streak.
-  if (!activeDatesSet.has(toDateStr(cursor))) {
-    cursor.setDate(cursor.getDate() - 1);
-  }
-  while (activeDatesSet.has(toDateStr(cursor))) {
-    streak++;
-    cursor.setDate(cursor.getDate() - 1);
-  }
-  return { streak, activeDatesSet };
-}
-
-// Hàm thuần — nhận mảng ngày "YYYY-MM-DD" (có thể trùng lặp, không cần sort
-// trước), trả về số nguyên = độ dài chuỗi ngày liên tiếp DÀI NHẤT từng có
-// trong toàn bộ lịch sử (không nhất thiết phải liên quan tới "hôm nay",
-// khác với computeStreakFromDates() ở trên).
-function computeBestStreak(dateStrings) {
-  const uniqueDates = [...new Set(dateStrings)].sort();
-  if (uniqueDates.length === 0) return 0;
-
-  let best = 1;
-  let current = 1;
-
-  for (let i = 1; i < uniqueDates.length; i++) {
-    const prev = new Date(uniqueDates[i - 1]);
-    const cur = new Date(uniqueDates[i]);
-    const diffDays = Math.round((cur - prev) / 86400000);
-
-    if (diffDays === 1) {
-      current++;
-    } else if (diffDays > 1) {
-      current = 1;
-    }
-    // diffDays === 0 (trùng ngày, không nên xảy ra vì đã unique) -> bỏ qua
-
-    if (current > best) best = current;
-  }
-
-  return best;
-}
+// computeStreakFromDates() và computeBestStreak() giờ nằm ở streak-utils.js
+// (hàm thuần, dùng chung với admin.js) — file đó PHẢI được load TRƯỚC
+// app.js trong index.html, xem thẻ <script src="streak-utils.js"> đặt
+// trước <script src="app.js">.
 
 // Fetch dữ liệu hoạt động của user từ 2 nguồn (Review flashcard + Quiz):
 // - 90 ngày gần nhất -> streak hiện tại + heatmap 90 ô, 5 mức độ (Prompt 7.4).
@@ -759,63 +705,73 @@ function countVocabByLevelLocal(jlptLevel) {
   return window.vocabularyData.filter(w => w.level === jlptLevel).length;
 }
 
-// Dùng chung với Admin (admin/admin.js): isAdminView=false khi học viên tự
-// xem — giữ tham số này để chuẩn bị Phase 3.
-async function loadStudentDetail(userId, isAdminView = true, jlptLevel = null) {
-  const totalVocab = countVocabByLevelLocal(jlptLevel);
+// ════════════════════════════════════════════════════════════
+// DASHBOARD HỌC VIÊN — tạm comment out toàn bộ khối này.
+// Trang index.html hiện không còn menu/section Dashboard nào gọi tới
+// openDashboard() nữa. Đồng thời learnedCount bên dưới phụ thuộc
+// countStudentLearnedVocab() đọc từ bảng vocab_srs_progress, bảng này
+// chưa được ghi ở bất kỳ đâu trong code (SRS thật đang lưu ở
+// localStorage phía client) nên luôn ra 0. Giữ nguyên logic, chỉ
+// comment out để tắt tính năng cho tới khi quyết định hướng sửa.
+//
+// // Dùng chung với Admin (admin/admin.js): isAdminView=false khi học viên tự
+// // xem — giữ tham số này để chuẩn bị Phase 3.
+// async function loadStudentDetail(userId, isAdminView = true, jlptLevel = null) {
+//   const totalVocab = countVocabByLevelLocal(jlptLevel);
+//
+//   const [learnedCount, dueToday] = await Promise.all([
+//     countStudentLearnedVocab(userId),
+//     countStudentDueToday(userId)
+//   ]);
+//
+//   const pct = totalVocab > 0 ? Math.round((learnedCount / totalVocab) * 100) : 0;
+//   const fractionEl = document.getElementById('sp-vocab-fraction');
+//   const fillEl = document.getElementById('sp-vocab-progress-fill');
+//   const dueEl = document.getElementById('sp-due-today');
+//   if (fractionEl) fractionEl.textContent = `${learnedCount}/${totalVocab}`;
+//   if (fillEl) fillEl.style.width = `${pct}%`;
+//   if (dueEl) dueEl.textContent = dueToday;
+//
+//   return { totalVocab, learnedCount, dueToday };
+// }
+//
+// // Mở trang #dashboard — lấy userId từ session hiện tại rồi gọi loadStudentDetail(userId, false).
+// async function openDashboard() {
+//   switchMainSection('dashboard');
+//
+//   const nameEl = document.getElementById('sp-student-name');
+//   const levelEl = document.getElementById('sp-student-level');
+//   const fractionEl = document.getElementById('sp-vocab-fraction');
+//   const dueEl = document.getElementById('sp-due-today');
+//
+//   if (fractionEl) fractionEl.textContent = 'Đang tải...';
+//   if (dueEl) dueEl.textContent = '—';
+//
+//   try {
+//     const { data: userData, error: userError } = await supabaseClient.auth.getUser();
+//     if (userError) throw userError;
+//
+//     const userId = userData?.user?.id;
+//     if (!userId) throw new Error('Không tìm thấy phiên đăng nhập hiện tại.');
+//
+//     // profiles đã gộp đủ cột — không cần bảng student_profiles riêng nữa.
+//     const { data: profile, error: profileError } = await supabaseClient
+//       .from('profiles')
+//       .select('full_name, jlpt_level')
+//       .eq('id', userId)
+//       .maybeSingle();
+//     if (profileError) throw profileError;
+//
+//     if (nameEl) nameEl.textContent = profile?.full_name || currentUser?.email || '(chưa có tên)';
+//     if (levelEl) levelEl.textContent = profile?.jlpt_level ? `Level ${profile.jlpt_level}` : 'Chưa có level';
+//
+//     await loadStudentDetail(userId, false, profile?.jlpt_level || null);
+//   } catch (err) {
+//     console.error('Lỗi tải Dashboard:', err);
+//     if (fractionEl) fractionEl.textContent = '❌ Lỗi tải dữ liệu';
+//   }
+// }
 
-  const [learnedCount, dueToday] = await Promise.all([
-    countStudentLearnedVocab(userId),
-    countStudentDueToday(userId)
-  ]);
-
-  const pct = totalVocab > 0 ? Math.round((learnedCount / totalVocab) * 100) : 0;
-  const fractionEl = document.getElementById('sp-vocab-fraction');
-  const fillEl = document.getElementById('sp-vocab-progress-fill');
-  const dueEl = document.getElementById('sp-due-today');
-  if (fractionEl) fractionEl.textContent = `${learnedCount}/${totalVocab}`;
-  if (fillEl) fillEl.style.width = `${pct}%`;
-  if (dueEl) dueEl.textContent = dueToday;
-
-  return { totalVocab, learnedCount, dueToday };
-}
-
-// Mở trang #dashboard — lấy userId từ session hiện tại rồi gọi loadStudentDetail(userId, false).
-async function openDashboard() {
-  switchMainSection('dashboard');
-
-  const nameEl = document.getElementById('sp-student-name');
-  const levelEl = document.getElementById('sp-student-level');
-  const fractionEl = document.getElementById('sp-vocab-fraction');
-  const dueEl = document.getElementById('sp-due-today');
-
-  if (fractionEl) fractionEl.textContent = 'Đang tải...';
-  if (dueEl) dueEl.textContent = '—';
-
-  try {
-    const { data: userData, error: userError } = await supabaseClient.auth.getUser();
-    if (userError) throw userError;
-
-    const userId = userData?.user?.id;
-    if (!userId) throw new Error('Không tìm thấy phiên đăng nhập hiện tại.');
-
-    // profiles đã gộp đủ cột — không cần bảng student_profiles riêng nữa.
-    const { data: profile, error: profileError } = await supabaseClient
-      .from('profiles')
-      .select('full_name, jlpt_level')
-      .eq('id', userId)
-      .maybeSingle();
-    if (profileError) throw profileError;
-
-    if (nameEl) nameEl.textContent = profile?.full_name || currentUser?.email || '(chưa có tên)';
-    if (levelEl) levelEl.textContent = profile?.jlpt_level ? `Level ${profile.jlpt_level}` : 'Chưa có level';
-
-    await loadStudentDetail(userId, false, profile?.jlpt_level || null);
-  } catch (err) {
-    console.error('Lỗi tải Dashboard:', err);
-    if (fractionEl) fractionEl.textContent = '❌ Lỗi tải dữ liệu';
-  }
-}
 
 document.addEventListener('DOMContentLoaded', () => {
   logDeviceVisit(); // ghi nhận thiết bị mỗi lần học viên mở app — không chặn luồng chính
@@ -888,7 +844,7 @@ function buildAudioPath(wordObj) {
   const u = _digits(wordObj.unit);
   const p = _digits(wordObj.part);
   // Dùng word_index (không phải id) để khớp đúng quy ước đặt tên file audio
-  // mà admin.js đang hướng dẫn khi thu âm (buildAudioFilenamePreview).
+  // mà admin.js đang hướng dẫn học viên/admin khi thu âm (buildAudioFilenamePreview).
   // id và word_index có thể lệch nhau sau khi xóa từ/import CSV, nên KHÔNG dùng id ở đây.
   return `audio/u${u}_p${p}_word-${wordObj.word_index}.mp3`;
 }
