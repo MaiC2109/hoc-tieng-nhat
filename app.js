@@ -43,6 +43,7 @@ function _srSaveAll(data) {
 function srMarkWordsAsLearned(words) {
   const data = _srGetAll();
   let changed = false;
+  const newlyLearned = [];
   words.forEach(w => {
     const id = String(w.id);
     if (!data[id]) {
@@ -50,9 +51,16 @@ function srMarkWordsAsLearned(words) {
       due.setDate(due.getDate() + SR_STEPS_DAYS[0]); // ôn lại sau 1 ngày
       data[id] = { interval: SR_STEPS_DAYS[0], reps: 0, dueDate: due.toISOString().split('T')[0] };
       changed = true;
+      newlyLearned.push(id);
     }
   });
-  if (changed) _srSaveAll(data);
+  if (changed) {
+    _srSaveAll(data);
+    // Đồng bộ lên Supabase (best-effort, không chặn UI) — chỉ để Admin xem
+    // được tiến độ; localStorage vẫn là nguồn đọc chính trên chính thiết bị
+    // này (xem ghi chú tại srSyncWordToSupabase()).
+    newlyLearned.forEach(id => srSyncWordToSupabase(id, data[id], { isFirstLearn: true }));
+  }
 }
 
 // Cập nhật trạng thái ôn tập của 1 từ sau khi học viên trả lời (Đã thuộc / Chưa thuộc)
@@ -87,6 +95,98 @@ function srUpdateWordState(wordId, isCorrect) {
 
   data[id] = st;
   _srSaveAll(data);
+
+  // Đồng bộ lên Supabase (best-effort, không chặn UI) — ghi đè, vì đây là
+  // tiến độ mới nhất vừa xảy ra trên chính thiết bị này.
+  srSyncWordToSupabase(id, st, { isFirstLearn: false });
+}
+
+// ============================================================
+//  SRS SYNC (write-through, best-effort) — Option A trong 2 phương án
+//  đã thống nhất: localStorage VẪN LÀ NGUỒN ĐỌC CHÍNH trên chính thiết bị
+//  (app không đọc lại vocab_srs_progress để chạy SRS). Việc ghi lên Supabase
+//  ở đây CHỈ phục vụ mục đích: cho Admin xem được tiến độ học viên qua
+//  countStudentLearnedVocab()/countStudentDueToday() (admin.js) — không đồng
+//  bộ đa thiết bị, không khôi phục dữ liệu khi mất localStorage.
+//
+//  Điểm mở rộng cho Option B (khi số học viên tăng, cần đồng bộ đa thiết bị
+//  thật sự): thay _srGetAll()/_srSaveAll() để đọc/ghi qua Supabase làm nguồn
+//  chính (có thể giữ localStorage làm cache/fallback offline), và xóa cờ
+//  SR_SYNCED_FLAG_KEY vì lúc đó không còn khái niệm "đồng bộ 1 lần" nữa.
+// ============================================================
+const SR_SYNCED_FLAG_KEY = 'sr_synced_v1';
+
+// Ghi 1 dòng tiến độ SRS lên Supabase — không throw ra ngoài, chỉ log lỗi,
+// vì đây là thao tác phụ (không được phép làm hỏng trải nghiệm Flashcard/Ôn
+// tập chính nếu mất mạng hoặc Supabase lỗi).
+//
+// opts.isFirstLearn = true  -> dùng ignoreDuplicates: true (không ghi đè nếu
+//   Supabase đã có dòng này từ trước, vd. từ thiết bị khác/lần backfill trước
+//   — tránh reset nhầm tiến độ đã có về "học lần đầu").
+// opts.isFirstLearn = false -> ghi đè bình thường, vì đây là tiến độ mới
+//   nhất vừa xảy ra thật trên thiết bị này.
+async function srSyncWordToSupabase(wordId, st, opts = {}) {
+  if (!state.currentUser) return; // chưa đăng nhập -> không có user_id để ghi
+
+  const row = {
+    user_id: state.currentUser.id,
+    vocab_id: Number(wordId),
+    interval_days: st.interval,
+    due_date: st.dueDate,
+    ease_factor: 2.5, // logic SM-2 hiện tại dùng SR_GROWTH_FACTOR cố định, chưa
+                       // tính ease_factor động theo từng từ -> ghi mặc định cột
+    last_reviewed_at: opts.isFirstLearn ? null : new Date().toISOString()
+  };
+
+  try {
+    const { error } = await supabaseClient
+      .from('vocab_srs_progress')
+      .upsert(row, { onConflict: 'user_id,vocab_id', ignoreDuplicates: !!opts.isFirstLearn });
+    if (error) throw error;
+  } catch (e) {
+    console.error('Lỗi đồng bộ SRS lên Supabase:', e);
+  }
+}
+
+// Đồng bộ 1 LẦN DUY NHẤT/thiết bị: đẩy toàn bộ tiến độ SRS đang có sẵn trong
+// localStorage (từ trước khi có tính năng sync này) lên Supabase, để Admin
+// nhìn thấy ngay cả những gì học viên đã học trước đó — không phải chỉ tính
+// từ nay trở đi. Dùng ignoreDuplicates: true cho MỌI dòng (kể cả dòng có vẻ
+// "mới" theo local) vì đây là dữ liệu quá khứ không chắc mới hơn dữ liệu đã
+// có trên Supabase (nếu học viên từng dùng thiết bị khác đã sync trước đó).
+// Đánh dấu bằng SR_SYNCED_FLAG_KEY để không chạy lại mỗi lần mở app.
+async function srBackfillLocalToSupabase(userId) {
+  if (localStorage.getItem(SR_SYNCED_FLAG_KEY) === 'true') return;
+
+  const data = _srGetAll();
+  const wordIds = Object.keys(data);
+
+  if (wordIds.length === 0) {
+    localStorage.setItem(SR_SYNCED_FLAG_KEY, 'true');
+    return;
+  }
+
+  try {
+    const rows = wordIds.map(id => ({
+      user_id: userId,
+      vocab_id: Number(id),
+      interval_days: data[id].interval,
+      due_date: data[id].dueDate,
+      ease_factor: 2.5
+      // last_reviewed_at: bỏ trống (null) — không có mốc thời gian chính xác
+      // của lần ôn gần nhất trong dữ liệu localStorage cũ.
+    }));
+
+    const { error } = await supabaseClient
+      .from('vocab_srs_progress')
+      .upsert(rows, { onConflict: 'user_id,vocab_id', ignoreDuplicates: true });
+    if (error) throw error;
+
+    localStorage.setItem(SR_SYNCED_FLAG_KEY, 'true');
+  } catch (e) {
+    console.error('Lỗi đồng bộ SRS cũ (localStorage) lên Supabase:', e);
+    // Không set flag khi lỗi -> tự thử lại ở lần mở app kế tiếp.
+  }
 }
 
 // Lấy danh sách từ đến hạn ôn hôm nay, từ toàn bộ vocabularyData đã load
@@ -511,6 +611,11 @@ function startUI() {
     // Streak: chỉ tải khi đã đăng nhập, không chặn phần render UI phía trên
     if (state.currentUser) {
       loadStreakData(state.currentUser.id);
+      // Đẩy 1 lần dữ liệu SRS cũ (đã có sẵn trong localStorage từ trước khi
+      // có tính năng sync) lên Supabase — best-effort, không chặn UI, tự
+      // đánh dấu đã chạy qua SR_SYNCED_FLAG_KEY nên chỉ thực sự gọi Supabase
+      // ở lần mở app đầu tiên sau khi tính năng này được triển khai.
+      srBackfillLocalToSupabase(state.currentUser.id);
     }
 
     // Ẩn loading nếu bạn có dùng overlay
