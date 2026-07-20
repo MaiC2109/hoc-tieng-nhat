@@ -300,29 +300,16 @@
               </div>
             </div>
 
-            <!-- Streak/Heatmap học viên — port từ #streak-* bên trang học viên tự xem,
-                 render bởi loadStudentStreakDetail(userId) trong admin.js.
-                 Dùng lại y hệt class .streak-badge/.streak-stats-row/.streak-stat-card/
-                 .streak-grid/.streak-cell.level-0..4 đã có trong style.css. -->
-            <div class="student-progress-streak-section" style="margin-top:20px; padding-top:18px; border-top:1px solid var(--border);">
-              <div id="sp-streak-summary" class="streak-badge">—</div>
-
-              <div class="streak-stats-row">
-                <div class="streak-stat-card">
-                  <div class="streak-stat-value" id="sp-streak-current">—</div>
-                  <div class="streak-stat-label">Streak hiện tại</div>
-                </div>
-                <div class="streak-stat-card">
-                  <div class="streak-stat-value" id="sp-streak-best">—</div>
-                  <div class="streak-stat-label">Best streak</div>
-                </div>
-                <div class="streak-stat-card">
-                  <div class="streak-stat-value" id="sp-streak-week">—</div>
-                  <div class="streak-stat-label">Tuần này</div>
-                </div>
+            <!-- Kết quả Quiz của học viên — group theo ngày làm (mới nhất lên đầu),
+                 trong mỗi ngày tách theo Part. Render bởi loadStudentQuizResults(userId)
+                 trong admin.js. Cột "Đúng/Đã làm" tính trên số câu THỰC TẾ học viên đã
+                 trả lời trong ngày đó (KHÔNG so với tổng số từ vựng của Part, vì số câu
+                 quiz sinh ra mỗi lần làm bài không cố định bằng số từ trong Part). -->
+            <div class="student-quiz-results-section" style="margin-top:20px; padding-top:18px; border-top:1px solid var(--border);">
+              <h3 style="font-size:14px; font-weight:700; color:var(--ink); margin-bottom:12px;">Kết quả Quiz</h3>
+              <div id="sp-quiz-results" class="admin-table-scroll">
+                <div class="empty-state" style="padding:20px 0;">Đang tải...</div>
               </div>
-
-              <div id="sp-streak-grid" class="streak-grid"></div>
             </div>
           </div>
 
@@ -497,10 +484,6 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <!-- PapaParse — parse file CSV client-side cho chức năng Import CSV (mục Vocab) -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
-  <!-- streak-utils.js: computeStreakFromDates/computeBestStreak dùng chung với app.js —
-       PHẢI load trước admin.js vì loadStudentStreakDetail() (sẽ thêm ở bước sau)
-       gọi thẳng 2 hàm này từ global scope. -->
-  <script src="/streak-utils.js"></script>
   <!-- Logic (Supabase Auth, toggle nav, fetch số liệu...) -->
   <script src="/admin/admin.js"></script>
 </body>

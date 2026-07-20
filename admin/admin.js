@@ -1605,16 +1605,8 @@ async function selectStudentRow(userId) {
   document.getElementById('sp-vocab-fraction').textContent = 'Đang tải...';
   document.getElementById('sp-vocab-progress-fill').style.width = '0%';
   document.getElementById('sp-due-today').textContent = '—';
-  const spStreakSummaryEl = document.getElementById('sp-streak-summary');
-  const spStreakCurrentEl = document.getElementById('sp-streak-current');
-  const spStreakBestEl = document.getElementById('sp-streak-best');
-  const spStreakWeekEl = document.getElementById('sp-streak-week');
-  const spStreakGridEl = document.getElementById('sp-streak-grid');
-  if (spStreakSummaryEl) spStreakSummaryEl.textContent = 'Đang tải...';
-  if (spStreakCurrentEl) spStreakCurrentEl.textContent = '—';
-  if (spStreakBestEl) spStreakBestEl.textContent = '—';
-  if (spStreakWeekEl) spStreakWeekEl.textContent = '—';
-  if (spStreakGridEl) spStreakGridEl.innerHTML = '';
+  const quizResultsEl = document.getElementById('sp-quiz-results');
+  if (quizResultsEl) quizResultsEl.innerHTML = `<div class="empty-state" style="padding:20px 0;">Đang tải...</div>`;
 
   view.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
@@ -1625,13 +1617,13 @@ async function selectStudentRow(userId) {
     document.getElementById('sp-vocab-fraction').textContent = '❌ Lỗi tải dữ liệu';
   }
 
-  // Tách try/catch riêng — lỗi tải streak không được làm hỏng phần đã tải
-  // thành công ở trên (giống cách app.js tách 2 khối try/catch trong loadStreakData()).
+  // Tách try/catch riêng — lỗi tải kết quả quiz không được làm hỏng phần
+  // đã tải thành công ở trên.
   try {
-    await loadStudentStreakDetail(userId);
+    await loadStudentQuizResults(userId);
   } catch (err) {
-    console.error('Lỗi tải streak học viên:', err);
-    if (spStreakSummaryEl) spStreakSummaryEl.textContent = '❌ Lỗi tải dữ liệu';
+    console.error('Lỗi tải kết quả quiz học viên:', err);
+    if (quizResultsEl) quizResultsEl.innerHTML = `<div class="empty-state" style="padding:20px 0;">❌ Không tải được kết quả quiz.</div>`;
   }
 }
 
@@ -1656,125 +1648,100 @@ async function loadStudentDetail(userId, isAdminView = true, jlptLevel = null) {
   return { totalVocab, learnedCount, dueToday };
 }
 
-// ── STREAK CHO ADMIN XEM 1 HỌC VIÊN BẤT KỲ ──────────────────
-// Port từ loadStreakData(userId) bên app.js (Bước 7), khác 2 điểm:
-//   1. Dùng supabaseClient.from(...) thay vì fetch thô + sbHeaders() —
-//      giống hệt pattern countStudentLearnedVocab()/countStudentDueToday()
-//      ở trên, vì các bảng vocab_review_log/quiz_attempts/study_sessions
-//      có RLS theo user_id, cần đi qua session JWT của admin đang đăng
-//      nhập (được RLS cho phép đọc chéo), không dùng anon key trần.
-//   2. Render vào #sp-streak-* (khu vực Chi tiết học viên bên Admin),
-//      không phải #streak-* (trang học viên tự xem).
-// computeStreakFromDates()/computeBestStreak() lấy từ streak-utils.js
-// (global, đã load trước admin.js — xem admin/index.html).
-async function loadStudentStreakDetail(userId) {
-  const summaryEl = document.getElementById('sp-streak-summary');
-  const gridEl = document.getElementById('sp-streak-grid');
-  const currentStreakEl = document.getElementById('sp-streak-current');
-  const bestStreakEl = document.getElementById('sp-streak-best');
-  const weekEl = document.getElementById('sp-streak-week');
+// ── KẾT QUẢ QUIZ CỦA HỌC VIÊN (thay cho streak trước đó) ────────────────
+// quiz_attempts KHÔNG có cột unit/part/quiz_mode — chỉ có vocab_id, is_correct,
+// answered_at. Join sang vocabulary(unit,part) qua vocab_id bằng cú pháp embed
+// của PostgREST, KHÔNG denormalize thêm cột vào quiz_attempts (tránh dữ liệu
+// lệch nếu sau này đổi tên Unit/Part trong danh mục).
+//
+// Cột "Đúng/Đã làm" tính trên SỐ CÂU THỰC TẾ học viên đã trả lời trong ngày
+// đó cho Part đó — KHÔNG so với tổng số từ vựng của Part, vì số câu quiz sinh
+// ra mỗi lần làm bài (_shuffle(getWords(u,p)) bên app.js) không phải lúc nào
+// cũng bằng tổng số từ trong Part.
+//
+// Dùng supabaseClient.from(...) (JWT session admin) thay vì fetch + sbHeaders()
+// anon key trần, vì quiz_attempts có RLS theo user_id — giống pattern
+// countStudentLearnedVocab()/countStudentDueToday() ở trên.
+async function loadStudentQuizResults(userId) {
+  const container = document.getElementById('sp-quiz-results');
+  if (!container) return;
 
-  try {
-    const since = new Date();
-    since.setDate(since.getDate() - 90);
-    const sinceStr = since.toISOString().split('T')[0];
+  const { data: rows, error } = await supabaseClient
+    .from('quiz_attempts')
+    .select('is_correct, answered_at, vocabulary(unit, part)')
+    .eq('user_id', userId)
+    .order('answered_at', { ascending: false });
 
-    const [reviewRes, quizRes, reviewAllRes, quizAllRes] = await Promise.all([
-      supabaseClient.from('vocab_review_log').select('reviewed_at').eq('user_id', userId).gte('reviewed_at', sinceStr),
-      supabaseClient.from('quiz_attempts').select('answered_at').eq('user_id', userId).gte('answered_at', sinceStr),
-      supabaseClient.from('vocab_review_log').select('reviewed_at').eq('user_id', userId),
-      supabaseClient.from('quiz_attempts').select('answered_at').eq('user_id', userId)
-    ]);
+  if (error) throw error;
 
-    if (reviewRes.error) throw reviewRes.error;
-    if (quizRes.error) throw quizRes.error;
-    if (reviewAllRes.error) throw reviewAllRes.error;
-    if (quizAllRes.error) throw quizAllRes.error;
+  if (!rows || rows.length === 0) {
+    container.innerHTML = `<div class="empty-state" style="padding:20px 0;">Học viên chưa làm bài Quiz nào.</div>`;
+    return;
+  }
 
-    // reviewed_at đã là "YYYY-MM-DD" (date). answered_at là timestamptz -> cắt lấy phần ngày.
-    const reviewDates = reviewRes.data.map(r => r.reviewed_at);
-    const quizDates = quizRes.data.map(r => String(r.answered_at).split('T')[0]);
-    const allDates = [...reviewDates, ...quizDates];
+  // Gom nhóm: ngày (YYYY-MM-DD) -> "unit||part" -> { unit, part, correct, total }
+  const byDate = new Map();
 
-    // Đếm số dòng log/ngày (gộp cả 2 nguồn) -> dùng để tính mức độ đậm nhạt ô heatmap.
-    const dateCountMap = new Map();
-    allDates.forEach(d => {
-      dateCountMap.set(d, (dateCountMap.get(d) || 0) + 1);
+  rows.forEach(r => {
+    // Một số dòng có thể có vocab_id trỏ tới từ đã bị xóa khỏi vocabulary ->
+    // r.vocabulary sẽ là null. Gom các dòng này vào nhóm "(từ đã bị xóa)"
+    // thay vì bỏ qua, để không làm mất dữ liệu lịch sử làm bài của học viên.
+    const dateStr = String(r.answered_at).split('T')[0];
+    const unit = r.vocabulary ? r.vocabulary.unit : null;
+    const part = r.vocabulary ? r.vocabulary.part : null;
+    const partKey = (unit && part) ? `${unit}||${part}` : '__deleted__';
+
+    if (!byDate.has(dateStr)) byDate.set(dateStr, new Map());
+    const dateGroup = byDate.get(dateStr);
+
+    if (!dateGroup.has(partKey)) {
+      dateGroup.set(partKey, { unit, part, correct: 0, total: 0 });
+    }
+    const stat = dateGroup.get(partKey);
+    stat.total += 1;
+    if (r.is_correct) stat.correct += 1;
+  });
+
+  const sortedDates = [...byDate.keys()].sort((a, b) => b.localeCompare(a)); // mới nhất trước
+
+  let bodyHtml = '';
+  sortedDates.forEach(dateStr => {
+    const dateGroup = byDate.get(dateStr);
+    const partKeys = _naturalSort([...dateGroup.keys()], k => k);
+    const rowCount = partKeys.length;
+
+    partKeys.forEach((partKey, idx) => {
+      const stat = dateGroup.get(partKey);
+      const pct = stat.total > 0 ? Math.round((stat.correct / stat.total) * 100) : 0;
+      const unitLabel = stat.unit ? escHtml(stat.unit) : '—';
+      const partLabel = stat.part ? escHtml(stat.part) : '(từ đã bị xóa)';
+
+      bodyHtml += `
+        <tr>
+          ${idx === 0 ? `<td rowspan="${rowCount}" style="white-space:nowrap; vertical-align:top; font-weight:600;">${escHtml(dateStr)}</td>` : ''}
+          <td>${unitLabel}</td>
+          <td>${partLabel}</td>
+          <td>${stat.correct}/${stat.total}</td>
+          <td>${pct}%</td>
+        </tr>
+      `;
     });
+  });
 
-    const { streak } = computeStreakFromDates(allDates);
-
-    // Best streak — dùng toàn bộ lịch sử, không giới hạn 90 ngày
-    const reviewDatesAll = reviewAllRes.data.map(r => r.reviewed_at);
-    const quizDatesAll = quizAllRes.data.map(r => String(r.answered_at).split('T')[0]);
-    const bestStreak = computeBestStreak([...reviewDatesAll, ...quizDatesAll]);
-
-    if (summaryEl) {
-      summaryEl.textContent = streak > 0
-        ? `🔥 ${streak} ngày liên tục`
-        : 'Chưa có chuỗi ngày học nào';
-    }
-
-    if (currentStreakEl) currentStreakEl.textContent = streak;
-    if (bestStreakEl) bestStreakEl.textContent = bestStreak;
-
-    // Render heatmap 90 ô — mỗi ô là 1 ngày, từ 89 ngày trước đến hôm nay.
-    // Mức độ (level-0 .. level-4) tính theo % so với count cao nhất trong tập dữ liệu.
-    if (gridEl) {
-      const maxCount = Math.max(0, ...dateCountMap.values());
-
-      const getLevel = (count) => {
-        if (count === 0 || maxCount === 0) return 0;
-        const pct = count / maxCount;
-        if (pct <= 0.25) return 1;
-        if (pct <= 0.50) return 2;
-        if (pct <= 0.75) return 3;
-        return 4;
-      };
-
-      const cells = [];
-      for (let i = 89; i >= 0; i--) {
-        const d = new Date();
-        d.setDate(d.getDate() - i);
-        const dStr = d.toISOString().split('T')[0];
-        const count = dateCountMap.get(dStr) || 0;
-        const level = getLevel(count);
-        cells.push(`<div class="streak-cell level-${level}" title="${dStr}: ${count} hoạt động"></div>`);
-      }
-      gridEl.innerHTML = cells.join('');
-    }
-  } catch (err) {
-    console.error('Lỗi tải dữ liệu streak học viên:', err);
-    if (summaryEl) summaryEl.textContent = '—';
-    if (currentStreakEl) currentStreakEl.textContent = '—';
-    if (bestStreakEl) bestStreakEl.textContent = '—';
-    if (gridEl) gridEl.innerHTML = '';
-  }
-
-  // study_sessions 7 ngày gần nhất — phút học tuần này. Tách try/catch riêng
-  // để lỗi ở phần này không làm hỏng phần streak/heatmap phía trên.
-  try {
-    const since7 = new Date();
-    since7.setDate(since7.getDate() - 7);
-    const since7Str = since7.toISOString();
-
-    const { data: rows, error } = await supabaseClient
-      .from('study_sessions')
-      .select('session_type, word_count, duration_seconds')
-      .eq('user_id', userId)
-      .gte('started_at', since7Str);
-
-    if (error) throw error;
-
-    const totalMinutes = Math.round(
-      rows.reduce((sum, r) => sum + (r.duration_seconds || 0), 0) / 60
-    );
-
-    if (weekEl) weekEl.textContent = `${totalMinutes} phút`;
-  } catch (err) {
-    console.error('Lỗi tải thống kê study_sessions 7 ngày của học viên:', err);
-    if (weekEl) weekEl.textContent = '—';
-  }
+  container.innerHTML = `
+    <table class="admin-vocab-table">
+      <thead>
+        <tr>
+          <th style="width:110px;">Ngày</th>
+          <th style="width:80px;">Unit</th>
+          <th style="width:80px;">Part</th>
+          <th style="width:100px;">Đúng / Đã làm</th>
+          <th style="width:70px;">Tỉ lệ</th>
+        </tr>
+      </thead>
+      <tbody>${bodyHtml}</tbody>
+    </table>
+  `;
 }
 
 // ── FORM "CẬP NHẬT THÔNG TIN HỌC VIÊN" ──────────────────────
