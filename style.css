@@ -813,6 +813,73 @@ body {
   text-align: center;
 }
 
+.streak-badge {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--vermillion);
+  margin-top: 14px;
+}
+
+/* 3 ô thống kê nhanh: Streak hiện tại / Best streak / Tuần này */
+.streak-stats-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  max-width: 460px;
+  margin: 16px auto 0;
+}
+
+.streak-stat-card {
+  background: var(--paper-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 12px 10px;
+  text-align: center;
+}
+
+.streak-stat-value {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.streak-stat-label {
+  font-size: 11px;
+  color: var(--ink-mute);
+  margin-top: 2px;
+}
+
+/* Heatmap 90 ô (13 cột x 7 hàng) — cuộn ngang trên màn hình hẹp để giữ
+   đúng tỉ lệ ô vuông thay vì co nhỏ lại. */
+.streak-grid {
+  display: grid;
+  grid-template-columns: repeat(13, 14px);
+  grid-auto-flow: column;
+  grid-template-rows: repeat(7, 14px);
+  gap: 4px;
+  max-width: 100%;
+  width: max-content;
+  margin: 16px auto 0;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.streak-cell {
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+  background: var(--paper-warm);
+}
+
+/* 5 mức độ hoạt động — dùng lại đúng 2 biến màu đã có (--verm-glow,
+   --vermillion), không tạo biến màu mới. level-0 = không hoạt động. */
+.streak-cell.level-0 { background: var(--paper-warm); }
+.streak-cell.level-1 { background: var(--verm-glow); }
+.streak-cell.level-2 { background: rgba(192, 57, 43, 0.35); }
+.streak-cell.level-3 { background: rgba(192, 57, 43, 0.65); }
+.streak-cell.level-4 { background: var(--vermillion); }
+
+
 #review-zone {
   width: 100%;
   display: flex;
