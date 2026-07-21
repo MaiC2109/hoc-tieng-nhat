@@ -263,7 +263,7 @@
                 </thead>
                 <tbody id="student-table-body">
                   <tr>
-                    <td colspan="3"><div class="empty-state">Đang tải dữ liệu...</div></td>
+                    <td colspan="2"><div class="empty-state">Đang tải dữ liệu...</div></td>
                   </tr>
                 </tbody>
               </table>
@@ -297,6 +297,18 @@
                   <div class="admin-stat-value" id="sp-due-today">—</div>
                   <div class="admin-stat-label">Cần ôn hôm nay</div>
                 </div>
+              </div>
+            </div>
+
+            <!-- Kết quả Quiz của học viên — group theo ngày làm (mới nhất lên đầu),
+                 trong mỗi ngày tách theo Part. Render bởi loadStudentQuizResults(userId)
+                 trong admin.js. Cột "Đúng/Đã làm" tính trên số câu THỰC TẾ học viên đã
+                 trả lời trong ngày đó (KHÔNG so với tổng số từ vựng của Part, vì số câu
+                 quiz sinh ra mỗi lần làm bài không cố định bằng số từ trong Part). -->
+            <div class="student-quiz-results-section" style="margin-top:20px; padding-top:18px; border-top:1px solid var(--border);">
+              <h3 style="font-size:14px; font-weight:700; color:var(--ink); margin-bottom:12px;">Kết quả Quiz</h3>
+              <div id="sp-quiz-results" class="admin-table-scroll">
+                <div class="empty-state" style="padding:20px 0;">Đang tải...</div>
               </div>
             </div>
           </div>

@@ -1632,6 +1632,8 @@ async function selectStudentRow(userId) {
   document.getElementById('sp-vocab-fraction').textContent = 'Đang tải...';
   document.getElementById('sp-vocab-progress-fill').style.width = '0%';
   document.getElementById('sp-due-today').textContent = '—';
+  const quizResultsEl = document.getElementById('sp-quiz-results');
+  if (quizResultsEl) quizResultsEl.innerHTML = `<div class="empty-state" style="padding:20px 0;">Đang tải...</div>`;
 
   view.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
@@ -1640,6 +1642,15 @@ async function selectStudentRow(userId) {
   } catch (err) {
     console.error('Lỗi tải chi tiết học viên:', err);
     document.getElementById('sp-vocab-fraction').textContent = '❌ Lỗi tải dữ liệu';
+  }
+
+  // Tách try/catch riêng — lỗi tải kết quả quiz không được làm hỏng phần
+  // đã tải thành công ở trên.
+  try {
+    await loadStudentQuizResults(userId);
+  } catch (err) {
+    console.error('Lỗi tải kết quả quiz học viên:', err);
+    if (quizResultsEl) quizResultsEl.innerHTML = `<div class="empty-state" style="padding:20px 0;">❌ Không tải được kết quả quiz.</div>`;
   }
 }
 
@@ -1662,6 +1673,102 @@ async function loadStudentDetail(userId, isAdminView = true, jlptLevel = null) {
   }
 
   return { totalVocab, learnedCount, dueToday };
+}
+
+// ── KẾT QUẢ QUIZ CỦA HỌC VIÊN (thay cho streak trước đó) ────────────────
+// quiz_attempts KHÔNG có cột unit/part/quiz_mode — chỉ có vocab_id, is_correct,
+// answered_at. Join sang vocabulary(unit,part) qua vocab_id bằng cú pháp embed
+// của PostgREST, KHÔNG denormalize thêm cột vào quiz_attempts (tránh dữ liệu
+// lệch nếu sau này đổi tên Unit/Part trong danh mục).
+//
+// Cột "Đúng/Đã làm" tính trên SỐ CÂU THỰC TẾ học viên đã trả lời trong ngày
+// đó cho Part đó — KHÔNG so với tổng số từ vựng của Part, vì số câu quiz sinh
+// ra mỗi lần làm bài (_shuffle(getWords(u,p)) bên app.js) không phải lúc nào
+// cũng bằng tổng số từ trong Part.
+//
+// Dùng supabaseClient.from(...) (JWT session admin) thay vì fetch + sbHeaders()
+// anon key trần, vì quiz_attempts có RLS theo user_id — giống pattern
+// countStudentLearnedVocab()/countStudentDueToday() ở trên.
+async function loadStudentQuizResults(userId) {
+  const container = document.getElementById('sp-quiz-results');
+  if (!container) return;
+
+  const { data: rows, error } = await supabaseClient
+    .from('quiz_attempts')
+    .select('is_correct, answered_at, vocabulary(unit, part)')
+    .eq('user_id', userId)
+    .order('answered_at', { ascending: false });
+
+  if (error) throw error;
+
+  if (!rows || rows.length === 0) {
+    container.innerHTML = `<div class="empty-state" style="padding:20px 0;">Học viên chưa làm bài Quiz nào.</div>`;
+    return;
+  }
+
+  // Gom nhóm: ngày (YYYY-MM-DD) -> "unit||part" -> { unit, part, correct, total }
+  const byDate = new Map();
+
+  rows.forEach(r => {
+    // Một số dòng có thể có vocab_id trỏ tới từ đã bị xóa khỏi vocabulary ->
+    // r.vocabulary sẽ là null. Gom các dòng này vào nhóm "(từ đã bị xóa)"
+    // thay vì bỏ qua, để không làm mất dữ liệu lịch sử làm bài của học viên.
+    const dateStr = String(r.answered_at).split('T')[0];
+    const unit = r.vocabulary ? r.vocabulary.unit : null;
+    const part = r.vocabulary ? r.vocabulary.part : null;
+    const partKey = (unit && part) ? `${unit}||${part}` : '__deleted__';
+
+    if (!byDate.has(dateStr)) byDate.set(dateStr, new Map());
+    const dateGroup = byDate.get(dateStr);
+
+    if (!dateGroup.has(partKey)) {
+      dateGroup.set(partKey, { unit, part, correct: 0, total: 0 });
+    }
+    const stat = dateGroup.get(partKey);
+    stat.total += 1;
+    if (r.is_correct) stat.correct += 1;
+  });
+
+  const sortedDates = [...byDate.keys()].sort((a, b) => b.localeCompare(a)); // mới nhất trước
+
+  let bodyHtml = '';
+  sortedDates.forEach(dateStr => {
+    const dateGroup = byDate.get(dateStr);
+    const partKeys = _naturalSort([...dateGroup.keys()], k => k);
+    const rowCount = partKeys.length;
+
+    partKeys.forEach((partKey, idx) => {
+      const stat = dateGroup.get(partKey);
+      const pct = stat.total > 0 ? Math.round((stat.correct / stat.total) * 100) : 0;
+      const unitLabel = stat.unit ? escHtml(stat.unit) : '—';
+      const partLabel = stat.part ? escHtml(stat.part) : '(từ đã bị xóa)';
+
+      bodyHtml += `
+        <tr>
+          ${idx === 0 ? `<td rowspan="${rowCount}" style="white-space:nowrap; vertical-align:top; font-weight:600;">${escHtml(dateStr)}</td>` : ''}
+          <td>${unitLabel}</td>
+          <td>${partLabel}</td>
+          <td>${stat.correct}/${stat.total}</td>
+          <td>${pct}%</td>
+        </tr>
+      `;
+    });
+  });
+
+  container.innerHTML = `
+    <table class="admin-vocab-table">
+      <thead>
+        <tr>
+          <th style="width:110px;">Ngày</th>
+          <th style="width:80px;">Unit</th>
+          <th style="width:80px;">Part</th>
+          <th style="width:100px;">Đúng / Đã làm</th>
+          <th style="width:70px;">Tỉ lệ</th>
+        </tr>
+      </thead>
+      <tbody>${bodyHtml}</tbody>
+    </table>
+  `;
 }
 
 // ── FORM "CẬP NHẬT THÔNG TIN HỌC VIÊN" ──────────────────────
