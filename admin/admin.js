@@ -1478,7 +1478,7 @@ const studentAdminState = {
 async function loadStudentAdminList() {
   const tbody = document.getElementById('student-table-body');
   if (tbody) {
-    tbody.innerHTML = `<tr><td colspan="2"><div class="empty-state">Đang tải dữ liệu...</div></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="3"><div class="empty-state">Đang tải dữ liệu...</div></td></tr>`;
   }
 
   try {
@@ -1518,7 +1518,7 @@ async function loadStudentAdminList() {
   } catch (err) {
     console.error('Lỗi tải danh sách học viên:', err);
     if (tbody) {
-      tbody.innerHTML = `<tr><td colspan="2"><div class="empty-state">❌ Không tải được danh sách học viên.</div></td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="3"><div class="empty-state">❌ Không tải được danh sách học viên.</div></td></tr>`;
     }
   }
 }
@@ -1581,7 +1581,7 @@ function renderStudentAdminTable(rows) {
     : rows;
 
   if (filtered.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="2"><div class="empty-state">Không tìm thấy học viên nào.</div></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="3"><div class="empty-state">Không tìm thấy học viên nào.</div></td></tr>`;
     return;
   }
 
@@ -1597,9 +1597,6 @@ function renderStudentAdminTable(rows) {
       <tr class="student-row ${activeClass}" onclick="selectStudentRow('${r.id}')">
         <td>${escHtml(r.full_name || '(chưa có tên)')}</td>
         <td>${escHtml(r.jlpt_level || '—')}</td>
-        <!-- Tạm ẩn cột "% Vocab" — xem ghi chú ở loadStudentDetail() /
-             countStudentLearnedVocab(). pct/pctLabel vẫn tính ở trên, giữ
-             nguyên logic, chỉ không render ra DOM ở bước này.
         <td>
           <div style="display:flex; align-items:center; gap:8px;">
             <div class="progress-bar-mini" style="width:70px;">
@@ -1608,7 +1605,6 @@ function renderStudentAdminTable(rows) {
             <span style="font-size:12px; color:var(--ink-mute);">${pctLabel}</span>
           </div>
         </td>
-        -->
       </tr>
     `;
   }).join('');
@@ -1633,10 +1629,11 @@ async function selectStudentRow(userId) {
 
   document.getElementById('sp-student-name').textContent = row.full_name || '(chưa có tên)';
   document.getElementById('sp-student-level').textContent = row.jlpt_level ? `Level ${row.jlpt_level}` : 'Chưa có level';
-  // Tạm ẩn "Vocab đã học" — xem ghi chú trong loadStudentDetail() bên dưới.
-  // document.getElementById('sp-vocab-fraction').textContent = 'Đang tải...';
-  // document.getElementById('sp-vocab-progress-fill').style.width = '0%';
+  document.getElementById('sp-vocab-fraction').textContent = 'Đang tải...';
+  document.getElementById('sp-vocab-progress-fill').style.width = '0%';
   document.getElementById('sp-due-today').textContent = '—';
+  const quizResultsEl = document.getElementById('sp-quiz-results');
+  if (quizResultsEl) quizResultsEl.innerHTML = `<div class="empty-state" style="padding:20px 0;">Đang tải...</div>`;
 
   view.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
@@ -1644,7 +1641,16 @@ async function selectStudentRow(userId) {
     await loadStudentDetail(userId, true, row.jlpt_level);
   } catch (err) {
     console.error('Lỗi tải chi tiết học viên:', err);
-    // document.getElementById('sp-vocab-fraction').textContent = '❌ Lỗi tải dữ liệu';
+    document.getElementById('sp-vocab-fraction').textContent = '❌ Lỗi tải dữ liệu';
+  }
+
+  // Tách try/catch riêng — lỗi tải kết quả quiz không được làm hỏng phần
+  // đã tải thành công ở trên.
+  try {
+    await loadStudentQuizResults(userId);
+  } catch (err) {
+    console.error('Lỗi tải kết quả quiz học viên:', err);
+    if (quizResultsEl) quizResultsEl.innerHTML = `<div class="empty-state" style="padding:20px 0;">❌ Không tải được kết quả quiz.</div>`;
   }
 }
 
@@ -1660,17 +1666,109 @@ async function loadStudentDetail(userId, isAdminView = true, jlptLevel = null) {
   ]);
 
   if (isAdminView) {
-    // Tạm ẩn hiển thị "Vocab đã học" — countStudentLearnedVocab() đọc từ
-    // vocab_srs_progress, bảng này chưa được ghi ở đâu trong code hiện tại
-    // nên luôn trả về 0. Giữ nguyên phép tính pct/learnedCount bên dưới
-    // (return vẫn trả đủ dữ liệu), chỉ comment out phần ghi ra DOM.
-    // const pct = totalVocab > 0 ? Math.round((learnedCount / totalVocab) * 100) : 0;
-    // document.getElementById('sp-vocab-fraction').textContent = `${learnedCount}/${totalVocab}`;
-    // document.getElementById('sp-vocab-progress-fill').style.width = `${pct}%`;
+    const pct = totalVocab > 0 ? Math.round((learnedCount / totalVocab) * 100) : 0;
+    document.getElementById('sp-vocab-fraction').textContent = `${learnedCount}/${totalVocab}`;
+    document.getElementById('sp-vocab-progress-fill').style.width = `${pct}%`;
     document.getElementById('sp-due-today').textContent = dueToday;
   }
 
   return { totalVocab, learnedCount, dueToday };
+}
+
+// ── KẾT QUẢ QUIZ CỦA HỌC VIÊN (thay cho streak trước đó) ────────────────
+// quiz_attempts KHÔNG có cột unit/part/quiz_mode — chỉ có vocab_id, is_correct,
+// answered_at. Join sang vocabulary(unit,part) qua vocab_id bằng cú pháp embed
+// của PostgREST, KHÔNG denormalize thêm cột vào quiz_attempts (tránh dữ liệu
+// lệch nếu sau này đổi tên Unit/Part trong danh mục).
+//
+// Cột "Đúng/Đã làm" tính trên SỐ CÂU THỰC TẾ học viên đã trả lời trong ngày
+// đó cho Part đó — KHÔNG so với tổng số từ vựng của Part, vì số câu quiz sinh
+// ra mỗi lần làm bài (_shuffle(getWords(u,p)) bên app.js) không phải lúc nào
+// cũng bằng tổng số từ trong Part.
+//
+// Dùng supabaseClient.from(...) (JWT session admin) thay vì fetch + sbHeaders()
+// anon key trần, vì quiz_attempts có RLS theo user_id — giống pattern
+// countStudentLearnedVocab()/countStudentDueToday() ở trên.
+async function loadStudentQuizResults(userId) {
+  const container = document.getElementById('sp-quiz-results');
+  if (!container) return;
+
+  const { data: rows, error } = await supabaseClient
+    .from('quiz_attempts')
+    .select('is_correct, answered_at, vocabulary(unit, part)')
+    .eq('user_id', userId)
+    .order('answered_at', { ascending: false });
+
+  if (error) throw error;
+
+  if (!rows || rows.length === 0) {
+    container.innerHTML = `<div class="empty-state" style="padding:20px 0;">Học viên chưa làm bài Quiz nào.</div>`;
+    return;
+  }
+
+  // Gom nhóm: ngày (YYYY-MM-DD) -> "unit||part" -> { unit, part, correct, total }
+  const byDate = new Map();
+
+  rows.forEach(r => {
+    // Một số dòng có thể có vocab_id trỏ tới từ đã bị xóa khỏi vocabulary ->
+    // r.vocabulary sẽ là null. Gom các dòng này vào nhóm "(từ đã bị xóa)"
+    // thay vì bỏ qua, để không làm mất dữ liệu lịch sử làm bài của học viên.
+    const dateStr = String(r.answered_at).split('T')[0];
+    const unit = r.vocabulary ? r.vocabulary.unit : null;
+    const part = r.vocabulary ? r.vocabulary.part : null;
+    const partKey = (unit && part) ? `${unit}||${part}` : '__deleted__';
+
+    if (!byDate.has(dateStr)) byDate.set(dateStr, new Map());
+    const dateGroup = byDate.get(dateStr);
+
+    if (!dateGroup.has(partKey)) {
+      dateGroup.set(partKey, { unit, part, correct: 0, total: 0 });
+    }
+    const stat = dateGroup.get(partKey);
+    stat.total += 1;
+    if (r.is_correct) stat.correct += 1;
+  });
+
+  const sortedDates = [...byDate.keys()].sort((a, b) => b.localeCompare(a)); // mới nhất trước
+
+  let bodyHtml = '';
+  sortedDates.forEach(dateStr => {
+    const dateGroup = byDate.get(dateStr);
+    const partKeys = _naturalSort([...dateGroup.keys()], k => k);
+    const rowCount = partKeys.length;
+
+    partKeys.forEach((partKey, idx) => {
+      const stat = dateGroup.get(partKey);
+      const pct = stat.total > 0 ? Math.round((stat.correct / stat.total) * 100) : 0;
+      const unitLabel = stat.unit ? escHtml(stat.unit) : '—';
+      const partLabel = stat.part ? escHtml(stat.part) : '(từ đã bị xóa)';
+
+      bodyHtml += `
+        <tr>
+          ${idx === 0 ? `<td rowspan="${rowCount}" style="white-space:nowrap; vertical-align:top; font-weight:600;">${escHtml(dateStr)}</td>` : ''}
+          <td>${unitLabel}</td>
+          <td>${partLabel}</td>
+          <td>${stat.correct}/${stat.total}</td>
+          <td>${pct}%</td>
+        </tr>
+      `;
+    });
+  });
+
+  container.innerHTML = `
+    <table class="admin-vocab-table">
+      <thead>
+        <tr>
+          <th style="width:110px;">Ngày</th>
+          <th style="width:80px;">Unit</th>
+          <th style="width:80px;">Part</th>
+          <th style="width:100px;">Đúng / Đã làm</th>
+          <th style="width:70px;">Tỉ lệ</th>
+        </tr>
+      </thead>
+      <tbody>${bodyHtml}</tbody>
+    </table>
+  `;
 }
 
 // ── FORM "CẬP NHẬT THÔNG TIN HỌC VIÊN" ──────────────────────

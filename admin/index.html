@@ -282,12 +282,6 @@
             </div>
 
             <div class="student-progress-stats-grid">
-              <!-- Tạm ẩn "Vocab đã học" — countStudentLearnedVocab() đang đọc từ bảng
-                   vocab_srs_progress, bảng này hiện chưa được ghi ở bất kỳ đâu trong
-                   code (SRS thật đang lưu ở localStorage phía client), nên luôn ra 0.
-                   Comment out phần hiển thị, KHÔNG xóa logic — chờ quyết định hướng
-                   sửa (đổi nguồn đếm sang vocab_review_log, hoặc ghi thật vào
-                   vocab_srs_progress) rồi mở lại.
               <div class="admin-stat-card">
                 <div class="admin-stat-icon vocab"><i class="ti ti-book-2"></i></div>
                 <div style="flex:1;">
@@ -298,7 +292,6 @@
                   </div>
                 </div>
               </div>
-              -->
 
               <div class="admin-stat-card">
                 <div class="admin-stat-icon students"><i class="ti ti-clock-hour-4"></i></div>
@@ -306,6 +299,18 @@
                   <div class="admin-stat-value" id="sp-due-today">—</div>
                   <div class="admin-stat-label">Cần ôn hôm nay</div>
                 </div>
+              </div>
+            </div>
+
+            <!-- Kết quả Quiz của học viên — group theo ngày làm (mới nhất lên đầu),
+                 trong mỗi ngày tách theo Part. Render bởi loadStudentQuizResults(userId)
+                 trong admin.js. Cột "Đúng/Đã làm" tính trên số câu THỰC TẾ học viên đã
+                 trả lời trong ngày đó (KHÔNG so với tổng số từ vựng của Part, vì số câu
+                 quiz sinh ra mỗi lần làm bài không cố định bằng số từ trong Part). -->
+            <div class="student-quiz-results-section" style="margin-top:20px; padding-top:18px; border-top:1px solid var(--border);">
+              <h3 style="font-size:14px; font-weight:700; color:var(--ink); margin-bottom:12px;">Kết quả Quiz</h3>
+              <div id="sp-quiz-results" class="admin-table-scroll">
+                <div class="empty-state" style="padding:20px 0;">Đang tải...</div>
               </div>
             </div>
           </div>
