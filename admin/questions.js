@@ -203,7 +203,8 @@ async function loadQuestionsSection() {
 
 const questionFormState = {
   mode: 'create',    // 'create' | 'edit'
-  editingId: null     // id câu hỏi đang sửa (chỉ có giá trị khi mode === 'edit')
+  editingId: null,   // id câu hỏi đang sửa (chỉ có giá trị khi mode === 'edit')
+  audioUploading: false // true trong lúc file audio đang upload dở — chặn submit để tránh lưu thiếu audio_url
 };
 
 // Dropdown Kỹ năng riêng cho form (khác dropdown filter ở toolbar)
@@ -248,6 +249,18 @@ function resetQuestionForm() {
   // form.reset() không tác dụng lên div contenteditable -> dọn tay
   const editor = document.getElementById('question-text');
   if (editor) editor.innerHTML = '';
+
+  // dọn field audio (input file, hidden url, preview)
+  const audioFileInput = document.getElementById('question-audio-file');
+  if (audioFileInput) audioFileInput.value = '';
+  document.getElementById('question-audio-url').value = '';
+  const audioStatus = document.getElementById('question-audio-status');
+  if (audioStatus) audioStatus.textContent = '';
+  const audioPreview = document.getElementById('question-audio-preview');
+  if (audioPreview) {
+    audioPreview.style.display = 'none';
+    audioPreview.removeAttribute('src');
+  }
 
   // reset về đáp án đúng mặc định là ô đầu tiên
   const radio0 = document.getElementById('question-choice-radio-0');
@@ -299,6 +312,13 @@ async function submitQuestionForm(e) {
   const submitBtn = document.getElementById('question-form-submit-btn');
   errorEl.textContent = '';
 
+  // Nếu file audio đang upload dở mà bấm Lưu ngay -> audio_url sẽ trống dù
+  // giáo viên đã chọn file. Chặn lại và báo rõ thay vì lưu thiếu audio.
+  if (questionFormState.audioUploading) {
+    errorEl.textContent = 'File audio đang được tải lên, vui lòng đợi upload xong rồi mới bấm Lưu.';
+    return;
+  }
+
   const skillId = document.getElementById('question-skill').value;
   const questionType = document.getElementById('question-type').value;
   // Nội dung câu hỏi lấy từ div contenteditable -> lưu nguyên HTML (giữ
@@ -347,15 +367,24 @@ async function submitQuestionForm(e) {
     return;
   }
 
+  // Cảnh báo mềm (không chặn submit) nếu Kỹ năng = "Nghe hiểu" mà chưa có audio.
+  const audioUrl = document.getElementById('question-audio-url').value || null;
+  const selectedSkill = questionsAdminState.skills.find(sk => String(sk.id) === String(skillId));
+  if (selectedSkill?.code === 'listening' && !audioUrl) {
+    const proceed = confirm('Kỹ năng này là "Nghe hiểu" nhưng bạn chưa upload file audio. Vẫn muốn lưu câu hỏi mà không có audio?');
+    if (!proceed) return;
+  }
+
   const payload = {
     skill_id: Number(skillId),
     question_type: questionType,
     question_text: questionTextHtml,
+    audio_url: audioUrl,
     choices: choices, // null với fill_blank
     correct_answer: correctAnswer,
     explanation: explanation || null,
     difficulty: difficulty || null
-    // audio_url, passage_id: chưa làm ở bước này, để NULL/bỏ trống theo default cột
+    // passage_id: chưa làm ở bước này, để NULL/bỏ trống theo default cột
   };
 
   const isEdit = questionFormState.mode === 'edit' && questionFormState.editingId !== null;
@@ -372,21 +401,27 @@ async function submitQuestionForm(e) {
         `${ADMIN_CONFIG.supabaseUrl}/rest/v1/question_bank?id=eq.${questionFormState.editingId}`,
         { method: 'PATCH', headers, body: JSON.stringify({ ...payload, updated_at: new Date().toISOString() }) }
       );
-      if (!res.ok) throw new Error(`Lỗi cập nhật câu hỏi: ${res.status}`);
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => null);
+        throw new Error(errBody?.message || `Lỗi cập nhật câu hỏi (HTTP ${res.status})`);
+      }
     } else {
       const res = await fetch(`${ADMIN_CONFIG.supabaseUrl}/rest/v1/question_bank`, {
         method: 'POST',
         headers,
         body: JSON.stringify(payload)
       });
-      if (!res.ok) throw new Error(`Lỗi thêm câu hỏi: ${res.status}`);
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => null);
+        throw new Error(errBody?.message || `Lỗi thêm câu hỏi (HTTP ${res.status})`);
+      }
     }
 
     closeQuestionForm();
     await loadQuestionAdminList();
   } catch (err) {
     console.error('Lỗi lưu câu hỏi:', err);
-    errorEl.textContent = isEdit ? 'Có lỗi khi cập nhật câu hỏi. Vui lòng thử lại.' : 'Có lỗi khi lưu câu hỏi. Vui lòng thử lại.';
+    errorEl.textContent = err?.message || (isEdit ? 'Có lỗi khi cập nhật câu hỏi. Vui lòng thử lại.' : 'Có lỗi khi lưu câu hỏi. Vui lòng thử lại.');
   } finally {
     submitBtn.disabled = false;
     submitBtn.innerHTML = originalText;
@@ -418,6 +453,62 @@ function syncRichTextToolbarState() {
   }
 }
 
+// ── Upload audio lên Supabase Storage (bucket exam-audio) ────────────────
+// Dùng thẳng supabaseClient.storage (client đã khởi tạo sẵn trong
+// admin.js) thay vì tự gọi fetch REST — đây là cách chuẩn của supabase-js
+// cho việc upload file, không cần tự build request.
+async function uploadQuestionAudioFile(file) {
+  const statusEl = document.getElementById('question-audio-status');
+  const previewEl = document.getElementById('question-audio-preview');
+  const hiddenUrlInput = document.getElementById('question-audio-url');
+
+  questionFormState.audioUploading = true;
+  if (statusEl) {
+    statusEl.textContent = '⏳ Đang tải file audio lên...';
+    statusEl.style.color = '';
+  }
+
+  try {
+    const safeFileName = file.name.replace(/[^\w.\-]/g, '_'); // tránh ký tự lạ trong path
+    const path = `${crypto.randomUUID()}-${safeFileName}`;
+
+    const { error: uploadError } = await supabaseClient
+      .storage
+      .from('exam-audio')
+      .upload(path, file, { cacheControl: '3600', upsert: false });
+
+    if (uploadError) throw uploadError;
+
+    const { data: publicUrlData } = supabaseClient
+      .storage
+      .from('exam-audio')
+      .getPublicUrl(path);
+
+    const publicUrl = publicUrlData?.publicUrl;
+    if (!publicUrl) throw new Error('Không lấy được public URL sau khi upload.');
+
+    if (hiddenUrlInput) hiddenUrlInput.value = publicUrl;
+
+    if (previewEl) {
+      previewEl.src = publicUrl;
+      previewEl.style.display = 'block';
+    }
+    if (statusEl) statusEl.textContent = '✓ Đã tải audio lên thành công.';
+  } catch (err) {
+    // In lỗi đầy đủ ra console để debug (vd lỗi RLS/permission từ Storage
+    // sẽ có message rõ ràng ở đây), đồng thời hiện luôn message cho giáo
+    // viên thấy thay vì chỉ 1 dòng chung chung.
+    console.error('Lỗi upload audio câu hỏi:', err);
+    if (statusEl) {
+      statusEl.textContent = `❌ Tải audio thất bại: ${err?.message || 'Lỗi không xác định'}`;
+      statusEl.style.color = 'var(--vermillion)';
+    }
+    if (hiddenUrlInput) hiddenUrlInput.value = '';
+  } finally {
+    questionFormState.audioUploading = false;
+  }
+}
+
 function initQuestionFormControls() {
   document.getElementById('question-form-close-btn')?.addEventListener('click', closeQuestionForm);
   document.getElementById('question-form-cancel-btn')?.addEventListener('click', closeQuestionForm);
@@ -429,6 +520,11 @@ function initQuestionFormControls() {
   document.getElementById('question-text-underline-btn')?.addEventListener('click', () => applyQuestionTextFormat('underline'));
   document.getElementById('question-text')?.addEventListener('keyup', syncRichTextToolbarState);
   document.getElementById('question-text')?.addEventListener('mouseup', syncRichTextToolbarState);
+
+  document.getElementById('question-audio-file')?.addEventListener('change', (e) => {
+    const file = e.target.files?.[0];
+    if (file) uploadQuestionAudioFile(file);
+  });
 }
 
 // ============================================================

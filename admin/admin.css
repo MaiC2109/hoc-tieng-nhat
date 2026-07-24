@@ -969,7 +969,7 @@ body {
 /* ── Hàng đáp án trắc nghiệm: radio | tên đáp án | input, xếp ngang ── */
 .admin-choice-row {
   display: grid;
-  grid-template-columns: 24px 70px 1fr;
+  grid-template-columns: 26px 1fr 24px;
   align-items: center;
   gap: 10px;
   margin-bottom: 8px;

@@ -412,27 +412,27 @@
         <!-- Khối riêng cho multiple_choice — ẩn/hiện bằng JS theo #question-type -->
         <div id="question-mc-block">
           <label style="display:block; margin-bottom:8px; font-weight:600; font-size:13px; color:var(--ink);">
-            4 đáp án (tick chọn đáp án đúng)
+            4 đáp án (tích chọn đáp án đúng ở cuối hàng)
           </label>
           <div class="admin-choice-row">
-            <input type="radio" name="question-correct-choice" value="0" id="question-choice-radio-0" checked />
-            <label for="question-choice-0">Đáp án A</label>
+            <label for="question-choice-0">A.</label>
             <input type="text" id="question-choice-0" placeholder="Nhập đáp án A" />
+            <input type="radio" name="question-correct-choice" value="0" id="question-choice-radio-0" checked />
           </div>
           <div class="admin-choice-row">
-            <input type="radio" name="question-correct-choice" value="1" id="question-choice-radio-1" />
-            <label for="question-choice-1">Đáp án B</label>
+            <label for="question-choice-1">B.</label>
             <input type="text" id="question-choice-1" placeholder="Nhập đáp án B" />
+            <input type="radio" name="question-correct-choice" value="1" id="question-choice-radio-1" />
           </div>
           <div class="admin-choice-row">
-            <input type="radio" name="question-correct-choice" value="2" id="question-choice-radio-2" />
-            <label for="question-choice-2">Đáp án C</label>
+            <label for="question-choice-2">C.</label>
             <input type="text" id="question-choice-2" placeholder="Nhập đáp án C" />
+            <input type="radio" name="question-correct-choice" value="2" id="question-choice-radio-2" />
           </div>
           <div class="admin-choice-row">
-            <input type="radio" name="question-correct-choice" value="3" id="question-choice-radio-3" />
-            <label for="question-choice-3">Đáp án D</label>
+            <label for="question-choice-3">D.</label>
             <input type="text" id="question-choice-3" placeholder="Nhập đáp án D" />
+            <input type="radio" name="question-correct-choice" value="3" id="question-choice-radio-3" />
           </div>
         </div>
 
@@ -445,6 +445,16 @@
               Nhập chuỗi số thể hiện đúng thứ tự sắp xếp, ví dụ đề có 4 phần cần sắp xếp thì đáp án dạng "2314".
             </p>
           </div>
+        </div>
+
+        <!-- Khối upload audio — optional với mọi kỹ năng, gợi ý (không chặn cứng)
+             khi Kỹ năng = Nghe hiểu mà chưa chọn file -->
+        <div class="admin-form-group">
+          <label for="question-audio-file">File audio (tùy chọn)</label>
+          <input type="file" id="question-audio-file" accept="audio/*" />
+          <p class="admin-hint-text" id="question-audio-status"></p>
+          <input type="hidden" id="question-audio-url" value="" />
+          <audio id="question-audio-preview" controls style="display:none; margin-top:8px; width:100%;"></audio>
         </div>
 
         <div class="admin-form-group">
