@@ -83,6 +83,10 @@
           <i class="ti ti-users"></i>
           <span>Học viên</span>
         </button>
+        <button class="admin-nav-item" data-target="questions">
+          <i class="ti ti-help-circle"></i>
+          <span>Câu hỏi</span>
+        </button>
       </nav>
 
       <div class="admin-sidebar-footer">
@@ -263,7 +267,7 @@
                 </thead>
                 <tbody id="student-table-body">
                   <tr>
-                    <td colspan="3"><div class="empty-state">Đang tải dữ liệu...</div></td>
+                    <td colspan="2"><div class="empty-state">Đang tải dữ liệu...</div></td>
                   </tr>
                 </tbody>
               </table>
@@ -315,12 +319,150 @@
 
         </section>
 
+        <!-- ═══ SECTION: NGÂN HÀNG CÂU HỎI ═══ -->
+        <section class="admin-section" id="section-questions" data-section="questions">
+
+          <!-- Toolbar: search nội dung + lọc theo kỹ năng -->
+          <div class="admin-vocab-toolbar">
+            <div class="admin-filter-group">
+              <input type="text" id="question-search-input" class="admin-select" placeholder="🔍 Tìm theo nội dung câu hỏi..." style="min-width:260px;" />
+              <select id="filter-question-skill" class="admin-select">
+                <option value="">Tất cả kỹ năng</option>
+              </select>
+            </div>
+            <div class="admin-toolbar-actions">
+              <button class="btn btn-primary" id="btn-add-question" onclick="openQuestionForm()">
+                <i class="ti ti-plus"></i> Thêm câu hỏi mới
+              </button>
+            </div>
+          </div>
+
+          <!-- Bảng danh sách câu hỏi -->
+          <div class="admin-panel-card admin-table-card">
+            <div class="admin-table-scroll">
+              <table class="admin-vocab-table">
+                <thead>
+                  <tr>
+                    <th style="width:120px;">Kỹ năng</th>
+                    <th style="width:150px;">Loại câu hỏi</th>
+                    <th>Nội dung</th>
+                    <th style="width:100px; text-align:center;">Feedback</th>
+                    <th style="width:110px;">Ngày tạo</th>
+                  </tr>
+                </thead>
+                <tbody id="question-table-body">
+                  <tr>
+                    <td colspan="5"><div class="empty-state">Đang tải dữ liệu...</div></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+        </section>
+
       </div>
     </div>
   </div>
 
   <!-- ════════════════════════════════════════════════════════════
-       PANEL TRƯỢT: THÊM / SỬA TỪ VỰNG
+       PANEL TRƯỢT: THÊM / SỬA CÂU HỎI (question_bank)
+       Ẩn mặc định — logic show/hide + submit ở admin/questions.js.
+       CHƯA có: upload audio, chọn passage_id, sửa/xóa (bước sau).
+  ════════════════════════════════════════════════════════════ -->
+  <div id="question-form-overlay" class="admin-overlay" style="display:none;"></div>
+
+  <div id="question-form-panel" class="admin-slide-panel" style="display:none;">
+    <div class="admin-slide-panel-header">
+      <h3 id="question-form-title">Thêm câu hỏi mới</h3>
+      <button type="button" class="admin-slide-close-btn" id="question-form-close-btn">
+        <i class="ti ti-x"></i>
+      </button>
+    </div>
+
+    <div class="admin-slide-panel-body">
+      <form id="question-form">
+        <input type="hidden" id="question-form-id" value="" />
+
+        <div class="admin-form-row">
+          <div class="admin-form-group">
+            <label for="question-skill">Kỹ năng</label>
+            <select id="question-skill" required>
+              <option value="">— Chọn kỹ năng —</option>
+            </select>
+          </div>
+          <div class="admin-form-group">
+            <label for="question-type">Loại câu hỏi</label>
+            <select id="question-type" required>
+              <option value="multiple_choice">Trắc nghiệm 4 đáp án</option>
+              <option value="fill_blank">Điền từ</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="admin-form-group">
+          <label for="question-text">Nội dung câu hỏi</label>
+          <textarea id="question-text" rows="3" required></textarea>
+        </div>
+
+        <!-- Khối riêng cho multiple_choice — ẩn/hiện bằng JS theo #question-type -->
+        <div id="question-mc-block">
+          <label style="display:block; margin-bottom:8px; font-weight:600; font-size:13px; color:var(--ink);">
+            4 đáp án (tick chọn đáp án đúng)
+          </label>
+          <div class="admin-form-group" style="display:flex; align-items:center; gap:10px;">
+            <input type="radio" name="question-correct-choice" value="0" id="question-choice-radio-0" checked />
+            <input type="text" id="question-choice-0" placeholder="Đáp án 1" style="flex:1;" />
+          </div>
+          <div class="admin-form-group" style="display:flex; align-items:center; gap:10px;">
+            <input type="radio" name="question-correct-choice" value="1" id="question-choice-radio-1" />
+            <input type="text" id="question-choice-1" placeholder="Đáp án 2" style="flex:1;" />
+          </div>
+          <div class="admin-form-group" style="display:flex; align-items:center; gap:10px;">
+            <input type="radio" name="question-correct-choice" value="2" id="question-choice-radio-2" />
+            <input type="text" id="question-choice-2" placeholder="Đáp án 3" style="flex:1;" />
+          </div>
+          <div class="admin-form-group" style="display:flex; align-items:center; gap:10px;">
+            <input type="radio" name="question-correct-choice" value="3" id="question-choice-radio-3" />
+            <input type="text" id="question-choice-3" placeholder="Đáp án 4" style="flex:1;" />
+          </div>
+        </div>
+
+        <!-- Khối riêng cho fill_blank — ẩn/hiện bằng JS theo #question-type -->
+        <div id="question-fb-block" style="display:none;">
+          <div class="admin-form-group">
+            <label for="question-fillblank-answer">Đáp án đúng (thứ tự)</label>
+            <input type="text" id="question-fillblank-answer" placeholder="Ví dụ: 2314 — nhập đúng thứ tự các phần theo đề bài, không dấu cách" />
+            <p class="admin-hint-text">
+              Nhập chuỗi số thể hiện đúng thứ tự sắp xếp, ví dụ đề có 4 phần cần sắp xếp thì đáp án dạng "2314".
+            </p>
+          </div>
+        </div>
+
+        <div class="admin-form-group">
+          <label for="question-explanation">Feedback / giải thích (tùy chọn)</label>
+          <textarea id="question-explanation" rows="2"></textarea>
+        </div>
+
+        <div class="admin-form-group">
+          <label for="question-difficulty">Độ khó (tùy chọn)</label>
+          <select id="question-difficulty">
+            <option value="">— Không chọn —</option>
+            <option value="easy">Dễ</option>
+            <option value="medium">Trung bình</option>
+            <option value="hard">Khó</option>
+          </select>
+        </div>
+
+        <div id="question-form-error" class="admin-login-error"></div>
+
+        <div class="admin-form-actions">
+          <button type="button" class="btn btn-outline" id="question-form-cancel-btn">Hủy</button>
+          <button type="submit" class="btn btn-primary" id="question-form-submit-btn">Lưu câu hỏi</button>
+        </div>
+      </form>
+    </div>
+  </div>
        Ẩn mặc định — logic show/hide + submit sẽ thêm ở admin.js
        (Bước 2.2). Cấu trúc/HTML tĩnh đã đầy đủ ở bước này.
   ════════════════════════════════════════════════════════════ -->
@@ -486,5 +628,6 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
   <!-- Logic (Supabase Auth, toggle nav, fetch số liệu...) -->
   <script src="/admin/admin.js"></script>
+  <script src="/admin/questions.js"></script>
 </body>
 </html>

@@ -5,8 +5,8 @@
 //  Trỏ vào Supabase project Production (zlblylqosqwnhudeivpt).
 // ============================================================
 const ADMIN_CONFIG = {
-  supabaseUrl: "https://hzecdpnmegfwbximgqlv.supabase.co",
-  supabaseAnonKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh6ZWNkcG5tZWdmd2J4aW1ncWx2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMyMTEwNTEsImV4cCI6MjA5ODc4NzA1MX0.esdOJo7gvQXLJjG94PUQ_rghTfGCAAaYzdP3l-j3u-s",
+  supabaseUrl: "https://zlblylqosqwnhudeivpt.supabase.co",
+  supabaseAnonKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpsYmx5bHFvc3F3bmh1ZGVpdnB0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI1Mzk0NjUsImV4cCI6MjA5ODExNTQ2NX0.Xa8FblRuypm_eHMGz8GrCpwloKnzjgjTu8z_1ivS8_4",
   vocabTable: "vocabulary",
   profilesTable: "profiles",
   // Bảng lưu tiến độ SRS theo từng học viên: unique(user_id, vocab_id),
@@ -193,7 +193,8 @@ function initLoginPasswordToggle() {
 const ADMIN_SECTION_META = {
   overview:  { title: 'Tổng quan', sub: 'Số liệu chung của toàn bộ hệ thống' },
   vocab:     { title: 'Vocab',     sub: 'Quản lý từ vựng' },
-  students:  { title: 'Học viên',  sub: 'Danh sách học viên đã đăng ký' }
+  students:  { title: 'Học viên',  sub: 'Danh sách học viên đã đăng ký' },
+  questions: { title: 'Ngân hàng câu hỏi', sub: 'Quản lý câu hỏi cho các đề thi JLPT' }
 };
 
 function switchAdminSection(sectionKey) {
@@ -219,6 +220,10 @@ function switchAdminSection(sectionKey) {
     populateVocabFilterDropdowns().then(loadVocabAdminList);
   } else if (sectionKey === 'students') {
     loadStudentAdminList();
+  } else if (sectionKey === 'questions') {
+    // Hàm này định nghĩa trong admin/questions.js (nạp sau admin.js) —
+    // kiểm tra tồn tại trước để tránh vỡ nếu file chưa kịp load.
+    if (typeof loadQuestionsSection === 'function') loadQuestionsSection();
   }
 }
 
@@ -382,32 +387,65 @@ async function loadCategories() {
   categoriesState.parts = await partsRes.json();
 }
 
-// Fetch lại danh mục rồi đổ vào 2 dropdown filter — độc lập với việc bảng
-// đang hiển thị đang lọc theo gì.
+// ── DỮ LIỆU THỰC TẾ CHO 2 DROPDOWN FILTER (Unit/Part) ──
+// QUAN TRỌNG: 2 dropdown filter phải phản ánh đúng những Unit/Part ĐANG
+// THỰC SỰ TỒN TẠI trong bảng vocabulary — không lấy từ bảng danh mục
+// units/parts (categoriesState), vì danh mục có thể có Unit/Part chưa từng
+// gán cho từ nào, hoặc thiếu Unit/Part mà dữ liệu cũ đã dùng (nhập tay/CSV
+// trước khi có bảng danh mục). categoriesState vẫn dùng riêng cho form
+// Thêm/Sửa từ và panel Quản lý Unit/Part — không đụng vào.
+const vocabFilterOptionsState = {
+  pairs: []  // [{unit, part}] — toàn bộ cặp unit/part duy nhất đang có trong bảng vocabulary
+};
+
+// Fetch toàn bộ cặp (unit, part) đang thực sự tồn tại trong bảng vocabulary
+// (chỉ select 2 cột, không tải cả bảng) rồi loại trùng ở client.
+async function loadVocabFilterOptionsFromData() {
+  const url = `${ADMIN_CONFIG.supabaseUrl}/rest/v1/${ADMIN_CONFIG.vocabTable}?select=unit,part`;
+  const res = await fetch(url, { headers: sbHeaders() });
+  if (!res.ok) throw new Error(`Lỗi tải danh sách Unit/Part từ vocabulary: ${res.status}`);
+
+  const rows = await res.json();
+  const seen = new Set();
+  const pairs = [];
+  rows.forEach(r => {
+    const key = `${r.unit}\u0000${r.part}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      pairs.push({ unit: r.unit, part: r.part });
+    }
+  });
+  vocabFilterOptionsState.pairs = pairs;
+}
+
+// Fetch lại dữ liệu unit/part thật từ vocabulary rồi đổ vào 2 dropdown filter
+// — độc lập với việc bảng đang hiển thị đang lọc theo gì.
 async function populateVocabFilterDropdowns() {
   try {
-    await loadCategories();
+    await loadVocabFilterOptionsFromData();
   } catch (err) {
-    console.error('Lỗi tải danh mục cho filter:', err);
+    console.error('Lỗi tải danh sách Unit/Part cho filter:', err);
   }
 
   const unitSelect = document.getElementById('filter-unit');
   if (!unitSelect) return;
 
   const currentUnitVal = unitSelect.value;
-  const sortedUnits = _naturalSort(categoriesState.units, u => u.name);
+  const uniqueUnits = [...new Set(vocabFilterOptionsState.pairs.map(p => p.unit))];
+  const sortedUnits = _naturalSort(uniqueUnits);
 
   unitSelect.innerHTML = `<option value="">Tất cả Unit</option>` +
-    sortedUnits.map(u => `<option value="${escHtml(u.name)}">${escHtml(u.name)}</option>`).join('');
+    sortedUnits.map(u => `<option value="${escHtml(u)}">${escHtml(u)}</option>`).join('');
 
-  // Giữ lại lựa chọn cũ nếu vẫn còn hợp lệ sau khi refresh danh mục
-  unitSelect.value = sortedUnits.some(u => u.name === currentUnitVal) ? currentUnitVal : '';
+  // Giữ lại lựa chọn cũ nếu vẫn còn hợp lệ sau khi refresh danh sách
+  unitSelect.value = sortedUnits.includes(currentUnitVal) ? currentUnitVal : '';
 
   updateVocabPartFilterOptions();
 }
 
-// Part chỉ hiện các giá trị thuộc đúng Unit đang chọn ở dropdown Unit (nếu
-// chưa chọn Unit thì hiện toàn bộ Part có trong danh mục, loại trùng tên)
+// Part chỉ hiện các giá trị THỰC SỰ đang tồn tại (trong vocabulary) thuộc
+// đúng Unit đang chọn ở dropdown Unit (nếu chưa chọn Unit thì hiện toàn bộ
+// Part đang có trong dữ liệu, loại trùng tên)
 function updateVocabPartFilterOptions() {
   const unitSelect = document.getElementById('filter-unit');
   const partSelect = document.getElementById('filter-part');
@@ -416,18 +454,12 @@ function updateVocabPartFilterOptions() {
   const unitFilter = unitSelect.value;
   const currentPartVal = partSelect.value;
 
-  let scopedParts;
-  if (unitFilter) {
-    const unitObj = categoriesState.units.find(u => u.name === unitFilter);
-    scopedParts = unitObj ? categoriesState.parts.filter(p => p.unit_id === unitObj.id) : [];
-  } else {
-    scopedParts = categoriesState.parts;
-  }
+  const scopedPairs = unitFilter
+    ? vocabFilterOptionsState.pairs.filter(p => p.unit === unitFilter)
+    : vocabFilterOptionsState.pairs;
 
-  const uniqueNames = [...new Set(scopedParts.map(p => p.name))];
-  const sortedNames = uniqueNames.sort((a, b) =>
-    String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: 'base' })
-  );
+  const uniqueNames = [...new Set(scopedPairs.map(p => p.part))];
+  const sortedNames = _naturalSort(uniqueNames);
 
   partSelect.innerHTML = `<option value="">Tất cả Part</option>` +
     sortedNames.map(n => `<option value="${escHtml(n)}">${escHtml(n)}</option>`).join('');
