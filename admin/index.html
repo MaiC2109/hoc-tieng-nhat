@@ -402,7 +402,11 @@
 
         <div class="admin-form-group">
           <label for="question-text">Nội dung câu hỏi</label>
-          <textarea id="question-text" rows="3" required></textarea>
+          <div class="admin-richtext-toolbar">
+            <button type="button" class="admin-richtext-btn" id="question-text-bold-btn" title="In đậm" style="font-weight:700;">B</button>
+            <button type="button" class="admin-richtext-btn" id="question-text-underline-btn" title="Gạch chân" style="text-decoration:underline;">U</button>
+          </div>
+          <div id="question-text" class="admin-richtext-editor" contenteditable="true" data-placeholder="Nhập nội dung câu hỏi..."></div>
         </div>
 
         <!-- Khối riêng cho multiple_choice — ẩn/hiện bằng JS theo #question-type -->
@@ -410,21 +414,25 @@
           <label style="display:block; margin-bottom:8px; font-weight:600; font-size:13px; color:var(--ink);">
             4 đáp án (tick chọn đáp án đúng)
           </label>
-          <div class="admin-form-group" style="display:flex; align-items:center; gap:10px;">
+          <div class="admin-choice-row">
             <input type="radio" name="question-correct-choice" value="0" id="question-choice-radio-0" checked />
-            <input type="text" id="question-choice-0" placeholder="Đáp án 1" style="flex:1;" />
+            <label for="question-choice-0">Đáp án A</label>
+            <input type="text" id="question-choice-0" placeholder="Nhập đáp án A" />
           </div>
-          <div class="admin-form-group" style="display:flex; align-items:center; gap:10px;">
+          <div class="admin-choice-row">
             <input type="radio" name="question-correct-choice" value="1" id="question-choice-radio-1" />
-            <input type="text" id="question-choice-1" placeholder="Đáp án 2" style="flex:1;" />
+            <label for="question-choice-1">Đáp án B</label>
+            <input type="text" id="question-choice-1" placeholder="Nhập đáp án B" />
           </div>
-          <div class="admin-form-group" style="display:flex; align-items:center; gap:10px;">
+          <div class="admin-choice-row">
             <input type="radio" name="question-correct-choice" value="2" id="question-choice-radio-2" />
-            <input type="text" id="question-choice-2" placeholder="Đáp án 3" style="flex:1;" />
+            <label for="question-choice-2">Đáp án C</label>
+            <input type="text" id="question-choice-2" placeholder="Nhập đáp án C" />
           </div>
-          <div class="admin-form-group" style="display:flex; align-items:center; gap:10px;">
+          <div class="admin-choice-row">
             <input type="radio" name="question-correct-choice" value="3" id="question-choice-radio-3" />
-            <input type="text" id="question-choice-3" placeholder="Đáp án 4" style="flex:1;" />
+            <label for="question-choice-3">Đáp án D</label>
+            <input type="text" id="question-choice-3" placeholder="Nhập đáp án D" />
           </div>
         </div>
 

@@ -54,6 +54,14 @@ function formatDateVN(isoString) {
   return d.toLocaleDateString('vi-VN'); // dd/mm/yyyy
 }
 
+// question_text giờ có thể chứa thẻ <b>/<u> (do rich text editor) —
+// bỏ thẻ HTML khi cần hiển thị dạng chữ thường (search, rút gọn ở bảng).
+function stripHtml(html) {
+  const tmp = document.createElement('div');
+  tmp.innerHTML = String(html || '');
+  return tmp.textContent || tmp.innerText || '';
+}
+
 // ============================================================
 //  SKILLS — load 1 lần, dùng cho dropdown filter (và form ở bước sau)
 // ============================================================
@@ -138,7 +146,7 @@ function renderQuestionAdminTable() {
   const keyword = (document.getElementById('question-search-input')?.value || '').trim().toLowerCase();
   const rows = questionsAdminState.currentRows;
   const filtered = keyword
-    ? rows.filter(r => (r.question_text || '').toLowerCase().includes(keyword))
+    ? rows.filter(r => stripHtml(r.question_text).toLowerCase().includes(keyword))
     : rows;
 
   if (filtered.length === 0) {
@@ -155,7 +163,7 @@ function renderQuestionAdminTable() {
       <tr>
         <td>${escHtml(skillName)}</td>
         <td>${escHtml(typeLabel)}</td>
-        <td>${escHtml(truncateText(r.question_text, 50))}</td>
+        <td>${escHtml(truncateText(stripHtml(r.question_text), 50))}</td>
         <td style="text-align:center;">${hasFeedback ? '✓' : '—'}</td>
         <td>${escHtml(formatDateVN(r.created_at))}</td>
       </tr>
@@ -237,6 +245,10 @@ function resetQuestionForm() {
   document.getElementById('question-form-id').value = '';
   document.getElementById('question-form-error').textContent = '';
 
+  // form.reset() không tác dụng lên div contenteditable -> dọn tay
+  const editor = document.getElementById('question-text');
+  if (editor) editor.innerHTML = '';
+
   // reset về đáp án đúng mặc định là ô đầu tiên
   const radio0 = document.getElementById('question-choice-radio-0');
   if (radio0) radio0.checked = true;
@@ -289,7 +301,11 @@ async function submitQuestionForm(e) {
 
   const skillId = document.getElementById('question-skill').value;
   const questionType = document.getElementById('question-type').value;
-  const questionText = document.getElementById('question-text').value.trim();
+  // Nội dung câu hỏi lấy từ div contenteditable -> lưu nguyên HTML (giữ
+  // định dạng bold/underline giáo viên đã chọn) vào question_text.
+  const questionTextEditor = document.getElementById('question-text');
+  const questionTextHtml = (questionTextEditor?.innerHTML || '').trim();
+  const questionTextPlain = stripHtml(questionTextHtml).trim();
   const explanation = document.getElementById('question-explanation').value.trim();
   const difficulty = document.getElementById('question-difficulty').value;
 
@@ -297,7 +313,7 @@ async function submitQuestionForm(e) {
     errorEl.textContent = 'Vui lòng chọn Kỹ năng.';
     return;
   }
-  if (!questionText) {
+  if (!questionTextPlain) {
     errorEl.textContent = 'Vui lòng nhập nội dung câu hỏi.';
     return;
   }
@@ -334,7 +350,7 @@ async function submitQuestionForm(e) {
   const payload = {
     skill_id: Number(skillId),
     question_type: questionType,
-    question_text: questionText,
+    question_text: questionTextHtml,
     choices: choices, // null với fill_blank
     correct_answer: correctAnswer,
     explanation: explanation || null,
@@ -377,12 +393,42 @@ async function submitQuestionForm(e) {
   }
 }
 
+// ── Toolbar định dạng chữ (bold/underline) cho nội dung câu hỏi ──────────
+// Dùng document.execCommand: đơn giản, đủ dùng cho nhu cầu bold/underline
+// cơ bản, không cần thêm thư viện rich-text ngoài (giữ đúng chủ trương
+// vanilla JS, không thêm framework/dependency mới).
+function applyQuestionTextFormat(command) {
+  const editor = document.getElementById('question-text');
+  if (!editor) return;
+  editor.focus();
+  document.execCommand(command, false, null);
+  syncRichTextToolbarState();
+}
+
+// Bật highlight (.active) cho nút bold/underline nếu vị trí con trỏ hiện
+// tại đang nằm trong đoạn chữ có định dạng tương ứng.
+function syncRichTextToolbarState() {
+  const boldBtn = document.getElementById('question-text-bold-btn');
+  const underlineBtn = document.getElementById('question-text-underline-btn');
+  try {
+    if (boldBtn) boldBtn.classList.toggle('active', document.queryCommandState('bold'));
+    if (underlineBtn) underlineBtn.classList.toggle('active', document.queryCommandState('underline'));
+  } catch (e) {
+    // một số trình duyệt cũ có thể không hỗ trợ queryCommandState — bỏ qua an toàn
+  }
+}
+
 function initQuestionFormControls() {
   document.getElementById('question-form-close-btn')?.addEventListener('click', closeQuestionForm);
   document.getElementById('question-form-cancel-btn')?.addEventListener('click', closeQuestionForm);
   document.getElementById('question-form-overlay')?.addEventListener('click', closeQuestionForm);
   document.getElementById('question-form')?.addEventListener('submit', submitQuestionForm);
   document.getElementById('question-type')?.addEventListener('change', toggleQuestionTypeFields);
+
+  document.getElementById('question-text-bold-btn')?.addEventListener('click', () => applyQuestionTextFormat('bold'));
+  document.getElementById('question-text-underline-btn')?.addEventListener('click', () => applyQuestionTextFormat('underline'));
+  document.getElementById('question-text')?.addEventListener('keyup', syncRichTextToolbarState);
+  document.getElementById('question-text')?.addEventListener('mouseup', syncRichTextToolbarState);
 }
 
 // ============================================================
