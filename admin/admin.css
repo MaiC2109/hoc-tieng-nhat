@@ -966,13 +966,38 @@ body {
   color: var(--ink-mute);
 }
 
-/* ── Hàng đáp án trắc nghiệm: radio | tên đáp án | input, xếp ngang ── */
+/* ── Hàng đáp án trắc nghiệm: tên đáp án | input | radio, xếp ngang ── */
 .admin-choice-row {
   display: grid;
-  grid-template-columns: 26px 1fr 24px;
+  grid-template-columns: 24px 1fr 16px;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 8px;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.admin-choice-row input[type="text"] {
+  padding: 9px 12px;
+  font-size: 13px;
+  border: 1px solid var(--border-md);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-sans);
+  color: var(--ink);
+  background: var(--paper-card);
+  transition: border-color var(--transition);
+  width: 100%;
+}
+
+.admin-choice-row input[type="text"]:focus {
+  outline: none;
+  border-color: var(--vermillion);
+}
+
+.admin-choice-row input[type="radio"] {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: var(--vermillion);
+  cursor: pointer;
 }
 
 .admin-choice-row label {

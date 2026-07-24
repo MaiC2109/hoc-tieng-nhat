@@ -9,7 +9,7 @@
 
 // Nhãn hiển thị cho loại câu hỏi — dùng lại ở cả bảng danh sách và form (bước sau)
 const QUESTION_TYPE_LABELS = {
-  multiple_choice: 'Trắc nghiệm 4 đáp án',
+  multiple_choice: 'Trắc nghiệm',
   fill_blank: 'Điền từ'
 };
 
@@ -343,18 +343,29 @@ async function submitQuestionForm(e) {
   let correctAnswer = '';
 
   if (questionType === 'multiple_choice') {
-    const rawChoices = [0, 1, 2, 3].map(i => document.getElementById(`question-choice-${i}`).value.trim());
-    if (rawChoices.some(c => !c)) {
-      errorEl.textContent = 'Vui lòng nhập đủ 4 đáp án.';
+    // Cho phép 2-4 đáp án (không bắt buộc đủ 4) — ô nào bỏ trống sẽ không
+    // đưa vào choices, miễn còn ít nhất 2 ô có nội dung.
+    const rawChoices = [0, 1, 2, 3]
+      .map(i => document.getElementById(`question-choice-${i}`).value.trim())
+      .filter(c => c);
+
+    if (rawChoices.length < 2) {
+      errorEl.textContent = 'Vui lòng nhập ít nhất 2 đáp án.';
       return;
     }
+
     const correctIdx = document.querySelector('input[name="question-correct-choice"]:checked')?.value;
-    if (correctIdx === undefined) {
-      errorEl.textContent = 'Vui lòng chọn đáp án đúng.';
+    const correctValue = correctIdx !== undefined
+      ? document.getElementById(`question-choice-${correctIdx}`).value.trim()
+      : '';
+
+    if (!correctValue) {
+      errorEl.textContent = 'Đáp án đúng đang được tích chọn ở 1 ô trống — vui lòng nhập nội dung cho ô đó hoặc chọn lại đáp án đúng.';
       return;
     }
+
     choices = rawChoices;
-    correctAnswer = rawChoices[Number(correctIdx)];
+    correctAnswer = correctValue;
   } else if (questionType === 'fill_blank') {
     const fbAnswer = document.getElementById('question-fillblank-answer').value.trim();
     if (!fbAnswer) {
