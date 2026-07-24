@@ -304,10 +304,23 @@ async function initAuth() {
 
 // Lắng nghe thay đổi trạng thái đăng nhập (vd: token hết hạn, đăng xuất ở tab khác)
 // để đồng bộ lại giao diện mà không cần F5 thủ công.
+//
+// QUAN TRỌNG: supabaseClient tự động làm mới access_token ngầm khi hết hạn
+// (mặc định sau 1 giờ), nhưng việc đó chỉ cập nhật bên TRONG supabaseClient —
+// không tự động cập nhật state.currentUser.access_token mà sbAuthHeaders()
+// đang dùng cho các lệnh fetch() thủ công (quiz_attempts, vocab_review_log,
+// study_sessions). Nếu không lắng nghe TOKEN_REFRESHED ở đây, học viên giữ
+// tab mở quá 1 giờ sẽ bị mọi lệnh ghi đó trả về 401 (token cũ đã hết hạn),
+// dù supabaseClient.from(...) ở chỗ khác (vd vocab_srs_progress) vẫn hoạt
+// động bình thường vì nó tự quản lý token đúng cách.
 supabaseClient.auth.onAuthStateChange((event, session) => {
   if (event === 'SIGNED_OUT') {
     currentUser = null;
     showLoginScreen();
+  } else if (event === 'TOKEN_REFRESHED' || event === 'SIGNED_IN') {
+    if (session && session.user && state.currentUser) {
+      state.currentUser.access_token = session.access_token;
+    }
   }
 });
 
