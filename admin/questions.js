@@ -278,6 +278,7 @@ function openQuestionForm(row = null) {
   const panel = document.getElementById('question-form-panel');
   const title = document.getElementById('question-form-title');
   const submitBtn = document.getElementById('question-form-submit-btn');
+  const saveContinueBtn = document.getElementById('question-form-save-continue-btn');
 
   if (row) {
     // Nhánh sửa — CHƯA nối nút gọi tới đây ở bước này, để sẵn cho bước sau.
@@ -285,12 +286,14 @@ function openQuestionForm(row = null) {
     questionFormState.editingId = row.id;
     if (title) title.textContent = 'Sửa câu hỏi';
     if (submitBtn) submitBtn.textContent = 'Cập nhật câu hỏi';
+    if (saveContinueBtn) saveContinueBtn.style.display = 'none'; // chỉ có ở mode tạo mới
     // TODO (bước sau): đổ dữ liệu row vào các field tương ứng.
   } else {
     questionFormState.mode = 'create';
     questionFormState.editingId = null;
     if (title) title.textContent = 'Thêm câu hỏi mới';
     if (submitBtn) submitBtn.textContent = 'Lưu câu hỏi';
+    if (saveContinueBtn) saveContinueBtn.style.display = 'inline-flex';
   }
 
   if (overlay) overlay.style.display = 'block';
@@ -305,18 +308,18 @@ function closeQuestionForm() {
   resetQuestionForm();
 }
 
-async function submitQuestionForm(e) {
-  e.preventDefault();
-
+// Đọc + validate toàn bộ field trên form, trả về payload hợp lệ hoặc null
+// (khi null, đã tự ghi message lỗi vào #question-form-error).
+// Dùng chung cho cả 2 nút "Lưu" và "Lưu & Tạo tiếp".
+function validateAndBuildQuestionPayload() {
   const errorEl = document.getElementById('question-form-error');
-  const submitBtn = document.getElementById('question-form-submit-btn');
   errorEl.textContent = '';
 
   // Nếu file audio đang upload dở mà bấm Lưu ngay -> audio_url sẽ trống dù
   // giáo viên đã chọn file. Chặn lại và báo rõ thay vì lưu thiếu audio.
   if (questionFormState.audioUploading) {
     errorEl.textContent = 'File audio đang được tải lên, vui lòng đợi upload xong rồi mới bấm Lưu.';
-    return;
+    return null;
   }
 
   const skillId = document.getElementById('question-skill').value;
@@ -331,11 +334,11 @@ async function submitQuestionForm(e) {
 
   if (!skillId) {
     errorEl.textContent = 'Vui lòng chọn Kỹ năng.';
-    return;
+    return null;
   }
   if (!questionTextPlain) {
     errorEl.textContent = 'Vui lòng nhập nội dung câu hỏi.';
-    return;
+    return null;
   }
 
   // Chuẩn bị choices/correct_answer tùy theo loại câu hỏi
@@ -351,7 +354,7 @@ async function submitQuestionForm(e) {
 
     if (rawChoices.length < 2) {
       errorEl.textContent = 'Vui lòng nhập ít nhất 2 đáp án.';
-      return;
+      return null;
     }
 
     const correctIdx = document.querySelector('input[name="question-correct-choice"]:checked')?.value;
@@ -361,7 +364,7 @@ async function submitQuestionForm(e) {
 
     if (!correctValue) {
       errorEl.textContent = 'Đáp án đúng đang được tích chọn ở 1 ô trống — vui lòng nhập nội dung cho ô đó hoặc chọn lại đáp án đúng.';
-      return;
+      return null;
     }
 
     choices = rawChoices;
@@ -370,12 +373,12 @@ async function submitQuestionForm(e) {
     const fbAnswer = document.getElementById('question-fillblank-answer').value.trim();
     if (!fbAnswer) {
       errorEl.textContent = 'Vui lòng nhập đáp án đúng (dạng thứ tự, vd "2314").';
-      return;
+      return null;
     }
     correctAnswer = fbAnswer;
   } else {
     errorEl.textContent = 'Loại câu hỏi không hợp lệ.';
-    return;
+    return null;
   }
 
   // Cảnh báo mềm (không chặn submit) nếu Kỹ năng = "Nghe hiểu" mà chưa có audio.
@@ -383,10 +386,10 @@ async function submitQuestionForm(e) {
   const selectedSkill = questionsAdminState.skills.find(sk => String(sk.id) === String(skillId));
   if (selectedSkill?.code === 'listening' && !audioUrl) {
     const proceed = confirm('Kỹ năng này là "Nghe hiểu" nhưng bạn chưa upload file audio. Vẫn muốn lưu câu hỏi mà không có audio?');
-    if (!proceed) return;
+    if (!proceed) return null;
   }
 
-  const payload = {
+  return {
     skill_id: Number(skillId),
     question_type: questionType,
     question_text: questionTextHtml,
@@ -397,45 +400,103 @@ async function submitQuestionForm(e) {
     difficulty: difficulty || null
     // passage_id: chưa làm ở bước này, để NULL/bỏ trống theo default cột
   };
+}
 
+// Gọi Supabase để insert (create) hoặc update (edit) — dùng chung cho cả
+// 2 nút. Ném lỗi (throw) nếu request thất bại, để nơi gọi tự xử lý UI.
+async function saveQuestionToSupabase(payload) {
   const isEdit = questionFormState.mode === 'edit' && questionFormState.editingId !== null;
+  const headers = await sbAuthedHeaders({ 'Prefer': 'return=representation' });
+
+  if (isEdit) {
+    const res = await fetch(
+      `${ADMIN_CONFIG.supabaseUrl}/rest/v1/question_bank?id=eq.${questionFormState.editingId}`,
+      { method: 'PATCH', headers, body: JSON.stringify({ ...payload, updated_at: new Date().toISOString() }) }
+    );
+    if (!res.ok) {
+      const errBody = await res.json().catch(() => null);
+      throw new Error(errBody?.message || `Lỗi cập nhật câu hỏi (HTTP ${res.status})`);
+    }
+  } else {
+    const res = await fetch(`${ADMIN_CONFIG.supabaseUrl}/rest/v1/question_bank`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(payload)
+    });
+    if (!res.ok) {
+      const errBody = await res.json().catch(() => null);
+      throw new Error(errBody?.message || `Lỗi thêm câu hỏi (HTTP ${res.status})`);
+    }
+  }
+
+  return { isEdit };
+}
+
+// Nút "Lưu câu hỏi" / "Cập nhật câu hỏi" (submit form mặc định) — lưu xong
+// thì đóng form, quay về danh sách.
+async function submitQuestionForm(e) {
+  e.preventDefault();
+
+  const errorEl = document.getElementById('question-form-error');
+  const submitBtn = document.getElementById('question-form-submit-btn');
+
+  const payload = validateAndBuildQuestionPayload();
+  if (!payload) return;
 
   submitBtn.disabled = true;
   const originalText = submitBtn.innerHTML;
   submitBtn.innerHTML = 'Đang lưu...';
 
   try {
-    const headers = await sbAuthedHeaders({ 'Prefer': 'return=representation' });
-
-    if (isEdit) {
-      const res = await fetch(
-        `${ADMIN_CONFIG.supabaseUrl}/rest/v1/question_bank?id=eq.${questionFormState.editingId}`,
-        { method: 'PATCH', headers, body: JSON.stringify({ ...payload, updated_at: new Date().toISOString() }) }
-      );
-      if (!res.ok) {
-        const errBody = await res.json().catch(() => null);
-        throw new Error(errBody?.message || `Lỗi cập nhật câu hỏi (HTTP ${res.status})`);
-      }
-    } else {
-      const res = await fetch(`${ADMIN_CONFIG.supabaseUrl}/rest/v1/question_bank`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(payload)
-      });
-      if (!res.ok) {
-        const errBody = await res.json().catch(() => null);
-        throw new Error(errBody?.message || `Lỗi thêm câu hỏi (HTTP ${res.status})`);
-      }
-    }
-
+    await saveQuestionToSupabase(payload);
     closeQuestionForm();
     await loadQuestionAdminList();
   } catch (err) {
     console.error('Lỗi lưu câu hỏi:', err);
-    errorEl.textContent = err?.message || (isEdit ? 'Có lỗi khi cập nhật câu hỏi. Vui lòng thử lại.' : 'Có lỗi khi lưu câu hỏi. Vui lòng thử lại.');
+    errorEl.textContent = err?.message || 'Có lỗi khi lưu câu hỏi. Vui lòng thử lại.';
   } finally {
     submitBtn.disabled = false;
     submitBtn.innerHTML = originalText;
+  }
+}
+
+// Nút "Lưu & Tạo tiếp" — chỉ xuất hiện ở mode tạo mới. Lưu xong KHÔNG đóng
+// form: giữ nguyên Kỹ năng + Loại câu hỏi, xóa các field còn lại (nội dung,
+// đáp án, feedback, difficulty, audio), rồi focus lại vào ô nội dung để
+// giáo viên nhập ngay câu tiếp theo.
+async function handleSaveAndContinue() {
+  const errorEl = document.getElementById('question-form-error');
+  const btn = document.getElementById('question-form-save-continue-btn');
+
+  const payload = validateAndBuildQuestionPayload();
+  if (!payload) return;
+
+  btn.disabled = true;
+  const originalText = btn.innerHTML;
+  btn.innerHTML = 'Đang lưu...';
+
+  try {
+    await saveQuestionToSupabase(payload);
+
+    // Giữ nguyên Kỹ năng + Loại câu hỏi hiện tại (không reset 2 dropdown này)
+    const keepSkillId = document.getElementById('question-skill').value;
+    const keepType = document.getElementById('question-type').value;
+
+    resetQuestionForm();
+
+    document.getElementById('question-skill').value = keepSkillId;
+    document.getElementById('question-type').value = keepType;
+    toggleQuestionTypeFields();
+
+    document.getElementById('question-text')?.focus();
+
+    await loadQuestionAdminList(); // cập nhật bảng nền, không đóng form
+  } catch (err) {
+    console.error('Lỗi lưu câu hỏi (Lưu & Tạo tiếp):', err);
+    errorEl.textContent = err?.message || 'Có lỗi khi lưu câu hỏi. Vui lòng thử lại.';
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = originalText;
   }
 }
 
@@ -525,6 +586,7 @@ function initQuestionFormControls() {
   document.getElementById('question-form-cancel-btn')?.addEventListener('click', closeQuestionForm);
   document.getElementById('question-form-overlay')?.addEventListener('click', closeQuestionForm);
   document.getElementById('question-form')?.addEventListener('submit', submitQuestionForm);
+  document.getElementById('question-form-save-continue-btn')?.addEventListener('click', handleSaveAndContinue);
   document.getElementById('question-type')?.addEventListener('change', toggleQuestionTypeFields);
 
   document.getElementById('question-text-bold-btn')?.addEventListener('click', () => applyQuestionTextFormat('bold'));
