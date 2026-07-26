@@ -385,10 +385,6 @@
     <div class="admin-slide-panel-body">
       <form id="question-form">
         <input type="hidden" id="question-form-id" value="" />
-        <!-- passage_id: CHƯA có dropdown chọn passage ở form này (để dành tier
-             passages sau) — hidden field này chỉ để giữ nguyên giá trị gốc khi
-             sửa/nhân bản 1 câu đã có passage_id, tránh vô tình xóa mất liên kết. -->
-        <input type="hidden" id="question-form-passage-id" value="" />
 
         <div class="admin-form-row">
           <div class="admin-form-group">
@@ -403,6 +399,20 @@
               <option value="multiple_choice">Trắc nghiệm</option>
               <option value="fill_blank">Điền từ</option>
             </select>
+          </div>
+        </div>
+
+        <!-- Dropdown chọn đoạn văn/hội thoại — chỉ hiện khi Kỹ năng =
+             Đọc hiểu/Nghe hiểu (toggle bằng JS theo #question-skill).
+             Chưa chọn thì passage_id = NULL (câu hỏi độc lập, không thuộc
+             đoạn nào), đúng như hành vi từ trước tới giờ. -->
+        <div class="admin-form-group" id="question-passage-group" style="display:none;">
+          <label for="question-form-passage-id">Thuộc đoạn văn/hội thoại (tùy chọn)</label>
+          <div style="display:flex; gap:8px;">
+            <select id="question-form-passage-id" style="flex:1;">
+              <option value="">— Không thuộc đoạn nào —</option>
+            </select>
+            <button type="button" class="btn btn-outline" id="btn-open-passage-form">+ Tạo đoạn mới</button>
           </div>
         </div>
 
@@ -484,6 +494,52 @@
           <button type="button" class="btn btn-outline" id="question-form-cancel-btn">Hủy</button>
           <button type="button" class="btn btn-outline" id="question-form-save-continue-btn">Lưu &amp; Tạo tiếp</button>
           <button type="submit" class="btn btn-primary" id="question-form-submit-btn">Lưu câu hỏi</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════
+       PANEL TRƯỢT: TẠO ĐOẠN VĂN/HỘI THOẠI (passages)
+       Mở từ nút "+ Tạo đoạn mới" trong form câu hỏi. Lưu xong tự refresh
+       dropdown "Thuộc đoạn văn/hội thoại" ở form câu hỏi và chọn sẵn đoạn
+       vừa tạo — logic ở admin/questions.js.
+  ════════════════════════════════════════════════════════════ -->
+  <div id="passage-form-overlay" class="admin-overlay" style="display:none;"></div>
+
+  <div id="passage-form-panel" class="admin-slide-panel" style="display:none;">
+    <div class="admin-slide-panel-header">
+      <h3>Tạo đoạn văn/hội thoại</h3>
+      <button type="button" class="admin-slide-close-btn" id="passage-form-close-btn">
+        <i class="ti ti-x"></i>
+      </button>
+    </div>
+
+    <div class="admin-slide-panel-body">
+      <form id="passage-form">
+        <div class="admin-form-group">
+          <label for="passage-title">Tiêu đề</label>
+          <input type="text" id="passage-title" placeholder="Ví dụ: Hội thoại tại nhà hàng" />
+        </div>
+
+        <div class="admin-form-group">
+          <label for="passage-content">Nội dung văn bản</label>
+          <textarea id="passage-content" rows="6" placeholder="Nhập đoạn văn (dùng cho Đọc hiểu) hoặc lời thoại (dùng cho Nghe hiểu)..."></textarea>
+        </div>
+
+        <div class="admin-form-group">
+          <label for="passage-audio-file">File audio chung (tùy chọn)</label>
+          <input type="file" id="passage-audio-file" accept="audio/*" />
+          <p class="admin-hint-text" id="passage-audio-status"></p>
+          <input type="hidden" id="passage-audio-url" value="" />
+          <audio id="passage-audio-preview" controls style="display:none; margin-top:8px; width:100%;"></audio>
+        </div>
+
+        <div id="passage-form-error" class="admin-login-error"></div>
+
+        <div class="admin-form-actions">
+          <button type="button" class="btn btn-outline" id="passage-form-cancel-btn">Hủy</button>
+          <button type="submit" class="btn btn-primary" id="passage-form-submit-btn">Lưu đoạn văn</button>
         </div>
       </form>
     </div>

@@ -16,7 +16,9 @@ const QUESTION_TYPE_LABELS = {
 const questionsAdminState = {
   currentRows: [],   // danh sách câu hỏi đang hiển thị (theo filter kỹ năng hiện tại)
   skills: [],         // cache danh sách skills, tránh gọi lại Supabase nhiều lần
-  skillsLoaded: false
+  skillsLoaded: false,
+  passages: [],        // cache danh sách passages cho dropdown "Thuộc đoạn văn/hội thoại"
+  passagesLoaded: false
 };
 
 // ── Header xác thực bằng access token THẬT của admin đang đăng nhập ────────
@@ -94,6 +96,58 @@ async function populateQuestionSkillFilter() {
     if (currentValue) select.value = currentValue;
   } catch (err) {
     console.error('Lỗi nạp dropdown kỹ năng:', err);
+  }
+}
+
+// ============================================================
+//  PASSAGES — dùng cho dropdown "Thuộc đoạn văn/hội thoại" trong form câu hỏi
+// ============================================================
+async function fetchPassagesList(forceReload = false) {
+  if (questionsAdminState.passagesLoaded && !forceReload) return questionsAdminState.passages;
+
+  // Bảng passages cho phép đọc công khai (RLS select using(true)).
+  const url = `${ADMIN_CONFIG.supabaseUrl}/rest/v1/passages?select=id,title&order=created_at.desc`;
+  const res = await fetch(url, { headers: sbHeaders() });
+  if (!res.ok) throw new Error(`Lỗi tải danh sách đoạn văn/hội thoại: ${res.status}`);
+
+  questionsAdminState.passages = await res.json();
+  questionsAdminState.passagesLoaded = true;
+  return questionsAdminState.passages;
+}
+
+// selectedId: nếu truyền vào (vd sau khi vừa tạo đoạn mới), tự chọn sẵn
+// đoạn đó trong dropdown sau khi refresh.
+async function populateQuestionFormPassageDropdown(selectedId = '') {
+  const select = document.getElementById('question-form-passage-id');
+  if (!select) return;
+
+  try {
+    const passages = await fetchPassagesList(true); // luôn lấy mới nhất khi hàm này được gọi
+    const keepValue = selectedId || select.value;
+
+    select.innerHTML = '<option value="">— Không thuộc đoạn nào —</option>' +
+      passages.map(p => `<option value="${p.id}">${escHtml(p.title || '(Chưa đặt tiêu đề)')}</option>`).join('');
+
+    if (keepValue) select.value = keepValue;
+  } catch (err) {
+    console.error('Lỗi nạp dropdown đoạn văn/hội thoại:', err);
+  }
+}
+
+// Ẩn/hiện khối chọn passage theo Kỹ năng hiện tại — chỉ có ý nghĩa với
+// Đọc hiểu (reading) / Nghe hiểu (listening).
+function toggleQuestionPassageField() {
+  const group = document.getElementById('question-passage-group');
+  const skillId = document.getElementById('question-skill')?.value;
+  if (!group) return;
+
+  const skill = questionsAdminState.skills.find(sk => String(sk.id) === String(skillId));
+  const shouldShow = !!skill && (skill.code === 'reading' || skill.code === 'listening');
+
+  group.style.display = shouldShow ? 'block' : 'none';
+  if (!shouldShow) {
+    const select = document.getElementById('question-form-passage-id');
+    if (select) select.value = '';
   }
 }
 
@@ -207,6 +261,7 @@ function initQuestionSkillFilter() {
 async function loadQuestionsSection() {
   await populateQuestionSkillFilter();
   await populateQuestionFormSkillDropdown();
+  await populateQuestionFormPassageDropdown();
   await loadQuestionAdminList();
 }
 
@@ -286,6 +341,7 @@ function resetQuestionForm() {
   if (radio0) radio0.checked = true;
 
   toggleQuestionTypeFields();
+  toggleQuestionPassageField();
 }
 
 // Đổ dữ liệu 1 câu hỏi (row từ question_bank) vào các field trên form.
@@ -315,6 +371,7 @@ function populateQuestionFormFromRow(row, includeAudio) {
   }
 
   toggleQuestionTypeFields(); // select.value gán tay không tự bắn 'change'
+  toggleQuestionPassageField();
 
   if (includeAudio && row.audio_url) {
     document.getElementById('question-audio-url').value = row.audio_url;
@@ -604,6 +661,7 @@ async function handleSaveAndContinue() {
     document.getElementById('question-skill').value = keepSkillId;
     document.getElementById('question-type').value = keepType;
     toggleQuestionTypeFields();
+    toggleQuestionPassageField();
 
     document.getElementById('question-text')?.focus();
 
@@ -705,6 +763,7 @@ function initQuestionFormControls() {
   document.getElementById('question-form')?.addEventListener('submit', submitQuestionForm);
   document.getElementById('question-form-save-continue-btn')?.addEventListener('click', handleSaveAndContinue);
   document.getElementById('question-type')?.addEventListener('change', toggleQuestionTypeFields);
+  document.getElementById('question-skill')?.addEventListener('change', toggleQuestionPassageField);
 
   document.getElementById('question-text-bold-btn')?.addEventListener('click', () => applyQuestionTextFormat('bold'));
   document.getElementById('question-text-underline-btn')?.addEventListener('click', () => applyQuestionTextFormat('underline'));
@@ -715,6 +774,149 @@ function initQuestionFormControls() {
     const file = e.target.files?.[0];
     if (file) uploadQuestionAudioFile(file);
   });
+
+  document.getElementById('btn-open-passage-form')?.addEventListener('click', openPassageForm);
+  document.getElementById('passage-form-close-btn')?.addEventListener('click', closePassageForm);
+  document.getElementById('passage-form-cancel-btn')?.addEventListener('click', closePassageForm);
+  document.getElementById('passage-form-overlay')?.addEventListener('click', closePassageForm);
+  document.getElementById('passage-form')?.addEventListener('submit', submitPassageForm);
+  document.getElementById('passage-audio-file')?.addEventListener('change', (e) => {
+    const file = e.target.files?.[0];
+    if (file) uploadPassageAudioFile(file);
+  });
+}
+
+// ============================================================
+//  MODAL "TẠO ĐOẠN VĂN/HỘI THOẠI" (passages)
+//  Mở chồng lên trên panel form câu hỏi (dùng đúng pattern
+//  admin-overlay/admin-slide-panel có sẵn). Lưu xong sẽ refresh dropdown
+//  passage_id ở form câu hỏi và tự chọn sẵn đoạn vừa tạo.
+// ============================================================
+
+const passageFormState = {
+  audioUploading: false
+};
+
+function resetPassageForm() {
+  const form = document.getElementById('passage-form');
+  if (form) form.reset();
+
+  document.getElementById('passage-form-error').textContent = '';
+
+  const audioFileInput = document.getElementById('passage-audio-file');
+  if (audioFileInput) audioFileInput.value = '';
+  document.getElementById('passage-audio-url').value = '';
+  const statusEl = document.getElementById('passage-audio-status');
+  if (statusEl) { statusEl.textContent = ''; statusEl.style.color = ''; }
+  const preview = document.getElementById('passage-audio-preview');
+  if (preview) { preview.style.display = 'none'; preview.removeAttribute('src'); }
+}
+
+function openPassageForm() {
+  resetPassageForm();
+  document.getElementById('passage-form-overlay').style.display = 'block';
+  document.getElementById('passage-form-panel').style.display = 'flex';
+}
+
+function closePassageForm() {
+  document.getElementById('passage-form-overlay').style.display = 'none';
+  document.getElementById('passage-form-panel').style.display = 'none';
+  resetPassageForm();
+}
+
+// Upload audio chung cho passage — cùng bucket exam-audio, cùng path
+// pattern {uuid}-{filename} như audio của câu hỏi (chỉ khác thư mục field
+// lưu kết quả). Không gộp chung hàm với uploadQuestionAudioFile để tránh
+// phải truyền quá nhiều tham số DOM id qua lại — chấp nhận trùng lặp nhỏ
+// để dễ đọc, đúng phong cách các hàm khác trong file này.
+async function uploadPassageAudioFile(file) {
+  const statusEl = document.getElementById('passage-audio-status');
+  const previewEl = document.getElementById('passage-audio-preview');
+  const hiddenUrlInput = document.getElementById('passage-audio-url');
+
+  passageFormState.audioUploading = true;
+  if (statusEl) { statusEl.textContent = '⏳ Đang tải file audio lên...'; statusEl.style.color = ''; }
+
+  try {
+    const safeFileName = file.name.replace(/[^\w.\-]/g, '_');
+    const path = `${crypto.randomUUID()}-${safeFileName}`;
+
+    const { error: uploadError } = await supabaseClient
+      .storage
+      .from('exam-audio')
+      .upload(path, file, { cacheControl: '3600', upsert: false });
+
+    if (uploadError) throw uploadError;
+
+    const { data: publicUrlData } = supabaseClient.storage.from('exam-audio').getPublicUrl(path);
+    const publicUrl = publicUrlData?.publicUrl;
+    if (!publicUrl) throw new Error('Không lấy được public URL sau khi upload.');
+
+    if (hiddenUrlInput) hiddenUrlInput.value = publicUrl;
+    if (previewEl) { previewEl.src = publicUrl; previewEl.style.display = 'block'; }
+    if (statusEl) { statusEl.textContent = '✓ Đã tải audio lên thành công.'; statusEl.style.color = 'var(--success, #2e7d32)'; }
+  } catch (err) {
+    console.error('Lỗi upload audio đoạn văn/hội thoại:', err);
+    if (statusEl) {
+      statusEl.textContent = `❌ Tải audio thất bại: ${err?.message || 'Lỗi không xác định'}`;
+      statusEl.style.color = 'var(--vermillion)';
+    }
+    if (hiddenUrlInput) hiddenUrlInput.value = '';
+  } finally {
+    passageFormState.audioUploading = false;
+  }
+}
+
+async function submitPassageForm(e) {
+  e.preventDefault();
+
+  const errorEl = document.getElementById('passage-form-error');
+  const submitBtn = document.getElementById('passage-form-submit-btn');
+  errorEl.textContent = '';
+
+  if (passageFormState.audioUploading) {
+    errorEl.textContent = 'File audio đang được tải lên, vui lòng đợi upload xong rồi mới bấm Lưu.';
+    return;
+  }
+
+  const title = document.getElementById('passage-title').value.trim();
+  const content = document.getElementById('passage-content').value.trim();
+  const audioUrl = document.getElementById('passage-audio-url').value || null;
+
+  if (!title) {
+    errorEl.textContent = 'Vui lòng nhập tiêu đề cho đoạn văn/hội thoại (dùng để nhận diện trong dropdown).';
+    return;
+  }
+
+  submitBtn.disabled = true;
+  const originalText = submitBtn.innerHTML;
+  submitBtn.innerHTML = 'Đang lưu...';
+
+  try {
+    const headers = await sbAuthedHeaders({ 'Prefer': 'return=representation' });
+    const res = await fetch(`${ADMIN_CONFIG.supabaseUrl}/rest/v1/passages`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ title, content: content || null, audio_url: audioUrl })
+    });
+    if (!res.ok) {
+      const errBody = await res.json().catch(() => null);
+      throw new Error(errBody?.message || `Lỗi tạo đoạn văn/hội thoại (HTTP ${res.status})`);
+    }
+
+    const [inserted] = await res.json();
+
+    // Refresh dropdown passage_id ở form câu hỏi và tự chọn sẵn đoạn vừa tạo
+    await populateQuestionFormPassageDropdown(inserted?.id || '');
+
+    closePassageForm();
+  } catch (err) {
+    console.error('Lỗi lưu đoạn văn/hội thoại:', err);
+    errorEl.textContent = err?.message || 'Có lỗi khi lưu đoạn văn/hội thoại. Vui lòng thử lại.';
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.innerHTML = originalText;
+  }
 }
 
 // ============================================================
