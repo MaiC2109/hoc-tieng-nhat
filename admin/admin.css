@@ -1026,6 +1026,35 @@ body {
   flex-shrink: 0;
 }
 
+/* ── Sub-tab chuyển đổi giữa bảng Câu hỏi / Đoạn văn trong section Câu hỏi ── */
+.admin-subtabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.admin-subtab-btn {
+  padding: 8px 18px;
+  border: 1px solid var(--border-md);
+  border-radius: var(--radius-sm);
+  background: var(--paper-card);
+  color: var(--ink-mute);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color var(--transition), background var(--transition), color var(--transition);
+}
+
+.admin-subtab-btn:hover {
+  border-color: var(--vermillion);
+}
+
+.admin-subtab-btn.active {
+  background: var(--vermillion);
+  color: #fff;
+  border-color: var(--vermillion);
+}
+
 .admin-choice-row input[type="text"] {
   padding: 9px 12px;
   font-size: 13px;

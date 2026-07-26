@@ -322,68 +322,117 @@
         <!-- ═══ SECTION: NGÂN HÀNG CÂU HỎI ═══ -->
         <section class="admin-section" id="section-questions" data-section="questions">
 
-          <!-- Toolbar: search nội dung + lọc theo kỹ năng -->
-          <div class="admin-vocab-toolbar">
-            <div class="admin-filter-group">
-              <input type="text" id="question-search-input" class="admin-select" placeholder="🔍 Tìm theo nội dung câu hỏi..." style="min-width:260px;" />
-              <select id="filter-question-skill" class="admin-select">
-                <option value="">Tất cả kỹ năng</option>
-              </select>
-            </div>
-            <div class="admin-toolbar-actions">
-              <button class="btn btn-outline" id="btn-add-passage-standalone" onclick="openPassageForm()">
-                <i class="ti ti-file-text"></i> Tạo đoạn văn/hội thoại
-              </button>
-              <button class="btn btn-primary" id="btn-add-question" onclick="openQuestionForm()">
-                <i class="ti ti-plus"></i> Thêm câu hỏi mới
-              </button>
-            </div>
+          <!-- Sub-tab chuyển giữa bảng Câu hỏi và bảng Đoạn văn/hội thoại —
+               tách riêng để danh sách dài không bị dồn 2 bảng trên 1 màn hình -->
+          <div class="admin-subtabs">
+            <button type="button" class="admin-subtab-btn active" id="subtab-questions-btn" onclick="switchQuestionsSubtab('questions')">
+              Câu hỏi
+            </button>
+            <button type="button" class="admin-subtab-btn" id="subtab-passages-btn" onclick="switchQuestionsSubtab('passages')">
+              Đoạn văn/hội thoại
+            </button>
           </div>
 
-          <!-- Bảng danh sách đoạn văn/hội thoại (passages) -->
-          <div class="admin-panel-card admin-table-card">
-            <h4 style="margin:0 0 12px; font-size:14px; color:var(--ink);">Đoạn văn/hội thoại đã tạo</h4>
-            <div class="admin-table-scroll">
-              <table class="admin-vocab-table">
-                <thead>
-                  <tr>
-                    <th>Tiêu đề</th>
-                    <th style="width:140px; text-align:center;">Số câu hỏi</th>
-                    <th style="width:90px; text-align:center;">Audio</th>
-                    <th style="width:110px;">Ngày tạo</th>
-                    <th style="width:80px; text-align:center;">Thao tác</th>
-                  </tr>
-                </thead>
-                <tbody id="passage-table-body">
-                  <tr>
-                    <td colspan="5"><div class="empty-state">Đang tải dữ liệu...</div></td>
-                  </tr>
-                </tbody>
-              </table>
+          <!-- ─── SUBVIEW: CÂU HỎI ─── -->
+          <div id="questions-subview">
+
+            <!-- Toolbar: search nội dung + lọc theo kỹ năng -->
+            <div class="admin-vocab-toolbar">
+              <div class="admin-filter-group">
+                <input type="text" id="question-search-input" class="admin-select" placeholder="🔍 Tìm theo nội dung câu hỏi..." style="min-width:260px;" />
+                <select id="filter-question-skill" class="admin-select">
+                  <option value="">Tất cả kỹ năng</option>
+                </select>
+              </div>
+              <div class="admin-toolbar-actions">
+                <button class="btn btn-primary" id="btn-add-question" onclick="openQuestionForm()">
+                  <i class="ti ti-plus"></i> Thêm câu hỏi mới
+                </button>
+              </div>
             </div>
+
+            <!-- Bảng danh sách câu hỏi -->
+            <div class="admin-panel-card admin-table-card">
+              <div class="admin-table-scroll">
+                <table class="admin-vocab-table">
+                  <thead>
+                    <tr>
+                      <th style="width:120px;">Kỹ năng</th>
+                      <th style="width:150px;">Loại câu hỏi</th>
+                      <th>Nội dung</th>
+                      <th style="width:100px; text-align:center;">Feedback</th>
+                      <th style="width:110px;">Ngày tạo</th>
+                      <th style="width:132px; text-align:center;">Thao tác</th>
+                    </tr>
+                  </thead>
+                  <tbody id="question-table-body">
+                    <tr>
+                      <td colspan="6"><div class="empty-state">Đang tải dữ liệu...</div></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <div class="admin-pagination" id="question-pagination" style="display:none;">
+                <span class="admin-pagination-info" id="question-pagination-info"></span>
+                <div class="admin-pagination-controls">
+                  <button type="button" class="admin-row-action-btn" id="question-page-prev" title="Trang trước">
+                    <i class="ti ti-chevron-left"></i>
+                  </button>
+                  <span class="admin-pagination-current" id="question-pagination-current"></span>
+                  <button type="button" class="admin-row-action-btn" id="question-page-next" title="Trang sau">
+                    <i class="ti ti-chevron-right"></i>
+                  </button>
+                </div>
+              </div>
+            </div>
+
           </div>
 
-          <!-- Bảng danh sách câu hỏi -->
-          <div class="admin-panel-card admin-table-card">
-            <div class="admin-table-scroll">
-              <table class="admin-vocab-table">
-                <thead>
-                  <tr>
-                    <th style="width:120px;">Kỹ năng</th>
-                    <th style="width:150px;">Loại câu hỏi</th>
-                    <th>Nội dung</th>
-                    <th style="width:100px; text-align:center;">Feedback</th>
-                    <th style="width:110px;">Ngày tạo</th>
-                    <th style="width:132px; text-align:center;">Thao tác</th>
-                  </tr>
-                </thead>
-                <tbody id="question-table-body">
-                  <tr>
-                    <td colspan="6"><div class="empty-state">Đang tải dữ liệu...</div></td>
-                  </tr>
-                </tbody>
-              </table>
+          <!-- ─── SUBVIEW: ĐOẠN VĂN/HỘI THOẠI ─── -->
+          <div id="passages-subview" style="display:none;">
+
+            <div class="admin-vocab-toolbar">
+              <div class="admin-filter-group"></div>
+              <div class="admin-toolbar-actions">
+                <button class="btn btn-primary" id="btn-add-passage-standalone" onclick="openPassageForm()">
+                  <i class="ti ti-plus"></i> Tạo đoạn văn/hội thoại
+                </button>
+              </div>
             </div>
+
+            <div class="admin-panel-card admin-table-card">
+              <div class="admin-table-scroll">
+                <table class="admin-vocab-table">
+                  <thead>
+                    <tr>
+                      <th>Tiêu đề</th>
+                      <th style="width:140px; text-align:center;">Số câu hỏi</th>
+                      <th style="width:90px; text-align:center;">Audio</th>
+                      <th style="width:110px;">Ngày tạo</th>
+                      <th style="width:100px; text-align:center;">Thao tác</th>
+                    </tr>
+                  </thead>
+                  <tbody id="passage-table-body">
+                    <tr>
+                      <td colspan="5"><div class="empty-state">Đang tải dữ liệu...</div></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <div class="admin-pagination" id="passage-pagination" style="display:none;">
+                <span class="admin-pagination-info" id="passage-pagination-info"></span>
+                <div class="admin-pagination-controls">
+                  <button type="button" class="admin-row-action-btn" id="passage-page-prev" title="Trang trước">
+                    <i class="ti ti-chevron-left"></i>
+                  </button>
+                  <span class="admin-pagination-current" id="passage-pagination-current"></span>
+                  <button type="button" class="admin-row-action-btn" id="passage-page-next" title="Trang sau">
+                    <i class="ti ti-chevron-right"></i>
+                  </button>
+                </div>
+              </div>
+            </div>
+
           </div>
 
         </section>

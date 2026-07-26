@@ -13,13 +13,18 @@ const QUESTION_TYPE_LABELS = {
   fill_blank: 'Điền từ'
 };
 
+const QUESTION_PAGE_SIZE = 50;
+const PASSAGE_PAGE_SIZE = 50;
+
 const questionsAdminState = {
   currentRows: [],   // danh sách câu hỏi đang hiển thị (theo filter kỹ năng hiện tại)
+  currentPage: 1,     // trang hiện tại của bảng câu hỏi (50 items/trang)
   skills: [],         // cache danh sách skills, tránh gọi lại Supabase nhiều lần
   skillsLoaded: false,
   passages: [],        // cache danh sách passages cho dropdown "Thuộc đoạn văn/hội thoại"
   passagesLoaded: false,
-  passageTableRows: []  // dữ liệu bảng danh sách passage (kèm số câu hỏi đang dùng)
+  passageTableRows: [], // dữ liệu bảng danh sách passage (kèm số câu hỏi đang dùng)
+  passageCurrentPage: 1  // trang hiện tại của bảng passage (50 items/trang)
 };
 
 // ── Header xác thực bằng access token THẬT của admin đang đăng nhập ────────
@@ -185,6 +190,7 @@ async function loadQuestionAdminList() {
     if (!res.ok) throw new Error(`Lỗi tải danh sách câu hỏi: ${res.status}`);
 
     questionsAdminState.currentRows = await res.json();
+    questionsAdminState.currentPage = 1; // reset về trang 1 mỗi khi tải lại (đổi filter kỹ năng...)
     renderQuestionAdminTable();
   } catch (err) {
     console.error('Lỗi tải danh sách câu hỏi:', err);
@@ -198,6 +204,7 @@ async function loadQuestionAdminList() {
 // rồi render — gọi lại mỗi khi gõ ô search, KHÔNG gọi lại Supabase.
 function renderQuestionAdminTable() {
   const tbody = document.getElementById('question-table-body');
+  const pagEl = document.getElementById('question-pagination');
   if (!tbody) return;
 
   const keyword = (document.getElementById('question-search-input')?.value || '').trim().toLowerCase();
@@ -208,10 +215,18 @@ function renderQuestionAdminTable() {
 
   if (filtered.length === 0) {
     tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state">Không có câu hỏi nào khớp bộ lọc.</div></td></tr>`;
+    if (pagEl) pagEl.style.display = 'none';
     return;
   }
 
-  tbody.innerHTML = filtered.map(r => {
+  const totalPages = Math.max(1, Math.ceil(filtered.length / QUESTION_PAGE_SIZE));
+  if (questionsAdminState.currentPage > totalPages) questionsAdminState.currentPage = totalPages;
+  if (questionsAdminState.currentPage < 1) questionsAdminState.currentPage = 1;
+
+  const startIdx = (questionsAdminState.currentPage - 1) * QUESTION_PAGE_SIZE;
+  const pageRows = filtered.slice(startIdx, startIdx + QUESTION_PAGE_SIZE);
+
+  tbody.innerHTML = pageRows.map(r => {
     const skillName = r.skills?.name || '—';
     const typeLabel = QUESTION_TYPE_LABELS[r.question_type] || r.question_type || '—';
     const hasFeedback = !!(r.explanation && r.explanation.trim());
@@ -242,13 +257,53 @@ function renderQuestionAdminTable() {
       </tr>
     `;
   }).join('');
+
+  renderQuestionPagination(filtered.length, totalPages);
+}
+
+function renderQuestionPagination(totalRows, totalPages) {
+  const pagEl = document.getElementById('question-pagination');
+  const infoEl = document.getElementById('question-pagination-info');
+  const currentEl = document.getElementById('question-pagination-current');
+  const prevBtn = document.getElementById('question-page-prev');
+  const nextBtn = document.getElementById('question-page-next');
+  if (!pagEl) return;
+
+  if (totalPages <= 1) {
+    pagEl.style.display = 'none';
+    return;
+  }
+
+  const page = questionsAdminState.currentPage;
+  const startIdx = (page - 1) * QUESTION_PAGE_SIZE + 1;
+  const endIdx = Math.min(page * QUESTION_PAGE_SIZE, totalRows);
+
+  pagEl.style.display = 'flex';
+  if (infoEl) infoEl.textContent = `Hiển thị ${startIdx}–${endIdx} / ${totalRows} câu hỏi`;
+  if (currentEl) currentEl.textContent = `Trang ${page} / ${totalPages}`;
+  if (prevBtn) prevBtn.disabled = page <= 1;
+  if (nextBtn) nextBtn.disabled = page >= totalPages;
+}
+
+function goToQuestionPage(delta) {
+  questionsAdminState.currentPage += delta;
+  renderQuestionAdminTable();
+  document.getElementById('questions-subview')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function initQuestionPaginationControls() {
+  document.getElementById('question-page-prev')?.addEventListener('click', () => goToQuestionPage(-1));
+  document.getElementById('question-page-next')?.addEventListener('click', () => goToQuestionPage(1));
 }
 
 // ── Gắn sự kiện ──────────────────────────────────────────────────────────
 function initQuestionSearch() {
   const input = document.getElementById('question-search-input');
   if (!input) return;
-  input.addEventListener('input', () => renderQuestionAdminTable());
+  input.addEventListener('input', () => {
+    questionsAdminState.currentPage = 1; // đổi từ khóa search -> luôn quay về trang 1
+    renderQuestionAdminTable();
+  });
 }
 
 function initQuestionSkillFilter() {
@@ -930,6 +985,7 @@ async function loadPassagesAdminList() {
       ...p,
       questionCount: usageCountMap[p.id] || 0
     }));
+    questionsAdminState.passageCurrentPage = 1; // reset về trang 1 mỗi khi tải lại
 
     renderPassagesAdminTable();
   } catch (err) {
@@ -942,15 +998,24 @@ async function loadPassagesAdminList() {
 
 function renderPassagesAdminTable() {
   const tbody = document.getElementById('passage-table-body');
+  const pagEl = document.getElementById('passage-pagination');
   if (!tbody) return;
 
   const rows = questionsAdminState.passageTableRows || [];
   if (rows.length === 0) {
     tbody.innerHTML = `<tr><td colspan="5"><div class="empty-state">Chưa có đoạn văn/hội thoại nào.</div></td></tr>`;
+    if (pagEl) pagEl.style.display = 'none';
     return;
   }
 
-  tbody.innerHTML = rows.map(p => `
+  const totalPages = Math.max(1, Math.ceil(rows.length / PASSAGE_PAGE_SIZE));
+  if (questionsAdminState.passageCurrentPage > totalPages) questionsAdminState.passageCurrentPage = totalPages;
+  if (questionsAdminState.passageCurrentPage < 1) questionsAdminState.passageCurrentPage = 1;
+
+  const startIdx = (questionsAdminState.passageCurrentPage - 1) * PASSAGE_PAGE_SIZE;
+  const pageRows = rows.slice(startIdx, startIdx + PASSAGE_PAGE_SIZE);
+
+  tbody.innerHTML = pageRows.map(p => `
     <tr onclick="editPassageRow('${p.id}')" style="cursor:pointer;">
       <td>${escHtml(p.title || '(Chưa đặt tiêu đề)')}</td>
       <td style="text-align:center;">${p.questionCount}</td>
@@ -958,6 +1023,9 @@ function renderPassagesAdminTable() {
       <td>${escHtml(formatDateVN(p.created_at))}</td>
       <td onclick="event.stopPropagation();" style="text-align:center;">
         <div class="admin-row-actions">
+          <button class="admin-row-action-btn" onclick="editPassageRow('${p.id}')" title="Sửa">
+            <i class="ti ti-edit"></i>
+          </button>
           <button class="admin-row-action-btn danger" onclick="deletePassageRow('${p.id}')" title="Xóa">
             <i class="ti ti-trash"></i>
           </button>
@@ -965,6 +1033,43 @@ function renderPassagesAdminTable() {
       </td>
     </tr>
   `).join('');
+
+  renderPassagePagination(rows.length, totalPages);
+}
+
+function renderPassagePagination(totalRows, totalPages) {
+  const pagEl = document.getElementById('passage-pagination');
+  const infoEl = document.getElementById('passage-pagination-info');
+  const currentEl = document.getElementById('passage-pagination-current');
+  const prevBtn = document.getElementById('passage-page-prev');
+  const nextBtn = document.getElementById('passage-page-next');
+  if (!pagEl) return;
+
+  if (totalPages <= 1) {
+    pagEl.style.display = 'none';
+    return;
+  }
+
+  const page = questionsAdminState.passageCurrentPage;
+  const startIdx = (page - 1) * PASSAGE_PAGE_SIZE + 1;
+  const endIdx = Math.min(page * PASSAGE_PAGE_SIZE, totalRows);
+
+  pagEl.style.display = 'flex';
+  if (infoEl) infoEl.textContent = `Hiển thị ${startIdx}–${endIdx} / ${totalRows} đoạn văn`;
+  if (currentEl) currentEl.textContent = `Trang ${page} / ${totalPages}`;
+  if (prevBtn) prevBtn.disabled = page <= 1;
+  if (nextBtn) nextBtn.disabled = page >= totalPages;
+}
+
+function goToPassagePage(delta) {
+  questionsAdminState.passageCurrentPage += delta;
+  renderPassagesAdminTable();
+  document.getElementById('passages-subview')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function initPassagePaginationControls() {
+  document.getElementById('passage-page-prev')?.addEventListener('click', () => goToPassagePage(-1));
+  document.getElementById('passage-page-next')?.addEventListener('click', () => goToPassagePage(1));
 }
 
 function editPassageRow(id) {
@@ -1243,6 +1348,23 @@ async function submitPassageForm(e) {
   }
 }
 
+// ── Sub-tab: chuyển giữa bảng Câu hỏi và bảng Đoạn văn/hội thoại ─────────
+// Cả 2 bảng đã được load sẵn cùng lúc ở loadQuestionsSection() (dữ liệu
+// không quá lớn ở quy mô 1 giáo viên quản lý), nên hàm này chỉ đơn thuần
+// ẩn/hiện, không cần fetch lại gì thêm.
+function switchQuestionsSubtab(tab) {
+  const questionsView = document.getElementById('questions-subview');
+  const passagesView = document.getElementById('passages-subview');
+  const questionsBtn = document.getElementById('subtab-questions-btn');
+  const passagesBtn = document.getElementById('subtab-passages-btn');
+
+  const showQuestions = tab === 'questions';
+  if (questionsView) questionsView.style.display = showQuestions ? 'block' : 'none';
+  if (passagesView) passagesView.style.display = showQuestions ? 'none' : 'block';
+  if (questionsBtn) questionsBtn.classList.toggle('active', showQuestions);
+  if (passagesBtn) passagesBtn.classList.toggle('active', !showQuestions);
+}
+
 // ============================================================
 //  KHỞI TẠO (chạy song song với DOMContentLoaded của admin.js)
 // ============================================================
@@ -1250,4 +1372,6 @@ document.addEventListener('DOMContentLoaded', () => {
   initQuestionSearch();
   initQuestionSkillFilter();
   initQuestionFormControls();
+  initQuestionPaginationControls();
+  initPassagePaginationControls();
 });
