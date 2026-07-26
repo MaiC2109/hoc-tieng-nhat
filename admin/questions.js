@@ -18,7 +18,8 @@ const questionsAdminState = {
   skills: [],         // cache danh sách skills, tránh gọi lại Supabase nhiều lần
   skillsLoaded: false,
   passages: [],        // cache danh sách passages cho dropdown "Thuộc đoạn văn/hội thoại"
-  passagesLoaded: false
+  passagesLoaded: false,
+  passageTableRows: []  // dữ liệu bảng danh sách passage (kèm số câu hỏi đang dùng)
 };
 
 // ── Header xác thực bằng access token THẬT của admin đang đăng nhập ────────
@@ -262,6 +263,7 @@ async function loadQuestionsSection() {
   await populateQuestionSkillFilter();
   await populateQuestionFormSkillDropdown();
   await populateQuestionFormPassageDropdown();
+  await loadPassagesAdminList();
   await loadQuestionAdminList();
 }
 
@@ -895,6 +897,113 @@ function initQuestionFormControls() {
 }
 
 // ============================================================
+//  BẢNG DANH SÁCH PASSAGES (đoạn văn/hội thoại)
+// ============================================================
+
+// Tải danh sách passage + đếm số câu hỏi đang thuộc mỗi passage. Đếm bằng
+// cách lấy 1 lượt toàn bộ question_bank.passage_id (not null) rồi group ở
+// client — tránh phải gọi N request đếm riêng cho từng passage.
+async function loadPassagesAdminList() {
+  const tbody = document.getElementById('passage-table-body');
+  if (tbody) {
+    tbody.innerHTML = `<tr><td colspan="5"><div class="empty-state">Đang tải dữ liệu...</div></td></tr>`;
+  }
+
+  try {
+    const [passagesRes, usageRes] = await Promise.all([
+      fetch(`${ADMIN_CONFIG.supabaseUrl}/rest/v1/passages?select=id,title,audio_url,created_at&order=created_at.desc`, { headers: sbHeaders() }),
+      fetch(`${ADMIN_CONFIG.supabaseUrl}/rest/v1/question_bank?select=passage_id&passage_id=not.is.null`, { headers: await sbAuthedHeaders() })
+    ]);
+
+    if (!passagesRes.ok) throw new Error(`Lỗi tải danh sách đoạn văn/hội thoại: ${passagesRes.status}`);
+    if (!usageRes.ok) throw new Error(`Lỗi đếm câu hỏi theo đoạn văn: ${usageRes.status}`);
+
+    const passages = await passagesRes.json();
+    const usageRows = await usageRes.json();
+
+    const usageCountMap = {};
+    usageRows.forEach(r => {
+      usageCountMap[r.passage_id] = (usageCountMap[r.passage_id] || 0) + 1;
+    });
+
+    questionsAdminState.passageTableRows = passages.map(p => ({
+      ...p,
+      questionCount: usageCountMap[p.id] || 0
+    }));
+
+    renderPassagesAdminTable();
+  } catch (err) {
+    console.error('Lỗi tải bảng đoạn văn/hội thoại:', err);
+    if (tbody) {
+      tbody.innerHTML = `<tr><td colspan="5"><div class="empty-state">❌ Không tải được danh sách đoạn văn/hội thoại.</div></td></tr>`;
+    }
+  }
+}
+
+function renderPassagesAdminTable() {
+  const tbody = document.getElementById('passage-table-body');
+  if (!tbody) return;
+
+  const rows = questionsAdminState.passageTableRows || [];
+  if (rows.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="5"><div class="empty-state">Chưa có đoạn văn/hội thoại nào.</div></td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = rows.map(p => `
+    <tr onclick="editPassageRow('${p.id}')" style="cursor:pointer;">
+      <td>${escHtml(p.title || '(Chưa đặt tiêu đề)')}</td>
+      <td style="text-align:center;">${p.questionCount}</td>
+      <td style="text-align:center;">${p.audio_url ? '✓' : '—'}</td>
+      <td>${escHtml(formatDateVN(p.created_at))}</td>
+      <td onclick="event.stopPropagation();" style="text-align:center;">
+        <div class="admin-row-actions">
+          <button class="admin-row-action-btn danger" onclick="deletePassageRow('${p.id}')" title="Xóa">
+            <i class="ti ti-trash"></i>
+          </button>
+        </div>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function editPassageRow(id) {
+  const row = (questionsAdminState.passageTableRows || []).find(p => String(p.id) === String(id));
+  if (!row) return;
+  openPassageForm(row);
+}
+
+async function deletePassageRow(id) {
+  try {
+    const headers = await sbAuthedHeaders();
+    const countRes = await fetch(
+      `${ADMIN_CONFIG.supabaseUrl}/rest/v1/question_bank?passage_id=eq.${id}&select=id`,
+      { headers }
+    );
+    if (!countRes.ok) throw new Error(`Lỗi kiểm tra câu hỏi đang dùng đoạn văn này: ${countRes.status}`);
+    const usageRows = await countRes.json();
+    const usageCount = usageRows.length;
+
+    const confirmMsg = usageCount > 0
+      ? `Passage này đang có ${usageCount} câu hỏi sử dụng, xóa sẽ ảnh hưởng. Bạn vẫn muốn xóa?`
+      : 'Bạn có chắc muốn xóa đoạn văn/hội thoại này?';
+    if (!confirm(confirmMsg)) return;
+
+    const deleteRes = await fetch(
+      `${ADMIN_CONFIG.supabaseUrl}/rest/v1/passages?id=eq.${id}`,
+      { method: 'DELETE', headers: await sbAuthedHeaders() }
+    );
+    if (!deleteRes.ok) throw new Error(`Lỗi xóa đoạn văn/hội thoại: ${deleteRes.status}`);
+
+    await loadPassagesAdminList();
+    await populateQuestionFormPassageDropdown();
+  } catch (err) {
+    console.error('Lỗi xóa đoạn văn/hội thoại:', err);
+    alert('Có lỗi khi xóa đoạn văn/hội thoại. Vui lòng thử lại.');
+  }
+}
+
+// ============================================================
 //  MODAL "TẠO ĐOẠN VĂN/HỘI THOẠI" (passages)
 //  Mở chồng lên trên panel form câu hỏi (dùng đúng pattern
 //  admin-overlay/admin-slide-panel có sẵn). Lưu xong sẽ refresh dropdown
@@ -902,6 +1011,8 @@ function initQuestionFormControls() {
 // ============================================================
 
 const passageFormState = {
+  mode: 'create',   // 'create' | 'edit'
+  editingId: null,  // id passage đang sửa (chỉ có giá trị khi mode === 'edit')
   audioUploading: false
 };
 
@@ -926,8 +1037,40 @@ function resetPassageForm() {
   if (preview) { preview.style.display = 'none'; preview.removeAttribute('src'); }
 }
 
-function openPassageForm() {
+// Đổ dữ liệu 1 passage vào form — dùng khi mở mode edit
+function populatePassageFormFromRow(row) {
+  document.getElementById('passage-title').value = row.title || '';
+  document.getElementById('passage-content').innerHTML = row.content || '';
+
+  if (row.audio_url) {
+    document.getElementById('passage-audio-url').value = row.audio_url;
+    const preview = document.getElementById('passage-audio-preview');
+    if (preview) { preview.src = row.audio_url; preview.style.display = 'block'; }
+    const statusEl = document.getElementById('passage-audio-status');
+    if (statusEl) { statusEl.textContent = 'Audio hiện có của đoạn này — chọn file khác nếu muốn thay.'; statusEl.style.color = ''; }
+  }
+}
+
+// row = null -> mở form ở mode TẠO MỚI. Truyền row -> mode SỬA, pre-fill dữ liệu cũ.
+function openPassageForm(row = null) {
   resetPassageForm();
+
+  const title = document.getElementById('passage-form-title');
+  const submitBtn = document.getElementById('passage-form-submit-btn');
+
+  if (row) {
+    passageFormState.mode = 'edit';
+    passageFormState.editingId = row.id;
+    if (title) title.textContent = 'Sửa đoạn văn/hội thoại';
+    if (submitBtn) submitBtn.textContent = 'Cập nhật đoạn văn';
+    populatePassageFormFromRow(row);
+  } else {
+    passageFormState.mode = 'create';
+    passageFormState.editingId = null;
+    if (title) title.textContent = 'Tạo đoạn văn/hội thoại';
+    if (submitBtn) submitBtn.textContent = 'Lưu đoạn văn';
+  }
+
   document.getElementById('passage-form-overlay').style.display = 'block';
   document.getElementById('passage-form-panel').style.display = 'flex';
 }
@@ -1057,22 +1200,38 @@ async function submitPassageForm(e) {
   const originalText = submitBtn.innerHTML;
   submitBtn.innerHTML = 'Đang lưu...';
 
+  const isEdit = passageFormState.mode === 'edit' && passageFormState.editingId !== null;
+
   try {
     const headers = await sbAuthedHeaders({ 'Prefer': 'return=representation' });
-    const res = await fetch(`${ADMIN_CONFIG.supabaseUrl}/rest/v1/passages`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ title, content: hasTextOrImage ? contentHtml : null, audio_url: audioUrl })
-    });
-    if (!res.ok) {
-      const errBody = await res.json().catch(() => null);
-      throw new Error(errBody?.message || `Lỗi tạo đoạn văn/hội thoại (HTTP ${res.status})`);
+    const body = JSON.stringify({ title, content: hasTextOrImage ? contentHtml : null, audio_url: audioUrl });
+
+    let res;
+    if (isEdit) {
+      res = await fetch(`${ADMIN_CONFIG.supabaseUrl}/rest/v1/passages?id=eq.${passageFormState.editingId}`, {
+        method: 'PATCH',
+        headers,
+        body
+      });
+    } else {
+      res = await fetch(`${ADMIN_CONFIG.supabaseUrl}/rest/v1/passages`, {
+        method: 'POST',
+        headers,
+        body
+      });
     }
 
-    const [inserted] = await res.json();
+    if (!res.ok) {
+      const errBody = await res.json().catch(() => null);
+      throw new Error(errBody?.message || `Lỗi lưu đoạn văn/hội thoại (HTTP ${res.status})`);
+    }
 
-    // Refresh dropdown passage_id ở form câu hỏi và tự chọn sẵn đoạn vừa tạo
-    await populateQuestionFormPassageDropdown(inserted?.id || '');
+    const [saved] = await res.json();
+
+    // Refresh dropdown passage_id ở form câu hỏi + bảng danh sách passage,
+    // tự chọn sẵn đoạn vừa lưu trong dropdown.
+    await populateQuestionFormPassageDropdown(saved?.id || passageFormState.editingId || '');
+    await loadPassagesAdminList();
 
     closePassageForm();
   } catch (err) {
