@@ -966,13 +966,64 @@ body {
   color: var(--ink-mute);
 }
 
+.admin-richtext-editor img {
+  max-width: 100%;
+  display: block;
+  margin: 8px 0;
+  border-radius: var(--radius-sm);
+}
+
 /* ── Hàng đáp án trắc nghiệm: tên đáp án | input | radio, xếp ngang ── */
 .admin-choice-row {
   display: grid;
-  grid-template-columns: 24px 1fr 16px;
+  grid-template-columns: 24px 1fr 30px 16px;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   margin-bottom: 12px;
+}
+
+.admin-choice-input-wrap {
+  position: relative;
+}
+
+.admin-choice-image-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border: 1px solid var(--border-md);
+  border-radius: var(--radius-sm);
+  background: var(--paper-card);
+}
+
+.admin-choice-image-wrap img {
+  height: 40px;
+  width: auto;
+  max-width: 90px;
+  object-fit: cover;
+  border-radius: 4px;
+}
+
+.admin-choice-image-remove-btn {
+  margin-left: auto;
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: 50%;
+  background: var(--paper-bg, #f2f2f2);
+  color: var(--ink-mute);
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.admin-choice-image-remove-btn:hover {
+  background: var(--vermillion);
+  color: #fff;
+}
+
+.admin-choice-image-btn {
+  flex-shrink: 0;
 }
 
 .admin-choice-row input[type="text"] {

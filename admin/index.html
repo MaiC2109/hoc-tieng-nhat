@@ -331,6 +331,9 @@
               </select>
             </div>
             <div class="admin-toolbar-actions">
+              <button class="btn btn-outline" id="btn-add-passage-standalone" onclick="openPassageForm()">
+                <i class="ti ti-file-text"></i> Tạo đoạn văn/hội thoại
+              </button>
               <button class="btn btn-primary" id="btn-add-question" onclick="openQuestionForm()">
                 <i class="ti ti-plus"></i> Thêm câu hỏi mới
               </button>
@@ -428,26 +431,67 @@
         <!-- Khối riêng cho multiple_choice — ẩn/hiện bằng JS theo #question-type -->
         <div id="question-mc-block">
           <label style="display:block; margin-bottom:8px; font-weight:600; font-size:13px; color:var(--ink);">
-            Đáp án (tối thiểu 2, tối đa 4 — để trống ô nào không dùng đến; tích chọn đáp án đúng)
+            Đáp án (tối thiểu 2, tối đa 4 — để trống ô nào không dùng đến; tích chọn đáp án đúng).
+            Có thể dùng ảnh thay chữ cho từng đáp án (hữu ích với Nghe hiểu — vd chọn tranh đúng).
           </label>
-          <div class="admin-choice-row">
+          <div class="admin-choice-row" data-choice-index="0">
             <label for="question-choice-0">A.</label>
-            <input type="text" id="question-choice-0" placeholder="Nhập đáp án A" />
+            <div class="admin-choice-input-wrap">
+              <input type="text" id="question-choice-0" placeholder="Nhập đáp án A" />
+              <div class="admin-choice-image-wrap" id="question-choice-0-image-wrap" style="display:none;">
+                <img id="question-choice-0-image-preview" src="" alt="Đáp án A" />
+                <button type="button" class="admin-choice-image-remove-btn" data-choice-index="0" title="Bỏ ảnh, dùng lại chữ">✕</button>
+              </div>
+            </div>
+            <button type="button" class="admin-richtext-btn admin-choice-image-btn" data-choice-index="0" title="Dùng ảnh làm đáp án A">
+              <i class="ti ti-photo"></i>
+            </button>
+            <input type="file" accept="image/*" id="question-choice-0-image-file" style="display:none;" />
             <input type="radio" name="question-correct-choice" value="0" id="question-choice-radio-0" checked />
           </div>
-          <div class="admin-choice-row">
+          <div class="admin-choice-row" data-choice-index="1">
             <label for="question-choice-1">B.</label>
-            <input type="text" id="question-choice-1" placeholder="Nhập đáp án B" />
+            <div class="admin-choice-input-wrap">
+              <input type="text" id="question-choice-1" placeholder="Nhập đáp án B" />
+              <div class="admin-choice-image-wrap" id="question-choice-1-image-wrap" style="display:none;">
+                <img id="question-choice-1-image-preview" src="" alt="Đáp án B" />
+                <button type="button" class="admin-choice-image-remove-btn" data-choice-index="1" title="Bỏ ảnh, dùng lại chữ">✕</button>
+              </div>
+            </div>
+            <button type="button" class="admin-richtext-btn admin-choice-image-btn" data-choice-index="1" title="Dùng ảnh làm đáp án B">
+              <i class="ti ti-photo"></i>
+            </button>
+            <input type="file" accept="image/*" id="question-choice-1-image-file" style="display:none;" />
             <input type="radio" name="question-correct-choice" value="1" id="question-choice-radio-1" />
           </div>
-          <div class="admin-choice-row">
+          <div class="admin-choice-row" data-choice-index="2">
             <label for="question-choice-2">C.</label>
-            <input type="text" id="question-choice-2" placeholder="Nhập đáp án C" />
+            <div class="admin-choice-input-wrap">
+              <input type="text" id="question-choice-2" placeholder="Nhập đáp án C" />
+              <div class="admin-choice-image-wrap" id="question-choice-2-image-wrap" style="display:none;">
+                <img id="question-choice-2-image-preview" src="" alt="Đáp án C" />
+                <button type="button" class="admin-choice-image-remove-btn" data-choice-index="2" title="Bỏ ảnh, dùng lại chữ">✕</button>
+              </div>
+            </div>
+            <button type="button" class="admin-richtext-btn admin-choice-image-btn" data-choice-index="2" title="Dùng ảnh làm đáp án C">
+              <i class="ti ti-photo"></i>
+            </button>
+            <input type="file" accept="image/*" id="question-choice-2-image-file" style="display:none;" />
             <input type="radio" name="question-correct-choice" value="2" id="question-choice-radio-2" />
           </div>
-          <div class="admin-choice-row">
+          <div class="admin-choice-row" data-choice-index="3">
             <label for="question-choice-3">D.</label>
-            <input type="text" id="question-choice-3" placeholder="Nhập đáp án D" />
+            <div class="admin-choice-input-wrap">
+              <input type="text" id="question-choice-3" placeholder="Nhập đáp án D" />
+              <div class="admin-choice-image-wrap" id="question-choice-3-image-wrap" style="display:none;">
+                <img id="question-choice-3-image-preview" src="" alt="Đáp án D" />
+                <button type="button" class="admin-choice-image-remove-btn" data-choice-index="3" title="Bỏ ảnh, dùng lại chữ">✕</button>
+              </div>
+            </div>
+            <button type="button" class="admin-richtext-btn admin-choice-image-btn" data-choice-index="3" title="Dùng ảnh làm đáp án D">
+              <i class="ti ti-photo"></i>
+            </button>
+            <input type="file" accept="image/*" id="question-choice-3-image-file" style="display:none;" />
             <input type="radio" name="question-correct-choice" value="3" id="question-choice-radio-3" />
           </div>
         </div>
@@ -524,7 +568,16 @@
 
         <div class="admin-form-group">
           <label for="passage-content">Nội dung văn bản</label>
-          <textarea id="passage-content" rows="6" placeholder="Nhập đoạn văn (dùng cho Đọc hiểu) hoặc lời thoại (dùng cho Nghe hiểu)..."></textarea>
+          <div class="admin-richtext-toolbar">
+            <button type="button" class="admin-richtext-btn" id="passage-content-bold-btn" title="In đậm" style="font-weight:700;">B</button>
+            <button type="button" class="admin-richtext-btn" id="passage-content-underline-btn" title="Gạch chân" style="text-decoration:underline;">U</button>
+            <button type="button" class="admin-richtext-btn" id="passage-content-image-btn" title="Chèn ảnh">
+              <i class="ti ti-photo"></i>
+            </button>
+            <input type="file" id="passage-content-image-file" accept="image/*" style="display:none;" />
+          </div>
+          <div id="passage-content" class="admin-richtext-editor" contenteditable="true" data-placeholder="Nhập đoạn văn (dùng cho Đọc hiểu) hoặc lời thoại (dùng cho Nghe hiểu)... có thể chèn ảnh thay cho văn bản."></div>
+          <p class="admin-hint-text" id="passage-content-image-status"></p>
         </div>
 
         <div class="admin-form-group">

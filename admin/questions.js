@@ -277,7 +277,8 @@ async function loadQuestionsSection() {
 const questionFormState = {
   mode: 'create',    // 'create' | 'edit'
   editingId: null,   // id câu hỏi đang sửa (chỉ có giá trị khi mode === 'edit')
-  audioUploading: false // true trong lúc file audio đang upload dở — chặn submit để tránh lưu thiếu audio_url
+  audioUploading: false, // true trong lúc file audio đang upload dở — chặn submit để tránh lưu thiếu audio_url
+  choiceImages: ['', '', '', ''] // public URL ảnh (nếu có) cho từng đáp án 0-3, rỗng = đáp án đang dùng chữ
 };
 
 // Dropdown Kỹ năng riêng cho form (khác dropdown filter ở toolbar)
@@ -310,6 +311,58 @@ function toggleQuestionTypeFields() {
   }
 }
 
+// ── Ảnh thay chữ cho từng đáp án (hữu ích với Nghe hiểu, vd chọn tranh) ──
+// Ẩn ô text + hiện khung preview ảnh (hoặc ngược lại) cho đáp án ở vị trí index.
+function toggleChoiceImageMode(index, useImage) {
+  const textInput = document.getElementById(`question-choice-${index}`);
+  const wrap = document.getElementById(`question-choice-${index}-image-wrap`);
+  if (!textInput || !wrap) return;
+
+  if (useImage) {
+    textInput.style.display = 'none';
+    wrap.style.display = 'flex';
+  } else {
+    textInput.style.display = '';
+    wrap.style.display = 'none';
+  }
+}
+
+async function uploadChoiceImage(index, file) {
+  const preview = document.getElementById(`question-choice-${index}-image-preview`);
+
+  try {
+    const safeFileName = file.name.replace(/[^\w.\-]/g, '_');
+    const path = `${crypto.randomUUID()}-${safeFileName}`;
+
+    // Dùng chung bucket "passage-images" (bucket ảnh dùng chung cho nội
+    // dung, không chỉ riêng passages) — tránh phải tạo thêm bucket mới.
+    const { error: uploadError } = await supabaseClient
+      .storage
+      .from('passage-images')
+      .upload(path, file, { cacheControl: '3600', upsert: false });
+
+    if (uploadError) throw uploadError;
+
+    const { data: publicUrlData } = supabaseClient.storage.from('passage-images').getPublicUrl(path);
+    const publicUrl = publicUrlData?.publicUrl;
+    if (!publicUrl) throw new Error('Không lấy được public URL sau khi upload ảnh.');
+
+    questionFormState.choiceImages[index] = publicUrl;
+    if (preview) preview.src = publicUrl;
+    toggleChoiceImageMode(index, true);
+  } catch (err) {
+    console.error(`Lỗi upload ảnh đáp án ${index}:`, err);
+    alert(`Có lỗi khi tải ảnh cho đáp án lên: ${err?.message || 'Lỗi không xác định'}`);
+  }
+}
+
+function removeChoiceImage(index) {
+  questionFormState.choiceImages[index] = '';
+  const preview = document.getElementById(`question-choice-${index}-image-preview`);
+  if (preview) preview.removeAttribute('src');
+  toggleChoiceImageMode(index, false);
+}
+
 // Reset toàn bộ form về trạng thái trống — dùng cả khi mở form tạo mới
 // lẫn sau khi sửa xong (đóng form)
 function resetQuestionForm() {
@@ -340,6 +393,14 @@ function resetQuestionForm() {
   const radio0 = document.getElementById('question-choice-radio-0');
   if (radio0) radio0.checked = true;
 
+  // dọn ảnh đáp án (nếu có) — quay về chế độ nhập chữ cho cả 4 ô
+  questionFormState.choiceImages = ['', '', '', ''];
+  [0, 1, 2, 3].forEach(i => {
+    const fileInput = document.getElementById(`question-choice-${i}-image-file`);
+    if (fileInput) fileInput.value = '';
+    toggleChoiceImageMode(i, false);
+  });
+
   toggleQuestionTypeFields();
   toggleQuestionPassageField();
 }
@@ -359,10 +420,25 @@ function populateQuestionFormFromRow(row, includeAudio) {
     document.getElementById('question-fillblank-answer').value = row.correct_answer || '';
   } else {
     // multiple_choice: đổ từng đáp án vào ô tương ứng, ô nào không có dữ
-    // liệu (câu gốc chỉ có 2-3 đáp án) thì để trống.
+    // liệu (câu gốc chỉ có 2-3 đáp án) thì để trống. Đáp án dạng ảnh được
+    // lưu dưới dạng chuỗi HTML "<img src=...>" — nhận diện bằng regex để
+    // bật lại chế độ ảnh + preview đúng ảnh gốc thay vì hiện nguyên thẻ HTML
+    // vào ô nhập chữ.
     const choices = Array.isArray(row.choices) ? row.choices : [];
+    questionFormState.choiceImages = ['', '', '', ''];
     [0, 1, 2, 3].forEach(i => {
-      document.getElementById(`question-choice-${i}`).value = choices[i] || '';
+      const raw = choices[i] || '';
+      const imgMatch = raw.match(/^<img\s+[^>]*src="([^"]+)"/i);
+      if (imgMatch) {
+        questionFormState.choiceImages[i] = imgMatch[1];
+        const preview = document.getElementById(`question-choice-${i}-image-preview`);
+        if (preview) preview.src = imgMatch[1];
+        document.getElementById(`question-choice-${i}`).value = '';
+        toggleChoiceImageMode(i, true);
+      } else {
+        document.getElementById(`question-choice-${i}`).value = raw;
+        toggleChoiceImageMode(i, false);
+      }
     });
     // Tích đúng radio ứng với vị trí của correct_answer trong choices
     const correctIdx = choices.findIndex(c => c === row.correct_answer);
@@ -520,24 +596,30 @@ function validateAndBuildQuestionPayload() {
   let correctAnswer = '';
 
   if (questionType === 'multiple_choice') {
+    // Mỗi đáp án có thể là chữ (input text) HOẶC ảnh (đã upload, lưu URL
+    // trong questionFormState.choiceImages) — ảnh được ưu tiên nếu đã chọn.
+    // Ô nào không có cả 2 thì bỏ qua (đáp án không dùng đến).
+    const choiceValues = [0, 1, 2, 3].map(i => {
+      const imageUrl = questionFormState.choiceImages[i];
+      if (imageUrl) return `<img src="${imageUrl}" alt="Đáp án ${['A', 'B', 'C', 'D'][i]}" style="max-width:140px;" />`;
+      return document.getElementById(`question-choice-${i}`).value.trim();
+    });
+
     // Cho phép 2-4 đáp án (không bắt buộc đủ 4) — ô nào bỏ trống sẽ không
     // đưa vào choices, miễn còn ít nhất 2 ô có nội dung.
-    const rawChoices = [0, 1, 2, 3]
-      .map(i => document.getElementById(`question-choice-${i}`).value.trim())
-      .filter(c => c);
+    const filledIndices = [0, 1, 2, 3].filter(i => choiceValues[i]);
+    const rawChoices = filledIndices.map(i => choiceValues[i]);
 
     if (rawChoices.length < 2) {
-      errorEl.textContent = 'Vui lòng nhập ít nhất 2 đáp án.';
+      errorEl.textContent = 'Vui lòng nhập/chọn ảnh cho ít nhất 2 đáp án.';
       return null;
     }
 
     const correctIdx = document.querySelector('input[name="question-correct-choice"]:checked')?.value;
-    const correctValue = correctIdx !== undefined
-      ? document.getElementById(`question-choice-${correctIdx}`).value.trim()
-      : '';
+    const correctValue = correctIdx !== undefined ? choiceValues[Number(correctIdx)] : '';
 
     if (!correctValue) {
-      errorEl.textContent = 'Đáp án đúng đang được tích chọn ở 1 ô trống — vui lòng nhập nội dung cho ô đó hoặc chọn lại đáp án đúng.';
+      errorEl.textContent = 'Đáp án đúng đang được tích chọn ở 1 ô trống — vui lòng nhập chữ hoặc chọn ảnh cho ô đó, hoặc chọn lại đáp án đúng.';
       return null;
     }
 
@@ -775,6 +857,21 @@ function initQuestionFormControls() {
     if (file) uploadQuestionAudioFile(file);
   });
 
+  // Ảnh thay chữ cho từng đáp án (4 ô, dùng event delegation cho gọn thay
+  // vì phải lặp addEventListener 4 lần cho 3 loại control khác nhau).
+  [0, 1, 2, 3].forEach(i => {
+    document.querySelector(`.admin-choice-image-btn[data-choice-index="${i}"]`)
+      ?.addEventListener('click', () => document.getElementById(`question-choice-${i}-image-file`)?.click());
+
+    document.getElementById(`question-choice-${i}-image-file`)?.addEventListener('change', (e) => {
+      const file = e.target.files?.[0];
+      if (file) uploadChoiceImage(i, file);
+    });
+
+    document.querySelector(`.admin-choice-image-remove-btn[data-choice-index="${i}"]`)
+      ?.addEventListener('click', () => removeChoiceImage(i));
+  });
+
   document.getElementById('btn-open-passage-form')?.addEventListener('click', openPassageForm);
   document.getElementById('passage-form-close-btn')?.addEventListener('click', closePassageForm);
   document.getElementById('passage-form-cancel-btn')?.addEventListener('click', closePassageForm);
@@ -783,6 +880,17 @@ function initQuestionFormControls() {
   document.getElementById('passage-audio-file')?.addEventListener('change', (e) => {
     const file = e.target.files?.[0];
     if (file) uploadPassageAudioFile(file);
+  });
+
+  document.getElementById('passage-content-bold-btn')?.addEventListener('click', () => applyPassageContentFormat('bold'));
+  document.getElementById('passage-content-underline-btn')?.addEventListener('click', () => applyPassageContentFormat('underline'));
+  document.getElementById('passage-content-image-btn')?.addEventListener('click', () => {
+    document.getElementById('passage-content-image-file')?.click();
+  });
+  document.getElementById('passage-content-image-file')?.addEventListener('change', (e) => {
+    const file = e.target.files?.[0];
+    if (file) uploadAndInsertPassageContentImage(file);
+    e.target.value = ''; // cho phép chọn lại đúng file đó lần nữa nếu cần
   });
 }
 
@@ -802,6 +910,12 @@ function resetPassageForm() {
   if (form) form.reset();
 
   document.getElementById('passage-form-error').textContent = '';
+
+  // form.reset() không tác dụng lên div contenteditable -> dọn tay
+  const contentEditor = document.getElementById('passage-content');
+  if (contentEditor) contentEditor.innerHTML = '';
+  const imageStatusEl = document.getElementById('passage-content-image-status');
+  if (imageStatusEl) { imageStatusEl.textContent = ''; imageStatusEl.style.color = ''; }
 
   const audioFileInput = document.getElementById('passage-audio-file');
   if (audioFileInput) audioFileInput.value = '';
@@ -867,6 +981,52 @@ async function uploadPassageAudioFile(file) {
   }
 }
 
+// ── Toolbar định dạng chữ (bold/underline) cho nội dung đoạn văn ─────────
+function applyPassageContentFormat(command) {
+  const editor = document.getElementById('passage-content');
+  if (!editor) return;
+  editor.focus();
+  document.execCommand(command, false, null);
+}
+
+// ── Chèn ảnh vào nội dung đoạn văn (dùng thay cho text, vd đề thi dạng
+// ảnh chụp/biểu đồ) — upload lên bucket riêng "passage-images" (KHÁC bucket
+// exam-audio vốn chỉ dành cho audio), rồi chèn thẻ <img> vào đúng vị trí
+// con trỏ trong editor.
+async function uploadAndInsertPassageContentImage(file) {
+  const statusEl = document.getElementById('passage-content-image-status');
+  const editor = document.getElementById('passage-content');
+
+  if (statusEl) { statusEl.textContent = '⏳ Đang tải ảnh lên...'; statusEl.style.color = ''; }
+
+  try {
+    const safeFileName = file.name.replace(/[^\w.\-]/g, '_');
+    const path = `${crypto.randomUUID()}-${safeFileName}`;
+
+    const { error: uploadError } = await supabaseClient
+      .storage
+      .from('passage-images')
+      .upload(path, file, { cacheControl: '3600', upsert: false });
+
+    if (uploadError) throw uploadError;
+
+    const { data: publicUrlData } = supabaseClient.storage.from('passage-images').getPublicUrl(path);
+    const publicUrl = publicUrlData?.publicUrl;
+    if (!publicUrl) throw new Error('Không lấy được public URL sau khi upload ảnh.');
+
+    editor.focus();
+    document.execCommand('insertHTML', false, `<img src="${publicUrl}" alt="" />`);
+
+    if (statusEl) { statusEl.textContent = '✓ Đã chèn ảnh vào nội dung.'; statusEl.style.color = 'var(--success, #2e7d32)'; }
+  } catch (err) {
+    console.error('Lỗi upload ảnh cho passage:', err);
+    if (statusEl) {
+      statusEl.textContent = `❌ Chèn ảnh thất bại: ${err?.message || 'Lỗi không xác định'}`;
+      statusEl.style.color = 'var(--vermillion)';
+    }
+  }
+}
+
 async function submitPassageForm(e) {
   e.preventDefault();
 
@@ -880,7 +1040,12 @@ async function submitPassageForm(e) {
   }
 
   const title = document.getElementById('passage-title').value.trim();
-  const content = document.getElementById('passage-content').value.trim();
+  // Nội dung lấy từ div contenteditable -> lưu nguyên HTML (giữ bold/underline
+  // và cả thẻ <img> nếu giáo viên chèn ảnh thay cho văn bản).
+  const contentHtml = (document.getElementById('passage-content')?.innerHTML || '').trim();
+  // Coi là "có nội dung" nếu còn chữ HOẶC có ít nhất 1 ảnh (trường hợp dùng
+  // toàn ảnh thay text, không còn chữ nào).
+  const hasTextOrImage = !!stripHtml(contentHtml).trim() || /<img\b/i.test(contentHtml);
   const audioUrl = document.getElementById('passage-audio-url').value || null;
 
   if (!title) {
@@ -897,7 +1062,7 @@ async function submitPassageForm(e) {
     const res = await fetch(`${ADMIN_CONFIG.supabaseUrl}/rest/v1/passages`, {
       method: 'POST',
       headers,
-      body: JSON.stringify({ title, content: content || null, audio_url: audioUrl })
+      body: JSON.stringify({ title, content: hasTextOrImage ? contentHtml : null, audio_url: audioUrl })
     });
     if (!res.ok) {
       const errBody = await res.json().catch(() => null);
