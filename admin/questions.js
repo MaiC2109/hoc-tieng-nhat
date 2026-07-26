@@ -107,10 +107,12 @@ async function populateQuestionSkillFilter() {
 function buildQuestionListUrl() {
   const skillFilter = document.getElementById('filter-question-skill')?.value || '';
 
-  // Embed tên kỹ năng qua quan hệ FK skill_id -> skills(id) để không phải
-  // tự map id -> name thủ công ở client.
+  // Lấy đủ field cần cho form Sửa/Nhân bản (choices, correct_answer, audio_url,
+  // difficulty) — không chỉ mấy cột hiển thị ở bảng như trước, để click vào
+  // dòng là có đủ dữ liệu đổ vào form ngay, không phải gọi thêm 1 API riêng.
   let url = `${ADMIN_CONFIG.supabaseUrl}/rest/v1/question_bank`
-    + `?select=id,skill_id,question_type,question_text,explanation,created_at,skills(name)`
+    + `?select=id,skill_id,question_type,question_text,choices,correct_answer,`
+    + `audio_url,explanation,difficulty,passage_id,created_at,skills(name)`
     + `&order=created_at.desc`;
 
   if (skillFilter) url += `&skill_id=eq.${encodeURIComponent(skillFilter)}`;
@@ -120,7 +122,7 @@ function buildQuestionListUrl() {
 async function loadQuestionAdminList() {
   const tbody = document.getElementById('question-table-body');
   if (tbody) {
-    tbody.innerHTML = `<tr><td colspan="5"><div class="empty-state">Đang tải dữ liệu...</div></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state">Đang tải dữ liệu...</div></td></tr>`;
   }
 
   try {
@@ -132,7 +134,7 @@ async function loadQuestionAdminList() {
   } catch (err) {
     console.error('Lỗi tải danh sách câu hỏi:', err);
     if (tbody) {
-      tbody.innerHTML = `<tr><td colspan="5"><div class="empty-state">❌ Không tải được danh sách câu hỏi.</div></td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state">❌ Không tải được danh sách câu hỏi.</div></td></tr>`;
     }
   }
 }
@@ -150,7 +152,7 @@ function renderQuestionAdminTable() {
     : rows;
 
   if (filtered.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="5"><div class="empty-state">Không có câu hỏi nào khớp bộ lọc.</div></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state">Không có câu hỏi nào khớp bộ lọc.</div></td></tr>`;
     return;
   }
 
@@ -159,13 +161,29 @@ function renderQuestionAdminTable() {
     const typeLabel = QUESTION_TYPE_LABELS[r.question_type] || r.question_type || '—';
     const hasFeedback = !!(r.explanation && r.explanation.trim());
 
+    // Click vào cả dòng -> mở form Sửa. Các nút thao tác dùng
+    // event.stopPropagation() để không kích hoạt luôn việc mở form Sửa
+    // khi bấm Nhân bản/Xóa.
     return `
-      <tr>
+      <tr onclick="editQuestionRow('${r.id}')" style="cursor:pointer;">
         <td>${escHtml(skillName)}</td>
         <td>${escHtml(typeLabel)}</td>
         <td>${escHtml(truncateText(stripHtml(r.question_text), 50))}</td>
         <td style="text-align:center;">${hasFeedback ? '✓' : '—'}</td>
         <td>${escHtml(formatDateVN(r.created_at))}</td>
+        <td onclick="event.stopPropagation();" style="text-align:center;">
+          <div class="admin-row-actions">
+            <button class="admin-row-action-btn" onclick="editQuestionRow('${r.id}')" title="Sửa">
+              <i class="ti ti-edit"></i>
+            </button>
+            <button class="admin-row-action-btn" onclick="duplicateQuestionRow('${r.id}')" title="Nhân bản">
+              <i class="ti ti-copy"></i>
+            </button>
+            <button class="admin-row-action-btn danger" onclick="deleteQuestionRow('${r.id}')" title="Xóa">
+              <i class="ti ti-trash"></i>
+            </button>
+          </div>
+        </td>
       </tr>
     `;
   }).join('');
@@ -244,6 +262,7 @@ function resetQuestionForm() {
   if (form) form.reset();
 
   document.getElementById('question-form-id').value = '';
+  document.getElementById('question-form-passage-id').value = '';
   document.getElementById('question-form-error').textContent = '';
 
   // form.reset() không tác dụng lên div contenteditable -> dọn tay
@@ -269,9 +288,57 @@ function resetQuestionForm() {
   toggleQuestionTypeFields();
 }
 
-// Mở form ở chế độ TẠO MỚI. Tham số `row` để dành cho bước "Sửa" sau này
-// (truyền dữ liệu câu hỏi cũ vào) — hiện tại luôn gọi không kèm tham số.
-function openQuestionForm(row = null) {
+// Đổ dữ liệu 1 câu hỏi (row từ question_bank) vào các field trên form.
+// includeAudio=false dùng cho Nhân bản: KHÔNG copy audio_url, để giáo viên
+// tự upload file mới, tránh 2 câu hỏi vô tình dùng chung 1 file audio.
+function populateQuestionFormFromRow(row, includeAudio) {
+  document.getElementById('question-skill').value = row.skill_id ?? '';
+  document.getElementById('question-type').value = row.question_type ?? 'multiple_choice';
+  document.getElementById('question-text').innerHTML = row.question_text || '';
+  document.getElementById('question-form-passage-id').value = row.passage_id ?? '';
+  document.getElementById('question-explanation').value = row.explanation || '';
+  document.getElementById('question-difficulty').value = row.difficulty || '';
+
+  if (row.question_type === 'fill_blank') {
+    document.getElementById('question-fillblank-answer').value = row.correct_answer || '';
+  } else {
+    // multiple_choice: đổ từng đáp án vào ô tương ứng, ô nào không có dữ
+    // liệu (câu gốc chỉ có 2-3 đáp án) thì để trống.
+    const choices = Array.isArray(row.choices) ? row.choices : [];
+    [0, 1, 2, 3].forEach(i => {
+      document.getElementById(`question-choice-${i}`).value = choices[i] || '';
+    });
+    // Tích đúng radio ứng với vị trí của correct_answer trong choices
+    const correctIdx = choices.findIndex(c => c === row.correct_answer);
+    const radio = document.getElementById(`question-choice-radio-${correctIdx >= 0 ? correctIdx : 0}`);
+    if (radio) radio.checked = true;
+  }
+
+  toggleQuestionTypeFields(); // select.value gán tay không tự bắn 'change'
+
+  if (includeAudio && row.audio_url) {
+    document.getElementById('question-audio-url').value = row.audio_url;
+    const preview = document.getElementById('question-audio-preview');
+    if (preview) {
+      preview.src = row.audio_url;
+      preview.style.display = 'block';
+    }
+    const statusEl = document.getElementById('question-audio-status');
+    if (statusEl) {
+      statusEl.textContent = 'Audio hiện có của câu hỏi này — chọn file khác nếu muốn thay.';
+      statusEl.style.color = '';
+    }
+  }
+  // includeAudio=false: không làm gì thêm — resetQuestionForm() (gọi trước
+  // đó trong openQuestionForm) đã dọn sạch field audio sẵn rồi.
+}
+
+// Mở form. `row` = dữ liệu câu hỏi gốc (null nếu tạo mới thuần túy).
+// `mode`: 'create' | 'edit' | 'duplicate'.
+//   - 'edit': sửa đúng câu đang có (giữ nguyên audio, PATCH khi lưu).
+//   - 'duplicate': mở form ở chế độ TẠO MỚI nhưng pre-fill dữ liệu câu gốc,
+//     bỏ qua audio_url. Lưu sẽ INSERT thành câu hỏi mới, không đụng câu gốc.
+function openQuestionForm(row = null, mode = 'create') {
   resetQuestionForm();
 
   const overlay = document.getElementById('question-form-overlay');
@@ -280,14 +347,20 @@ function openQuestionForm(row = null) {
   const submitBtn = document.getElementById('question-form-submit-btn');
   const saveContinueBtn = document.getElementById('question-form-save-continue-btn');
 
-  if (row) {
-    // Nhánh sửa — CHƯA nối nút gọi tới đây ở bước này, để sẵn cho bước sau.
+  if (row && mode === 'edit') {
     questionFormState.mode = 'edit';
     questionFormState.editingId = row.id;
     if (title) title.textContent = 'Sửa câu hỏi';
     if (submitBtn) submitBtn.textContent = 'Cập nhật câu hỏi';
     if (saveContinueBtn) saveContinueBtn.style.display = 'none'; // chỉ có ở mode tạo mới
-    // TODO (bước sau): đổ dữ liệu row vào các field tương ứng.
+    populateQuestionFormFromRow(row, /* includeAudio */ true);
+  } else if (row && mode === 'duplicate') {
+    questionFormState.mode = 'create';
+    questionFormState.editingId = null;
+    if (title) title.textContent = 'Thêm câu hỏi mới (nhân bản)';
+    if (submitBtn) submitBtn.textContent = 'Lưu câu hỏi';
+    if (saveContinueBtn) saveContinueBtn.style.display = 'inline-flex';
+    populateQuestionFormFromRow(row, /* includeAudio */ false);
   } else {
     questionFormState.mode = 'create';
     questionFormState.editingId = null;
@@ -298,6 +371,50 @@ function openQuestionForm(row = null) {
 
   if (overlay) overlay.style.display = 'block';
   if (panel) panel.style.display = 'flex';
+}
+
+// ── Hành động trên từng dòng bảng: Sửa / Nhân bản / Xóa ──────────────────
+function editQuestionRow(id) {
+  const row = questionsAdminState.currentRows.find(r => String(r.id) === String(id));
+  if (!row) return;
+  openQuestionForm(row, 'edit');
+}
+
+function duplicateQuestionRow(id) {
+  const row = questionsAdminState.currentRows.find(r => String(r.id) === String(id));
+  if (!row) return;
+  openQuestionForm(row, 'duplicate');
+}
+
+async function deleteQuestionRow(id) {
+  try {
+    // Đếm số đề thi đang dùng câu hỏi này (exam_questions.question_id) để
+    // cảnh báo — KHÔNG chặn cứng, giáo viên tự quyết định.
+    const headers = await sbAuthedHeaders();
+    const countRes = await fetch(
+      `${ADMIN_CONFIG.supabaseUrl}/rest/v1/exam_questions?question_id=eq.${id}&select=id`,
+      { headers }
+    );
+    if (!countRes.ok) throw new Error(`Lỗi kiểm tra câu hỏi đang dùng ở đề thi nào: ${countRes.status}`);
+    const usageRows = await countRes.json();
+    const usageCount = usageRows.length;
+
+    const confirmMsg = usageCount > 0
+      ? `Câu hỏi này đang thuộc ${usageCount} đề thi, xóa sẽ ảnh hưởng đến các đề đó. Bạn vẫn muốn xóa?`
+      : 'Bạn có chắc muốn xóa câu hỏi này?';
+    if (!confirm(confirmMsg)) return;
+
+    const deleteRes = await fetch(
+      `${ADMIN_CONFIG.supabaseUrl}/rest/v1/question_bank?id=eq.${id}`,
+      { method: 'DELETE', headers: await sbAuthedHeaders() }
+    );
+    if (!deleteRes.ok) throw new Error(`Lỗi xóa câu hỏi: ${deleteRes.status}`);
+
+    await loadQuestionAdminList();
+  } catch (err) {
+    console.error('Lỗi xóa câu hỏi:', err);
+    alert('Có lỗi khi xóa câu hỏi. Vui lòng thử lại.');
+  }
 }
 
 function closeQuestionForm() {
@@ -394,11 +511,11 @@ function validateAndBuildQuestionPayload() {
     question_type: questionType,
     question_text: questionTextHtml,
     audio_url: audioUrl,
+    passage_id: document.getElementById('question-form-passage-id').value || null,
     choices: choices, // null với fill_blank
     correct_answer: correctAnswer,
     explanation: explanation || null,
     difficulty: difficulty || null
-    // passage_id: chưa làm ở bước này, để NULL/bỏ trống theo default cột
   };
 }
 

@@ -348,11 +348,13 @@
                     <th>Nội dung</th>
                     <th style="width:100px; text-align:center;">Feedback</th>
                     <th style="width:110px;">Ngày tạo</th>
+                    <th style="width:100px; text-align:center;">Thao tác</th>
+                    <th style="width:132px; text-align:center;">Thao tác</th>
                   </tr>
                 </thead>
                 <tbody id="question-table-body">
                   <tr>
-                    <td colspan="5"><div class="empty-state">Đang tải dữ liệu...</div></td>
+                    <td colspan="6"><div class="empty-state">Đang tải dữ liệu...</div></td>
                   </tr>
                 </tbody>
               </table>
@@ -383,6 +385,10 @@
     <div class="admin-slide-panel-body">
       <form id="question-form">
         <input type="hidden" id="question-form-id" value="" />
+        <!-- passage_id: CHƯA có dropdown chọn passage ở form này (để dành tier
+             passages sau) — hidden field này chỉ để giữ nguyên giá trị gốc khi
+             sửa/nhân bản 1 câu đã có passage_id, tránh vô tình xóa mất liên kết. -->
+        <input type="hidden" id="question-form-passage-id" value="" />
 
         <div class="admin-form-row">
           <div class="admin-form-group">
