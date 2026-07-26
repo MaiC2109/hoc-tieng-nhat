@@ -1,214 +1,717 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="vi">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>日本語 — Vocabulary Studio</title>
+  <title>learningwithmai Website</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&family=Inter:wght@300;400;500;600;700&family=Noto+Serif+JP:wght@400;700&display=swap" rel="stylesheet" />
 
-  <link rel="stylesheet" href="style.css" />
-  <!-- Tái sử dụng CSS #student-progress-view / .admin-stat-* đã viết cho trang Admin,
-       không viết lại CSS mới trùng lặp cho Dashboard học viên. -->
-  <link rel="stylesheet" href="admin/admin.css" />
+  <!-- BẮT BUỘC: load style.css gốc trước để kế thừa biến :root, rồi mới admin.css để override/thêm riêng -->
+  <link rel="stylesheet" href="/style.css" />
+  <link rel="stylesheet" href="/admin/admin.css" />
+
+  <!-- Icon set — style.css hiện tại chưa có icon set nào, dùng Tabler Icons qua CDN -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css" />
 </head>
 <body>
 
-  <div id="login-screen" class="login-screen">
-    <div class="login-box">
+  <!-- ════════════════════════════════════════════════════════════
+       FORM ĐĂNG NHẬP ADMIN
+       Mặc định hiển thị (chưa đăng nhập). Ở bước JS sau, sau khi xác
+       thực thành công qua Supabase Auth sẽ ẩn #admin-login-screen và
+       hiện #admin-shell.
+  ════════════════════════════════════════════════════════════ -->
+  <div id="admin-login-screen" class="admin-login-screen">
+    <div class="admin-login-box">
       <div class="logo-mark">語</div>
-      <h2>日本語 Vocab</h2>
-      <p>Đăng nhập để bắt đầu buổi học</p>
+      <h2>learningwithmai Website</h2>
+      <p>Đăng nhập để quản lý nội dung học tập</p>
 
-      <form id="login-form">
-        <div class="login-form-group">
+      <form id="admin-login-form">
+        <div class="admin-form-group">
           <label for="login-email">Email</label>
-          <input type="email" id="login-email" name="email" placeholder="ban@example.com" autocomplete="username" required />
+          <input type="email" id="login-email" name="email" placeholder="admin@example.com" autocomplete="username" />
         </div>
-        <div class="login-form-group">
+        <div class="admin-form-group">
           <label for="login-password">Mật khẩu</label>
-          <input type="password" id="login-password" name="password" placeholder="••••••••" autocomplete="current-password" required />
+          <div class="admin-password-wrap">
+            <input type="password" id="login-password" name="password" placeholder="••••••••" autocomplete="current-password" />
+            <button type="button" id="login-password-toggle" class="admin-password-toggle-btn" aria-label="Hiện/ẩn mật khẩu" tabindex="-1">
+              <i class="ti ti-eye"></i>
+            </button>
+          </div>
         </div>
 
-        <div id="login-error" class="login-error"></div>
+        <div id="admin-login-error" class="admin-login-error"></div>
 
-        <button type="submit" class="btn btn-primary" id="login-submit-btn" style="width:100%; justify-content:center;">
-          Đăng nhập
+        <button type="submit" class="btn btn-primary" style="width:100%; justify-content:center;">
+          <i class="ti ti-login"></i> Đăng nhập
         </button>
       </form>
     </div>
   </div>
 
-  <div id="app-root" style="display:none;">
+  <!-- ════════════════════════════════════════════════════════════
+       KHUNG ADMIN CHÍNH (sidebar + nội dung)
+       Ẩn cho tới khi đăng nhập thành công — thêm hidden/style hoặc
+       toggle class ở bước JS sau.
+  ════════════════════════════════════════════════════════════ -->
+  <div id="admin-shell" class="admin-shell" style="display:none;">
 
-<div id="loading-overlay" class="loading-overlay">
-  <div class="spinner"></div>
-  <p>Đang tải bài học...</p>
-  </div>
-
-  <header class="app-header">
-    <div class="app-logo">
-      <div class="logo-mark">語</div>
-      <div class="logo-text">
-        日本語 Vocab
-        <span class="logo-sub">Learning Studio</span>
-      </div>
-    </div>
-
-    <nav class="main-nav">
-      <button class="main-nav-btn" data-section="vocab" onclick="switchMainSection('vocab')">
-        Vocab
-      </button>
-      <button class="main-nav-btn" data-section="review" onclick="openReviewToday()">
-        Review
-        <span id="review-due-badge" class="nav-badge" style="display:none;"></span>
-      </button>
-      <button class="main-nav-btn" data-section="grammar" disabled>
-        Grammar
-        <span class="badge-soon">Soon</span>
-      </button>
-      <button class="main-nav-btn" data-section="kanji" disabled>
-        Kanji
-        <span class="badge-soon">Soon</span>
-      </button>
-    </nav>
-
-  <div class="header-right">
-    <div class="account-menu" id="account-menu">
-      <button class="main-nav-btn account-menu-trigger" id="account-menu-trigger" onclick="toggleAccountMenu()">
-        Account
-      </button>
-      <div class="account-menu-dropdown" id="account-menu-dropdown" style="display:none;">
-        <button class="account-menu-item" data-section="dashboard" onclick="openDashboard(); closeAccountMenu();">
-          Dashboard
-        </button>
-        <button class="account-menu-item" onclick="syncData(); closeAccountMenu();">
-          Update data
-        </button>
-        <button class="account-menu-item" onclick="logoutUser(); closeAccountMenu();">
-          Logout
-        </button>
-      </div>
-    </div>
-  </div>
-  </header>
-
-  <div class="app-body">
-    <div class="section-panel active" id="section-vocab" >
-      <div class="unit-tabs-bar" id="unit-tabs-bar"></div>
-      <div class="unit-content-wrap" id="unit-content-wrap"></div>
-    </div>
-
-    <div class="section-panel" id="section-review">
-      <div class="review-page-wrap">
-        <div class="review-page-header">
-          <h2>🔁 Ôn tập hôm nay</h2>
-          <p>Những từ đã đến hạn ôn lại, dựa trên tiến độ ghi nhớ của riêng bạn.</p>
-          <div id="streak-summary" class="streak-badge">—</div>
-
-          <div class="streak-stats-row">
-            <div class="streak-stat-card">
-              <div class="streak-stat-value" id="streak-current">—</div>
-              <div class="streak-stat-label">Streak hiện tại</div>
-            </div>
-            <div class="streak-stat-card">
-              <div class="streak-stat-value" id="streak-best">—</div>
-              <div class="streak-stat-label">Best streak</div>
-            </div>
-            <div class="streak-stat-card">
-              <div class="streak-stat-value" id="streak-week">—</div>
-              <div class="streak-stat-label">Tuần này</div>
-            </div>
-          </div>
-
-          <div id="streak-grid" class="streak-grid"></div>
+    <!-- ── SIDEBAR TRÁI (200px, cố định) ── -->
+    <aside class="admin-sidebar">
+      <div class="admin-sidebar-brand">
+        <div class="logo-mark">語</div>
+        <div>
+          <div class="admin-sidebar-brand-text">learningwithmai</div>
+          <div class="admin-sidebar-brand-sub">Admin Panel</div>
         </div>
-        <div id="review-zone"></div>
       </div>
-    </div>
 
-    <div class="section-panel" id="section-dashboard">
-      <div class="review-page-wrap">
-        <div class="review-page-header">
-          <h2>📊 Dashboard của bạn</h2>
-          <p>Tổng quan tiến độ học từ vựng của riêng bạn.</p>
+      <nav class="admin-nav">
+        <button class="admin-nav-item active" data-target="overview">
+          <i class="ti ti-layout-dashboard"></i>
+          <span>Tổng quan</span>
+        </button>
+        <button class="admin-nav-item" data-target="vocab">
+          <i class="ti ti-book-2"></i>
+          <span>Vocab</span>
+        </button>
+        <button class="admin-nav-item" data-target="students">
+          <i class="ti ti-users"></i>
+          <span>Học viên</span>
+        </button>
+        <button class="admin-nav-item" data-target="questions">
+          <i class="ti ti-help-circle"></i>
+          <span>Câu hỏi</span>
+        </button>
+      </nav>
+
+      <div class="admin-sidebar-footer">
+        <button id="admin-logout-btn" class="admin-logout-btn">
+          <i class="ti ti-logout-2"></i>
+          <span>Đăng xuất</span>
+        </button>
+      </div>
+    </aside>
+
+    <!-- ── NỘI DUNG BÊN PHẢI ── -->
+    <div class="admin-main">
+      <div class="admin-topbar">
+        <div>
+          <div class="admin-topbar-title" id="admin-topbar-title">Tổng quan</div>
+          <div class="admin-topbar-sub" id="admin-topbar-sub">Số liệu chung của toàn bộ hệ thống</div>
         </div>
+      </div>
 
-        <div id="student-progress-view" class="admin-panel-card admin-table-card" style="display:block; max-width:640px; margin:0 auto;">
-          <div class="student-progress-header">
-            <div>
-              <div class="student-progress-name" id="sp-student-name">—</div>
-              <div class="student-progress-level" id="sp-student-level">—</div>
-            </div>
-          </div>
+      <div class="admin-content">
 
-          <div class="student-progress-stats-grid">
+        <!-- ═══ SECTION: TỔNG QUAN ═══ -->
+        <section class="admin-section active" id="section-overview" data-section="overview">
+
+          <div class="admin-stats-grid">
             <div class="admin-stat-card">
-              <div class="admin-stat-icon vocab"><i class="ti ti-book-2">📖</i></div>
-              <div style="flex:1;">
-                <div class="admin-stat-value" id="sp-vocab-fraction">—</div>
-                <div class="admin-stat-label">Vocab đã học</div>
-                <div class="progress-bar-mini" style="width:100%; margin-top:8px;">
-                  <div class="progress-bar-mini-fill" id="sp-vocab-progress-fill" style="width:0%"></div>
+              <div class="admin-stat-icon vocab"><i class="ti ti-book-2"></i></div>
+              <div>
+                <div class="admin-stat-value" id="stat-total-vocab">—</div>
+                <div class="admin-stat-label">Tổng từ vựng</div>
+              </div>
+            </div>
+
+            <div class="admin-stat-card">
+              <div class="admin-stat-icon students"><i class="ti ti-users"></i></div>
+              <div>
+                <div class="admin-stat-value" id="stat-total-students">—</div>
+                <div class="admin-stat-label">Tổng học viên</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="admin-panel-card">
+            <h3>Hoạt động gần đây</h3>
+            <!-- Khung rỗng — đổ dữ liệu (vd: log học viên vừa học/quiz) ở bước JS sau -->
+            <div id="recent-activity-list">
+              <div class="empty-state" style="padding:24px 0;">Chưa có dữ liệu hoạt động.</div>
+            </div>
+          </div>
+
+        </section>
+
+        <!-- ═══ SECTION: VOCAB ═══ -->
+        <section class="admin-section" id="section-vocab" data-section="vocab">
+
+          <!-- Toolbar: lọc theo Unit/Part + nút thêm mới -->
+          <div class="admin-vocab-toolbar">
+            <div class="admin-filter-group">
+              <select id="filter-unit" class="admin-select">
+                <option value="">Tất cả Unit</option>
+              </select>
+              <select id="filter-part" class="admin-select">
+                <option value="">Tất cả Part</option>
+              </select>
+            </div>
+            <div class="admin-toolbar-actions">
+              <button class="btn btn-outline" id="btn-manage-categories">
+                <i class="ti ti-adjustments"></i> Quản lý Unit/Part
+              </button>
+              <button class="btn btn-primary" id="btn-add-vocab" onclick="openVocabForm()">
+                <i class="ti ti-plus"></i> Thêm từ mới
+              </button>
+            </div>
+          </div>
+
+          <!-- Bảng danh sách từ vựng -->
+          <div class="admin-panel-card admin-table-card">
+            <div class="admin-table-scroll">
+              <table class="admin-vocab-table">
+                <thead>
+                  <tr>
+                    <th style="width:56px;">STT</th>
+                    <th>Kanji</th>
+                    <th>Kana</th>
+                    <th>Meaning</th>
+                    <th style="width:80px;">Unit</th>
+                    <th style="width:80px;">Part</th>
+                    <th style="width:96px; text-align:center;">Thao tác</th>
+                  </tr>
+                </thead>
+                <tbody id="vocab-table-body">
+                  <tr>
+                    <td colspan="7"><div class="empty-state">Đang tải dữ liệu...</div></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="admin-pagination" id="vocab-pagination" style="display:none;">
+              <span class="admin-pagination-info" id="vocab-pagination-info"></span>
+              <div class="admin-pagination-controls">
+                <button type="button" class="admin-row-action-btn" id="vocab-page-prev" title="Trang trước">
+                  <i class="ti ti-chevron-left"></i>
+                </button>
+                <span class="admin-pagination-current" id="vocab-pagination-current"></span>
+                <button type="button" class="admin-row-action-btn" id="vocab-page-next" title="Trang sau">
+                  <i class="ti ti-chevron-right"></i>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Khu vực Import CSV -->
+          <div class="admin-panel-card admin-csv-card">
+            <h3><i class="ti ti-file-import"></i> Import từ vựng qua CSV</h3>
+            <p class="admin-hint-text">
+              Cột kỳ vọng trong file CSV:
+              <code>unit, part, word_index, kanji, kana, romaji, hanviet, meaning, example</code>
+              (không cần cột <code>id</code>).
+            </p>
+
+            <div class="admin-csv-controls">
+              <input type="file" id="csv-file-input" accept=".csv" class="admin-file-input" />
+              <button class="btn btn-outline" id="btn-csv-preview">
+                <i class="ti ti-eye"></i> Xem trước
+              </button>
+              <button class="btn btn-primary" id="btn-csv-import" disabled>
+                <i class="ti ti-upload"></i> Import vào Supabase
+              </button>
+            </div>
+
+            <div id="csv-preview-wrap" class="admin-csv-preview-wrap" style="display:none;">
+              <div class="admin-table-scroll">
+                <table class="admin-vocab-table">
+                  <thead>
+                    <tr>
+                      <th style="width:60px;">Unit</th>
+                      <th style="width:60px;">Part</th>
+                      <th style="width:40px;">#</th>
+                      <th>Kanji</th>
+                      <th>Kana</th>
+                      <th>Romaji</th>
+                      <th>Hán Việt</th>
+                      <th>Meaning</th>
+                      <th>Example</th>
+                    </tr>
+                  </thead>
+                  <tbody id="csv-preview-body"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+        </section>
+
+        <!-- ═══ SECTION: HỌC VIÊN ═══ -->
+        <section class="admin-section" id="section-students" data-section="students">
+
+          <div class="admin-vocab-toolbar">
+            <div class="admin-filter-group">
+              <input type="text" id="student-search-input" class="admin-select" placeholder="🔍 Tìm theo tên..." style="min-width:220px;" />
+            </div>
+            <div class="admin-toolbar-actions">
+              <button class="btn btn-primary" id="btn-add-student" onclick="openStudentForm()">
+                <i class="ti ti-user-plus"></i> Cập nhật thông tin học viên
+              </button>
+            </div>
+          </div>
+
+          <div class="admin-panel-card admin-table-card">
+            <div class="admin-table-scroll">
+              <table class="admin-vocab-table">
+                <thead>
+                  <tr>
+                    <th>Tên</th>
+                    <th style="width:100px;">Level</th>
+                    <th style="width:160px;">% Vocab</th>
+                  </tr>
+                </thead>
+                <tbody id="student-table-body">
+                  <tr>
+                    <td colspan="2"><div class="empty-state">Đang tải dữ liệu...</div></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Khu vực Chi tiết học viên — component dùng chung với Dashboard học viên tự xem -->
+          <div id="student-progress-view" class="admin-panel-card admin-table-card" style="display:none;">
+            <div class="student-progress-header">
+              <div>
+                <div class="student-progress-name" id="sp-student-name">—</div>
+                <div class="student-progress-level" id="sp-student-level">—</div>
+              </div>
+            </div>
+
+            <div class="student-progress-stats-grid">
+              <div class="admin-stat-card">
+                <div class="admin-stat-icon vocab"><i class="ti ti-book-2"></i></div>
+                <div style="flex:1;">
+                  <div class="admin-stat-value" id="sp-vocab-fraction">—</div>
+                  <div class="admin-stat-label">Vocab đã học</div>
+                  <div class="progress-bar-mini" style="width:100%; margin-top:8px;">
+                    <div class="progress-bar-mini-fill" id="sp-vocab-progress-fill" style="width:0%"></div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="admin-stat-card">
+                <div class="admin-stat-icon students"><i class="ti ti-clock-hour-4"></i></div>
+                <div>
+                  <div class="admin-stat-value" id="sp-due-today">—</div>
+                  <div class="admin-stat-label">Cần ôn hôm nay</div>
                 </div>
               </div>
             </div>
 
-            <div class="admin-stat-card">
-              <div class="admin-stat-icon students">⏰</div>
-              <div>
-                <div class="admin-stat-value" id="sp-due-today">—</div>
-                <div class="admin-stat-label">Cần ôn hôm nay</div>
+            <!-- Kết quả Quiz của học viên — group theo ngày làm (mới nhất lên đầu),
+                 trong mỗi ngày tách theo Part. Render bởi loadStudentQuizResults(userId)
+                 trong admin.js. Cột "Đúng/Đã làm" tính trên số câu THỰC TẾ học viên đã
+                 trả lời trong ngày đó (KHÔNG so với tổng số từ vựng của Part, vì số câu
+                 quiz sinh ra mỗi lần làm bài không cố định bằng số từ trong Part). -->
+            <div class="student-quiz-results-section" style="margin-top:20px; padding-top:18px; border-top:1px solid var(--border);">
+              <h3 style="font-size:14px; font-weight:700; color:var(--ink); margin-bottom:12px;">Kết quả Quiz</h3>
+              <div id="sp-quiz-results" class="admin-table-scroll">
+                <div class="empty-state" style="padding:20px 0;">Đang tải...</div>
               </div>
             </div>
           </div>
+
+        </section>
+
+        <!-- ═══ SECTION: NGÂN HÀNG CÂU HỎI ═══ -->
+        <section class="admin-section" id="section-questions" data-section="questions">
+
+          <!-- Toolbar: search nội dung + lọc theo kỹ năng -->
+          <div class="admin-vocab-toolbar">
+            <div class="admin-filter-group">
+              <input type="text" id="question-search-input" class="admin-select" placeholder="🔍 Tìm theo nội dung câu hỏi..." style="min-width:260px;" />
+              <select id="filter-question-skill" class="admin-select">
+                <option value="">Tất cả kỹ năng</option>
+              </select>
+            </div>
+            <div class="admin-toolbar-actions">
+              <button class="btn btn-outline" id="btn-add-passage-standalone" onclick="openPassageForm()">
+                <i class="ti ti-file-text"></i> Tạo đoạn văn/hội thoại
+              </button>
+              <button class="btn btn-primary" id="btn-add-question" onclick="openQuestionForm()">
+                <i class="ti ti-plus"></i> Thêm câu hỏi mới
+              </button>
+            </div>
+          </div>
+
+          <!-- Bảng danh sách câu hỏi -->
+          <div class="admin-panel-card admin-table-card">
+            <div class="admin-table-scroll">
+              <table class="admin-vocab-table">
+                <thead>
+                  <tr>
+                    <th style="width:120px;">Kỹ năng</th>
+                    <th style="width:150px;">Loại câu hỏi</th>
+                    <th>Nội dung</th>
+                    <th style="width:100px; text-align:center;">Feedback</th>
+                    <th style="width:110px;">Ngày tạo</th>
+                    <th style="width:100px; text-align:center;">Thao tác</th>
+                    <th style="width:132px; text-align:center;">Thao tác</th>
+                  </tr>
+                </thead>
+                <tbody id="question-table-body">
+                  <tr>
+                    <td colspan="6"><div class="empty-state">Đang tải dữ liệu...</div></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+        </section>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════
+       PANEL TRƯỢT: THÊM / SỬA CÂU HỎI (question_bank)
+       Ẩn mặc định — logic show/hide + submit ở admin/questions.js.
+       CHƯA có: upload audio, chọn passage_id, sửa/xóa (bước sau).
+  ════════════════════════════════════════════════════════════ -->
+  <div id="question-form-overlay" class="admin-overlay" style="display:none;"></div>
+
+  <div id="question-form-panel" class="admin-slide-panel" style="display:none;">
+    <div class="admin-slide-panel-header">
+      <h3 id="question-form-title">Thêm câu hỏi mới</h3>
+      <button type="button" class="admin-slide-close-btn" id="question-form-close-btn">
+        <i class="ti ti-x"></i>
+      </button>
+    </div>
+
+    <div class="admin-slide-panel-body">
+      <form id="question-form">
+        <input type="hidden" id="question-form-id" value="" />
+
+        <div class="admin-form-row">
+          <div class="admin-form-group">
+            <label for="question-skill">Kỹ năng</label>
+            <select id="question-skill" required>
+              <option value="">— Chọn kỹ năng —</option>
+            </select>
+          </div>
+          <div class="admin-form-group">
+            <label for="question-type">Loại câu hỏi</label>
+            <select id="question-type" required>
+              <option value="multiple_choice">Trắc nghiệm</option>
+              <option value="fill_blank">Điền từ</option>
+            </select>
+          </div>
         </div>
-      </div>
-    </div>
 
-    <div class="section-panel" id="section-grammar">
-      <div class="placeholder-panel">
-        <div class="placeholder-icon">✍️</div>
-        <h3>Grammar Module</h3>
-        <p>Grammar lessons and exercises will appear here in a future update.</p>
-      </div>
-    </div>
+        <!-- Dropdown chọn đoạn văn/hội thoại — chỉ hiện khi Kỹ năng =
+             Đọc hiểu/Nghe hiểu (toggle bằng JS theo #question-skill).
+             Chưa chọn thì passage_id = NULL (câu hỏi độc lập, không thuộc
+             đoạn nào), đúng như hành vi từ trước tới giờ. -->
+        <div class="admin-form-group" id="question-passage-group" style="display:none;">
+          <label for="question-form-passage-id">Thuộc đoạn văn/hội thoại (tùy chọn)</label>
+          <div style="display:flex; gap:8px;">
+            <select id="question-form-passage-id" style="flex:1;">
+              <option value="">— Không thuộc đoạn nào —</option>
+            </select>
+            <button type="button" class="btn btn-outline" id="btn-open-passage-form">+ Tạo đoạn mới</button>
+          </div>
+        </div>
 
-    <div class="section-panel" id="section-kanji">
-      <div class="placeholder-panel">
-        <div class="placeholder-icon">漢</div>
-        <h3>Kanji Module</h3>
-        <p>Dedicated kanji study with stroke order and radical breakdowns coming soon.</p>
-      </div>
+        <div class="admin-form-group">
+          <label for="question-text">Nội dung câu hỏi</label>
+          <div class="admin-richtext-toolbar">
+            <button type="button" class="admin-richtext-btn" id="question-text-bold-btn" title="In đậm" style="font-weight:700;">B</button>
+            <button type="button" class="admin-richtext-btn" id="question-text-underline-btn" title="Gạch chân" style="text-decoration:underline;">U</button>
+          </div>
+          <div id="question-text" class="admin-richtext-editor" contenteditable="true" data-placeholder="Nhập nội dung câu hỏi..."></div>
+        </div>
+
+        <!-- Khối riêng cho multiple_choice — ẩn/hiện bằng JS theo #question-type -->
+        <div id="question-mc-block">
+          <label style="display:block; margin-bottom:8px; font-weight:600; font-size:13px; color:var(--ink);">
+            Đáp án (tối thiểu 2, tối đa 4 — để trống ô nào không dùng đến; tích chọn đáp án đúng)
+          </label>
+          <div class="admin-choice-row">
+            <label for="question-choice-0">A.</label>
+            <input type="text" id="question-choice-0" placeholder="Nhập đáp án A" />
+            <input type="radio" name="question-correct-choice" value="0" id="question-choice-radio-0" checked />
+          </div>
+          <div class="admin-choice-row">
+            <label for="question-choice-1">B.</label>
+            <input type="text" id="question-choice-1" placeholder="Nhập đáp án B" />
+            <input type="radio" name="question-correct-choice" value="1" id="question-choice-radio-1" />
+          </div>
+          <div class="admin-choice-row">
+            <label for="question-choice-2">C.</label>
+            <input type="text" id="question-choice-2" placeholder="Nhập đáp án C" />
+            <input type="radio" name="question-correct-choice" value="2" id="question-choice-radio-2" />
+          </div>
+          <div class="admin-choice-row">
+            <label for="question-choice-3">D.</label>
+            <input type="text" id="question-choice-3" placeholder="Nhập đáp án D" />
+            <input type="radio" name="question-correct-choice" value="3" id="question-choice-radio-3" />
+          </div>
+        </div>
+
+        <!-- Khối riêng cho fill_blank — ẩn/hiện bằng JS theo #question-type -->
+        <div id="question-fb-block" style="display:none;">
+          <div class="admin-form-group">
+            <label for="question-fillblank-answer">Đáp án đúng (thứ tự)</label>
+            <input type="text" id="question-fillblank-answer" placeholder="Ví dụ: 2314 — nhập đúng thứ tự các phần theo đề bài, không dấu cách" />
+            <p class="admin-hint-text">
+              Nhập chuỗi số thể hiện đúng thứ tự sắp xếp, ví dụ đề có 4 phần cần sắp xếp thì đáp án dạng "2314".
+            </p>
+          </div>
+        </div>
+
+        <!-- Khối upload audio — optional với mọi kỹ năng, gợi ý (không chặn cứng)
+             khi Kỹ năng = Nghe hiểu mà chưa chọn file -->
+        <div class="admin-form-group">
+          <label for="question-audio-file">File audio (tùy chọn)</label>
+          <input type="file" id="question-audio-file" accept="audio/*" />
+          <p class="admin-hint-text" id="question-audio-status"></p>
+          <input type="hidden" id="question-audio-url" value="" />
+          <audio id="question-audio-preview" controls style="display:none; margin-top:8px; width:100%;"></audio>
+        </div>
+
+        <div class="admin-form-group">
+          <label for="question-explanation">Feedback / giải thích (tùy chọn)</label>
+          <textarea id="question-explanation" rows="2"></textarea>
+        </div>
+
+        <div class="admin-form-group">
+          <label for="question-difficulty">Độ khó (tùy chọn)</label>
+          <select id="question-difficulty">
+            <option value="">— Không chọn —</option>
+            <option value="easy">Dễ</option>
+            <option value="medium">Trung bình</option>
+            <option value="hard">Khó</option>
+          </select>
+        </div>
+
+        <div id="question-form-error" class="admin-login-error"></div>
+
+        <div class="admin-form-actions">
+          <button type="button" class="btn btn-outline" id="question-form-cancel-btn">Hủy</button>
+          <button type="button" class="btn btn-outline" id="question-form-save-continue-btn">Lưu &amp; Tạo tiếp</button>
+          <button type="submit" class="btn btn-primary" id="question-form-submit-btn">Lưu câu hỏi</button>
+        </div>
+      </form>
     </div>
   </div>
 
+  <!-- ════════════════════════════════════════════════════════════
+       PANEL TRƯỢT: TẠO ĐOẠN VĂN/HỘI THOẠI (passages)
+       Mở từ nút "+ Tạo đoạn mới" trong form câu hỏi. Lưu xong tự refresh
+       dropdown "Thuộc đoạn văn/hội thoại" ở form câu hỏi và chọn sẵn đoạn
+       vừa tạo — logic ở admin/questions.js.
+  ════════════════════════════════════════════════════════════ -->
+  <div id="passage-form-overlay" class="admin-overlay" style="display:none;"></div>
+
+  <div id="passage-form-panel" class="admin-slide-panel" style="display:none;">
+    <div class="admin-slide-panel-header">
+      <h3>Tạo đoạn văn/hội thoại</h3>
+      <button type="button" class="admin-slide-close-btn" id="passage-form-close-btn">
+        <i class="ti ti-x"></i>
+      </button>
+    </div>
+
+    <div class="admin-slide-panel-body">
+      <form id="passage-form">
+        <div class="admin-form-group">
+          <label for="passage-title">Tiêu đề</label>
+          <input type="text" id="passage-title" placeholder="Ví dụ: Hội thoại tại nhà hàng" />
+        </div>
+
+        <div class="admin-form-group">
+          <label for="passage-content">Nội dung văn bản</label>
+          <textarea id="passage-content" rows="6" placeholder="Nhập đoạn văn (dùng cho Đọc hiểu) hoặc lời thoại (dùng cho Nghe hiểu)..."></textarea>
+        </div>
+
+        <div class="admin-form-group">
+          <label for="passage-audio-file">File audio chung (tùy chọn)</label>
+          <input type="file" id="passage-audio-file" accept="audio/*" />
+          <p class="admin-hint-text" id="passage-audio-status"></p>
+          <input type="hidden" id="passage-audio-url" value="" />
+          <audio id="passage-audio-preview" controls style="display:none; margin-top:8px; width:100%;"></audio>
+        </div>
+
+        <div id="passage-form-error" class="admin-login-error"></div>
+
+        <div class="admin-form-actions">
+          <button type="button" class="btn btn-outline" id="passage-form-cancel-btn">Hủy</button>
+          <button type="submit" class="btn btn-primary" id="passage-form-submit-btn">Lưu đoạn văn</button>
+        </div>
+      </form>
+    </div>
+  </div>
+       Ẩn mặc định — logic show/hide + submit sẽ thêm ở admin.js
+       (Bước 2.2). Cấu trúc/HTML tĩnh đã đầy đủ ở bước này.
+  ════════════════════════════════════════════════════════════ -->
+  <div id="vocab-form-overlay" class="admin-overlay" style="display:none;"></div>
+
+  <div id="vocab-form-panel" class="admin-slide-panel" style="display:none;">
+    <div class="admin-slide-panel-header">
+      <h3 id="vocab-form-title">Thêm từ mới</h3>
+      <button type="button" class="admin-slide-close-btn" id="vocab-form-close-btn">
+        <i class="ti ti-x"></i>
+      </button>
+    </div>
+
+    <div class="admin-slide-panel-body">
+      <form id="vocab-form">
+        <input type="hidden" id="vocab-form-id" value="" />
+
+        <div class="admin-form-row">
+          <div class="admin-form-group">
+            <label for="vocab-unit">Unit</label>
+            <select id="vocab-unit" required>
+              <option value="">— Chọn Unit —</option>
+            </select>
+          </div>
+          <div class="admin-form-group">
+            <label for="vocab-part">Part</label>
+            <select id="vocab-part" required>
+              <option value="">— Chọn Part —</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="admin-form-row">
+          <div class="admin-form-group">
+            <label for="vocab-kanji">Kanji</label>
+            <input type="text" id="vocab-kanji" placeholder="例: 食べる" />
+          </div>
+          <div class="admin-form-group">
+            <label for="vocab-kana">Kana</label>
+            <input type="text" id="vocab-kana" placeholder="たべる" required />
+          </div>
+        </div>
+
+        <div class="admin-form-row">
+          <div class="admin-form-group">
+            <label for="vocab-romaji">Romaji</label>
+            <input type="text" id="vocab-romaji" placeholder="taberu" />
+          </div>
+          <div class="admin-form-group">
+            <label for="vocab-hanviet">Hán Việt</label>
+            <input type="text" id="vocab-hanviet" placeholder="thực" />
+          </div>
+        </div>
+
+        <div class="admin-form-group">
+          <label for="vocab-meaning">Meaning</label>
+          <textarea id="vocab-meaning" rows="2" required></textarea>
+        </div>
+
+        <div class="admin-form-group">
+          <label for="vocab-example">Example</label>
+          <textarea id="vocab-example" rows="2"></textarea>
+        </div>
+
+        <div class="admin-form-group">
+          <label>Tên file audio cần tạo</label>
+          <input type="text" id="vocab-audio-filename" class="admin-readonly-input" value="u—_p—_word-—.mp3" readonly />
+          <p class="admin-hint-text">
+            Thu âm và đặt đúng tên file này, sau đó push lên GitHub <code>/audio</code>.
+          </p>
+        </div>
+
+        <div id="vocab-form-error" class="admin-login-error"></div>
+
+        <div class="admin-form-actions">
+          <button type="button" class="btn btn-outline" id="vocab-form-cancel-btn">Hủy</button>
+          <button type="submit" class="btn btn-primary" id="vocab-form-submit-btn">Lưu từ vựng</button>
+        </div>
+      </form>
+    </div>
   </div>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="streak-utils.js"></script>
-<script src="app.js"></script>
-<script>
-  // Toggle dropdown "Account" ở góc phải header — logic UI thuần túy,
-  // không liên quan Supabase nên để riêng ở đây thay vì app.js.
-  function toggleAccountMenu() {
-    const dropdown = document.getElementById('account-menu-dropdown');
-    if (!dropdown) return;
-    dropdown.style.display = dropdown.style.display === 'none' ? 'flex' : 'none';
-  }
+  <!-- ════════════════════════════════════════════════════════════
+       PANEL TRƯỢT: QUẢN LÝ UNIT/PART (danh mục, mức tối thiểu)
+       Xem tên gọi trong admin.js: openCategoryManager()/renderCategoryManager()
+  ════════════════════════════════════════════════════════════ -->
+  <div id="category-manager-overlay" class="admin-overlay" style="display:none;"></div>
 
-  function closeAccountMenu() {
-    const dropdown = document.getElementById('account-menu-dropdown');
-    if (dropdown) dropdown.style.display = 'none';
-  }
+  <div id="category-manager-panel" class="admin-slide-panel" style="display:none;">
+    <div class="admin-slide-panel-header">
+      <h3>Quản lý Unit/Part</h3>
+      <button type="button" class="admin-slide-close-btn" id="category-manager-close-btn">
+        <i class="ti ti-x"></i>
+      </button>
+    </div>
 
-  // Đóng dropdown khi click ra ngoài
-  document.addEventListener('click', (e) => {
-    const menu = document.getElementById('account-menu');
-    if (menu && !menu.contains(e.target)) closeAccountMenu();
-  });
-</script>
+    <div class="admin-slide-panel-body">
+      <div class="admin-category-add-row">
+        <input type="text" id="new-unit-input" placeholder="Tên Unit mới (vd: Unit 10)" />
+        <button class="btn btn-primary" id="btn-add-unit-category">
+          <i class="ti ti-plus"></i> Thêm Unit
+        </button>
+      </div>
+
+      <div id="category-list" class="admin-category-list"></div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════
+       PANEL TRƯỢT: CẬP NHẬT THÔNG TIN HỌC VIÊN
+       Không có ô password — tài khoản phải được tạo trước bằng tay
+       trong Supabase Dashboard, form này chỉ bổ sung/cập nhật hồ sơ
+       (profiles) khớp theo email đã tồn tại.
+  ════════════════════════════════════════════════════════════ -->
+  <div id="student-form-overlay" class="admin-overlay" style="display:none;"></div>
+
+  <div id="student-form-panel" class="admin-slide-panel" style="display:none;">
+    <div class="admin-slide-panel-header">
+      <h3>Cập nhật thông tin học viên</h3>
+      <button type="button" class="admin-slide-close-btn" id="student-form-close-btn">
+        <i class="ti ti-x"></i>
+      </button>
+    </div>
+
+    <div class="admin-slide-panel-body">
+      <form id="student-form">
+        <div class="admin-form-group">
+          <label for="student-email">Email</label>
+          <input type="email" id="student-email" placeholder="hocvien@example.com" required />
+          <p class="admin-hint-text">Dùng để tìm đúng tài khoản đã tạo sẵn qua Supabase Dashboard. Tài khoản phải tồn tại trước.</p>
+        </div>
+
+        <div class="admin-form-group">
+          <label for="student-fullname">Họ và tên</label>
+          <input type="text" id="student-fullname" placeholder="Nguyễn Văn A" required />
+        </div>
+
+        <div class="admin-form-group">
+          <label for="student-level">JLPT Level</label>
+          <select id="student-level" required>
+            <option value="">— Chọn Level —</option>
+            <option value="N5">N5</option>
+            <option value="N4">N4</option>
+            <option value="N3">N3</option>
+            <option value="N2">N2</option>
+            <option value="N1">N1</option>
+          </select>
+        </div>
+
+        <div id="student-form-error" class="admin-login-error"></div>
+
+        <div class="admin-form-actions">
+          <button type="button" class="btn btn-outline" id="student-form-cancel-btn">Hủy</button>
+          <button type="submit" class="btn btn-primary" id="student-form-submit-btn">Lưu thông tin</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Supabase JS SDK — dùng cho Supabase Auth (đăng nhập/đăng xuất/session) -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <!-- PapaParse — parse file CSV client-side cho chức năng Import CSV (mục Vocab) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+  <!-- Logic (Supabase Auth, toggle nav, fetch số liệu...) -->
+  <script src="/admin/admin.js"></script>
+  <script src="/admin/questions.js"></script>
 </body>
 </html>
