@@ -976,10 +976,33 @@ body {
 /* ── Hàng đáp án trắc nghiệm: tên đáp án | input | radio, xếp ngang ── */
 .admin-choice-row {
   display: grid;
-  grid-template-columns: 24px 1fr 30px 16px;
+  grid-template-columns: 20px 24px 1fr 30px 16px;
   align-items: center;
   gap: 10px;
   margin-bottom: 12px;
+  transition: background var(--transition), outline var(--transition);
+}
+
+.admin-choice-drag-handle {
+  cursor: grab;
+  color: var(--ink-mute);
+  text-align: center;
+  font-size: 14px;
+}
+
+.admin-choice-drag-handle:active {
+  cursor: grabbing;
+}
+
+.admin-choice-row.admin-choice-drag-over {
+  outline: 2px dashed var(--vermillion);
+  outline-offset: 2px;
+  background: rgba(var(--vermillion-rgb, 217, 83, 40), 0.06);
+  border-radius: var(--radius-sm);
+}
+
+.admin-choice-row.admin-choice-dragging {
+  opacity: 0.4;
 }
 
 .admin-choice-input-wrap {

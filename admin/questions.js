@@ -19,6 +19,7 @@ const PASSAGE_PAGE_SIZE = 50;
 const questionsAdminState = {
   currentRows: [],   // danh sách câu hỏi đang hiển thị (theo filter kỹ năng hiện tại)
   currentPage: 1,     // trang hiện tại của bảng câu hỏi (50 items/trang)
+  selectedIds: new Set(), // id các câu hỏi đang được tick chọn (bulk actions)
   skills: [],         // cache danh sách skills, tránh gọi lại Supabase nhiều lần
   skillsLoaded: false,
   passages: [],        // cache danh sách passages cho dropdown "Thuộc đoạn văn/hội thoại"
@@ -182,7 +183,7 @@ function buildQuestionListUrl() {
 async function loadQuestionAdminList() {
   const tbody = document.getElementById('question-table-body');
   if (tbody) {
-    tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state">Đang tải dữ liệu...</div></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state">Đang tải dữ liệu...</div></td></tr>`;
   }
 
   try {
@@ -191,11 +192,12 @@ async function loadQuestionAdminList() {
 
     questionsAdminState.currentRows = await res.json();
     questionsAdminState.currentPage = 1; // reset về trang 1 mỗi khi tải lại (đổi filter kỹ năng...)
+    questionsAdminState.selectedIds.clear(); // dữ liệu mới -> bỏ chọn cũ cho an toàn
     renderQuestionAdminTable();
   } catch (err) {
     console.error('Lỗi tải danh sách câu hỏi:', err);
     if (tbody) {
-      tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state">❌ Không tải được danh sách câu hỏi.</div></td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state">❌ Không tải được danh sách câu hỏi.</div></td></tr>`;
     }
   }
 }
@@ -214,7 +216,7 @@ function renderQuestionAdminTable() {
     : rows;
 
   if (filtered.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state">Không có câu hỏi nào khớp bộ lọc.</div></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state">Không có câu hỏi nào khớp bộ lọc.</div></td></tr>`;
     if (pagEl) pagEl.style.display = 'none';
     return;
   }
@@ -226,16 +228,21 @@ function renderQuestionAdminTable() {
   const startIdx = (questionsAdminState.currentPage - 1) * QUESTION_PAGE_SIZE;
   const pageRows = filtered.slice(startIdx, startIdx + QUESTION_PAGE_SIZE);
 
-  tbody.innerHTML = pageRows.map(r => {
+  tbody.innerHTML = pageRows.map((r, idx) => {
     const skillName = r.skills?.name || '—';
     const typeLabel = QUESTION_TYPE_LABELS[r.question_type] || r.question_type || '—';
     const hasFeedback = !!(r.explanation && r.explanation.trim());
+    const stt = startIdx + idx + 1;
+    const isChecked = questionsAdminState.selectedIds.has(String(r.id));
 
-    // Click vào cả dòng -> mở form Sửa. Các nút thao tác dùng
-    // event.stopPropagation() để không kích hoạt luôn việc mở form Sửa
-    // khi bấm Nhân bản/Xóa.
+    // Click vào cả dòng -> mở form Sửa. Các nút thao tác/checkbox dùng
+    // event.stopPropagation() để không kích hoạt luôn việc mở form Sửa.
     return `
       <tr onclick="editQuestionRow('${r.id}')" style="cursor:pointer;">
+        <td onclick="event.stopPropagation();" style="text-align:center;">
+          <input type="checkbox" class="question-row-checkbox" data-id="${r.id}" ${isChecked ? 'checked' : ''} onchange="toggleQuestionRowSelect('${r.id}', this.checked)" />
+        </td>
+        <td style="text-align:center;">${stt}</td>
         <td>${escHtml(skillName)}</td>
         <td>${escHtml(typeLabel)}</td>
         <td>${escHtml(truncateText(stripHtml(r.question_text), 50))}</td>
@@ -258,8 +265,186 @@ function renderQuestionAdminTable() {
     `;
   }).join('');
 
+  syncQuestionSelectAllCheckbox();
+  updateQuestionBulkBar();
+
   renderQuestionPagination(filtered.length, totalPages);
 }
+
+// ============================================================
+//  BULK ACTIONS (chọn nhiều dòng câu hỏi cùng lúc)
+// ============================================================
+
+function toggleQuestionRowSelect(id, checked) {
+  const key = String(id);
+  if (checked) questionsAdminState.selectedIds.add(key);
+  else questionsAdminState.selectedIds.delete(key);
+
+  syncQuestionSelectAllCheckbox();
+  updateQuestionBulkBar();
+}
+
+// Checkbox "chọn tất cả" chỉ áp dụng cho các dòng ĐANG HIỂN THỊ ở trang hiện
+// tại (đúng hành vi phổ biến — không âm thầm chọn cả những dòng chưa nhìn
+// thấy ở trang khác).
+function toggleQuestionSelectAll(checked) {
+  document.querySelectorAll('#question-table-body .question-row-checkbox').forEach(cb => {
+    cb.checked = checked;
+    const id = cb.getAttribute('data-id');
+    if (checked) questionsAdminState.selectedIds.add(String(id));
+    else questionsAdminState.selectedIds.delete(String(id));
+  });
+  updateQuestionBulkBar();
+}
+
+// Tick "chọn tất cả" tự bật nếu mọi dòng ở trang hiện tại đều đã được chọn,
+// tự tắt nếu có ít nhất 1 dòng chưa chọn (kể cả khi không có dòng nào).
+function syncQuestionSelectAllCheckbox() {
+  const selectAllCb = document.getElementById('question-select-all');
+  if (!selectAllCb) return;
+  const rowCbs = document.querySelectorAll('#question-table-body .question-row-checkbox');
+  if (rowCbs.length === 0) { selectAllCb.checked = false; return; }
+  selectAllCb.checked = Array.from(rowCbs).every(cb => cb.checked);
+}
+
+function updateQuestionBulkBar() {
+  const bar = document.getElementById('question-bulk-bar');
+  const countEl = document.getElementById('question-bulk-count');
+  const count = questionsAdminState.selectedIds.size;
+
+  if (bar) bar.style.display = count > 0 ? 'flex' : 'none';
+  if (countEl) countEl.textContent = `Đã chọn ${count} câu hỏi`;
+}
+
+function clearQuestionSelection() {
+  questionsAdminState.selectedIds.clear();
+  updateQuestionBulkBar();
+}
+
+// ── Xóa hàng loạt ─────────────────────────────────────────────────────────
+async function bulkDeleteSelectedQuestions() {
+  const ids = Array.from(questionsAdminState.selectedIds);
+  if (ids.length === 0) return;
+
+  try {
+    const headers = await sbAuthedHeaders();
+
+    // Kiểm tra từng câu đang thuộc bao nhiêu đề thi, để liệt kê rõ trong
+    // confirm dialog (vd "3/5 câu đang thuộc đề thi").
+    const usageChecks = await Promise.all(ids.map(async id => {
+      const res = await fetch(`${ADMIN_CONFIG.supabaseUrl}/rest/v1/exam_questions?question_id=eq.${id}&select=id`, { headers });
+      if (!res.ok) throw new Error(`Lỗi kiểm tra câu hỏi ${id} đang dùng ở đề thi nào: ${res.status}`);
+      const rows = await res.json();
+      return rows.length > 0;
+    }));
+    const usedCount = usageChecks.filter(Boolean).length;
+
+    const confirmMsg = usedCount > 0
+      ? `${usedCount}/${ids.length} câu đang thuộc đề thi, xóa sẽ ảnh hưởng đến các đề đó. Vẫn xóa tất cả ${ids.length} câu đã chọn?`
+      : `Bạn có chắc muốn xóa ${ids.length} câu hỏi đã chọn?`;
+    if (!confirm(confirmMsg)) return;
+
+    const idsFilter = ids.join(',');
+    const deleteRes = await fetch(
+      `${ADMIN_CONFIG.supabaseUrl}/rest/v1/question_bank?id=in.(${idsFilter})`,
+      { method: 'DELETE', headers: await sbAuthedHeaders() }
+    );
+    if (!deleteRes.ok) throw new Error(`Lỗi xóa hàng loạt câu hỏi: ${deleteRes.status}`);
+
+    clearQuestionSelection();
+    await loadQuestionAdminList();
+  } catch (err) {
+    console.error('Lỗi xóa hàng loạt câu hỏi:', err);
+    alert('Có lỗi khi xóa các câu hỏi đã chọn. Vui lòng thử lại.');
+  }
+}
+
+// ── Đổi độ khó hàng loạt ──────────────────────────────────────────────────
+async function bulkApplyDifficulty() {
+  const ids = Array.from(questionsAdminState.selectedIds);
+  if (ids.length === 0) return;
+
+  const select = document.getElementById('question-bulk-difficulty');
+  const value = select?.value || '';
+  if (!value) {
+    alert('Vui lòng chọn độ khó muốn áp dụng.');
+    return;
+  }
+
+  try {
+    const idsFilter = ids.join(',');
+    const res = await fetch(
+      `${ADMIN_CONFIG.supabaseUrl}/rest/v1/question_bank?id=in.(${idsFilter})`,
+      {
+        method: 'PATCH',
+        headers: await sbAuthedHeaders(),
+        body: JSON.stringify({ difficulty: value, updated_at: new Date().toISOString() })
+      }
+    );
+    if (!res.ok) throw new Error(`Lỗi đổi độ khó hàng loạt: ${res.status}`);
+
+    if (select) select.value = '';
+    clearQuestionSelection();
+    await loadQuestionAdminList();
+  } catch (err) {
+    console.error('Lỗi đổi độ khó hàng loạt:', err);
+    alert('Có lỗi khi đổi độ khó hàng loạt. Vui lòng thử lại.');
+  }
+}
+
+// ── Đổi kỹ năng hàng loạt ─────────────────────────────────────────────────
+async function bulkApplySkill() {
+  const ids = Array.from(questionsAdminState.selectedIds);
+  if (ids.length === 0) return;
+
+  const select = document.getElementById('question-bulk-skill');
+  const value = select?.value || '';
+  if (!value) {
+    alert('Vui lòng chọn kỹ năng muốn áp dụng.');
+    return;
+  }
+
+  try {
+    const idsFilter = ids.join(',');
+    const res = await fetch(
+      `${ADMIN_CONFIG.supabaseUrl}/rest/v1/question_bank?id=in.(${idsFilter})`,
+      {
+        method: 'PATCH',
+        headers: await sbAuthedHeaders(),
+        body: JSON.stringify({ skill_id: Number(value), updated_at: new Date().toISOString() })
+      }
+    );
+    if (!res.ok) throw new Error(`Lỗi đổi kỹ năng hàng loạt: ${res.status}`);
+
+    if (select) select.value = '';
+    clearQuestionSelection();
+    await loadQuestionAdminList();
+  } catch (err) {
+    console.error('Lỗi đổi kỹ năng hàng loạt:', err);
+    alert('Có lỗi khi đổi kỹ năng hàng loạt. Vui lòng thử lại.');
+  }
+}
+
+// Nạp dropdown "Đổi kỹ năng thành" trong thanh bulk — dùng chung cache skills
+async function populateQuestionBulkSkillDropdown() {
+  const select = document.getElementById('question-bulk-skill');
+  if (!select) return;
+  try {
+    const skills = await fetchSkillsList();
+    select.innerHTML = '<option value="">— Đổi kỹ năng thành —</option>' +
+      skills.map(sk => `<option value="${sk.id}">${escHtml(sk.name)}</option>`).join('');
+  } catch (err) {
+    console.error('Lỗi nạp dropdown đổi kỹ năng hàng loạt:', err);
+  }
+}
+
+function initQuestionBulkControls() {
+  document.getElementById('question-select-all')?.addEventListener('change', (e) => toggleQuestionSelectAll(e.target.checked));
+  document.getElementById('question-bulk-delete-btn')?.addEventListener('click', bulkDeleteSelectedQuestions);
+  document.getElementById('question-bulk-apply-difficulty-btn')?.addEventListener('click', bulkApplyDifficulty);
+  document.getElementById('question-bulk-apply-skill-btn')?.addEventListener('click', bulkApplySkill);
+}
+
 
 function renderQuestionPagination(totalRows, totalPages) {
   const pagEl = document.getElementById('question-pagination');
@@ -318,6 +503,7 @@ async function loadQuestionsSection() {
   await populateQuestionSkillFilter();
   await populateQuestionFormSkillDropdown();
   await populateQuestionFormPassageDropdown();
+  await populateQuestionBulkSkillDropdown();
   await loadPassagesAdminList();
   await loadQuestionAdminList();
 }
@@ -418,6 +604,91 @@ function removeChoiceImage(index) {
   const preview = document.getElementById(`question-choice-${index}-image-preview`);
   if (preview) preview.removeAttribute('src');
   toggleChoiceImageMode(index, false);
+}
+
+// ── Kéo-thả đổi vị trí 4 đáp án ──────────────────────────────────────────
+// 4 hàng đáp án luôn nằm cố định ở đúng 4 vị trí DOM (id cố định
+// question-choice-0..3) — kéo thả KHÔNG di chuyển DOM node, mà HOÁN ĐỔI dữ
+// liệu (chữ, ảnh, và trạng thái "đáp án đúng") giữa 2 vị trí. Cách này đơn
+// giản, không phải sinh lại id động, và đảm bảo đáp án đúng luôn đi theo
+// đúng nội dung sau khi đổi chỗ.
+let draggedChoiceIndex = null;
+
+function swapChoiceRows(i, j) {
+  if (i === j) return;
+
+  // Hoán đổi nội dung chữ
+  const textI = document.getElementById(`question-choice-${i}`);
+  const textJ = document.getElementById(`question-choice-${j}`);
+  const tmpText = textI.value;
+  textI.value = textJ.value;
+  textJ.value = tmpText;
+
+  // Hoán đổi ảnh (nếu có)
+  const tmpImg = questionFormState.choiceImages[i];
+  questionFormState.choiceImages[i] = questionFormState.choiceImages[j];
+  questionFormState.choiceImages[j] = tmpImg;
+
+  [i, j].forEach(idx => {
+    const imgUrl = questionFormState.choiceImages[idx];
+    const preview = document.getElementById(`question-choice-${idx}-image-preview`);
+    if (imgUrl) {
+      if (preview) preview.src = imgUrl;
+      toggleChoiceImageMode(idx, true);
+    } else {
+      if (preview) preview.removeAttribute('src');
+      toggleChoiceImageMode(idx, false);
+    }
+  });
+
+  // Hoán đổi trạng thái "đáp án đúng" -> đáp án đúng đi theo đúng nội dung
+  const radioI = document.getElementById(`question-choice-radio-${i}`);
+  const radioJ = document.getElementById(`question-choice-radio-${j}`);
+  const wasICorrect = radioI.checked;
+  const wasJCorrect = radioJ.checked;
+  radioI.checked = wasJCorrect;
+  radioJ.checked = wasICorrect;
+}
+
+function initChoiceDragDrop() {
+  const rows = document.querySelectorAll('#question-mc-block .admin-choice-row');
+
+  rows.forEach(row => {
+    const handle = row.querySelector('.admin-choice-drag-handle');
+
+    // Chỉ bắt đầu kéo từ handle (⋮⋮) — tránh xung đột khi giáo viên bôi đen
+    // chọn text trong ô input (bôi đen bằng chuột cũng là 1 dạng "drag").
+    handle?.addEventListener('dragstart', (e) => {
+      draggedChoiceIndex = Number(row.getAttribute('data-choice-index'));
+      row.classList.add('admin-choice-dragging');
+      e.dataTransfer.effectAllowed = 'move';
+    });
+
+    handle?.addEventListener('dragend', () => {
+      row.classList.remove('admin-choice-dragging');
+      rows.forEach(r => r.classList.remove('admin-choice-drag-over'));
+      draggedChoiceIndex = null;
+    });
+
+    row.addEventListener('dragover', (e) => {
+      e.preventDefault(); // bắt buộc để cho phép drop
+      e.dataTransfer.dropEffect = 'move';
+      row.classList.add('admin-choice-drag-over');
+    });
+
+    row.addEventListener('dragleave', () => {
+      row.classList.remove('admin-choice-drag-over');
+    });
+
+    row.addEventListener('drop', (e) => {
+      e.preventDefault();
+      row.classList.remove('admin-choice-drag-over');
+      const targetIndex = Number(row.getAttribute('data-choice-index'));
+      if (draggedChoiceIndex !== null) {
+        swapChoiceRows(draggedChoiceIndex, targetIndex);
+      }
+    });
+  });
 }
 
 // Reset toàn bộ form về trạng thái trống — dùng cả khi mở form tạo mới
@@ -961,7 +1232,7 @@ function initQuestionFormControls() {
 async function loadPassagesAdminList() {
   const tbody = document.getElementById('passage-table-body');
   if (tbody) {
-    tbody.innerHTML = `<tr><td colspan="5"><div class="empty-state">Đang tải dữ liệu...</div></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state">Đang tải dữ liệu...</div></td></tr>`;
   }
 
   try {
@@ -991,7 +1262,7 @@ async function loadPassagesAdminList() {
   } catch (err) {
     console.error('Lỗi tải bảng đoạn văn/hội thoại:', err);
     if (tbody) {
-      tbody.innerHTML = `<tr><td colspan="5"><div class="empty-state">❌ Không tải được danh sách đoạn văn/hội thoại.</div></td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state">❌ Không tải được danh sách đoạn văn/hội thoại.</div></td></tr>`;
     }
   }
 }
@@ -1003,7 +1274,7 @@ function renderPassagesAdminTable() {
 
   const rows = questionsAdminState.passageTableRows || [];
   if (rows.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="5"><div class="empty-state">Chưa có đoạn văn/hội thoại nào.</div></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state">Chưa có đoạn văn/hội thoại nào.</div></td></tr>`;
     if (pagEl) pagEl.style.display = 'none';
     return;
   }
@@ -1015,8 +1286,9 @@ function renderPassagesAdminTable() {
   const startIdx = (questionsAdminState.passageCurrentPage - 1) * PASSAGE_PAGE_SIZE;
   const pageRows = rows.slice(startIdx, startIdx + PASSAGE_PAGE_SIZE);
 
-  tbody.innerHTML = pageRows.map(p => `
+  tbody.innerHTML = pageRows.map((p, idx) => `
     <tr onclick="editPassageRow('${p.id}')" style="cursor:pointer;">
+      <td style="text-align:center;">${startIdx + idx + 1}</td>
       <td>${escHtml(p.title || '(Chưa đặt tiêu đề)')}</td>
       <td style="text-align:center;">${p.questionCount}</td>
       <td style="text-align:center;">${p.audio_url ? '✓' : '—'}</td>
@@ -1374,4 +1646,6 @@ document.addEventListener('DOMContentLoaded', () => {
   initQuestionFormControls();
   initQuestionPaginationControls();
   initPassagePaginationControls();
+  initQuestionBulkControls();
+  initChoiceDragDrop();
 });

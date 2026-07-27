@@ -351,12 +351,37 @@
               </div>
             </div>
 
+            <!-- Thanh bulk actions — chỉ hiện khi có >=1 dòng được chọn -->
+            <div class="admin-vocab-toolbar" id="question-bulk-bar" style="display:none;">
+              <div class="admin-filter-group">
+                <span id="question-bulk-count" style="font-size:13px; font-weight:600; color:var(--ink);"></span>
+                <select id="question-bulk-difficulty" class="admin-select">
+                  <option value="">— Đổi độ khó thành —</option>
+                  <option value="easy">Dễ</option>
+                  <option value="medium">Trung bình</option>
+                  <option value="hard">Khó</option>
+                </select>
+                <button type="button" class="btn btn-outline" id="question-bulk-apply-difficulty-btn">Áp dụng độ khó</button>
+                <select id="question-bulk-skill" class="admin-select">
+                  <option value="">— Đổi kỹ năng thành —</option>
+                </select>
+                <button type="button" class="btn btn-outline" id="question-bulk-apply-skill-btn">Áp dụng kỹ năng</button>
+              </div>
+              <div class="admin-toolbar-actions">
+                <button type="button" class="btn btn-outline" id="question-bulk-delete-btn" style="color:var(--vermillion); border-color:var(--vermillion);">
+                  <i class="ti ti-trash"></i> Xóa đã chọn
+                </button>
+              </div>
+            </div>
+
             <!-- Bảng danh sách câu hỏi -->
             <div class="admin-panel-card admin-table-card">
               <div class="admin-table-scroll">
                 <table class="admin-vocab-table">
                   <thead>
                     <tr>
+                      <th style="width:34px; text-align:center;"><input type="checkbox" id="question-select-all" /></th>
+                      <th style="width:48px;">STT</th>
                       <th style="width:120px;">Kỹ năng</th>
                       <th style="width:150px;">Loại câu hỏi</th>
                       <th>Nội dung</th>
@@ -367,7 +392,7 @@
                   </thead>
                   <tbody id="question-table-body">
                     <tr>
-                      <td colspan="6"><div class="empty-state">Đang tải dữ liệu...</div></td>
+                      <td colspan="8"><div class="empty-state">Đang tải dữ liệu...</div></td>
                     </tr>
                   </tbody>
                 </table>
@@ -405,6 +430,7 @@
                 <table class="admin-vocab-table">
                   <thead>
                     <tr>
+                      <th style="width:48px;">STT</th>
                       <th>Tiêu đề</th>
                       <th style="width:140px; text-align:center;">Số câu hỏi</th>
                       <th style="width:90px; text-align:center;">Audio</th>
@@ -414,7 +440,7 @@
                   </thead>
                   <tbody id="passage-table-body">
                     <tr>
-                      <td colspan="5"><div class="empty-state">Đang tải dữ liệu...</div></td>
+                      <td colspan="6"><div class="empty-state">Đang tải dữ liệu...</div></td>
                     </tr>
                   </tbody>
                 </table>
@@ -506,6 +532,7 @@
             Có thể dùng ảnh thay chữ cho từng đáp án (hữu ích với Nghe hiểu — vd chọn tranh đúng).
           </label>
           <div class="admin-choice-row" data-choice-index="0">
+            <span class="admin-choice-drag-handle" draggable="true" title="Kéo để đổi vị trí"><i class="ti ti-grip-vertical"></i></span>
             <label for="question-choice-0">A.</label>
             <div class="admin-choice-input-wrap">
               <input type="text" id="question-choice-0" placeholder="Nhập đáp án A" />
@@ -521,6 +548,7 @@
             <input type="radio" name="question-correct-choice" value="0" id="question-choice-radio-0" checked />
           </div>
           <div class="admin-choice-row" data-choice-index="1">
+            <span class="admin-choice-drag-handle" draggable="true" title="Kéo để đổi vị trí"><i class="ti ti-grip-vertical"></i></span>
             <label for="question-choice-1">B.</label>
             <div class="admin-choice-input-wrap">
               <input type="text" id="question-choice-1" placeholder="Nhập đáp án B" />
@@ -536,6 +564,7 @@
             <input type="radio" name="question-correct-choice" value="1" id="question-choice-radio-1" />
           </div>
           <div class="admin-choice-row" data-choice-index="2">
+            <span class="admin-choice-drag-handle" draggable="true" title="Kéo để đổi vị trí"><i class="ti ti-grip-vertical"></i></span>
             <label for="question-choice-2">C.</label>
             <div class="admin-choice-input-wrap">
               <input type="text" id="question-choice-2" placeholder="Nhập đáp án C" />
@@ -551,6 +580,7 @@
             <input type="radio" name="question-correct-choice" value="2" id="question-choice-radio-2" />
           </div>
           <div class="admin-choice-row" data-choice-index="3">
+            <span class="admin-choice-drag-handle" draggable="true" title="Kéo để đổi vị trí"><i class="ti ti-grip-vertical"></i></span>
             <label for="question-choice-3">D.</label>
             <div class="admin-choice-input-wrap">
               <input type="text" id="question-choice-3" placeholder="Nhập đáp án D" />
