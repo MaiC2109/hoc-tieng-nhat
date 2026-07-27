@@ -944,21 +944,12 @@ body {
   border-color: var(--vermillion);
 }
 
+/* Style khung nhập (padding/border/font/màu/focus) TÁI DÙNG từ .admin-select
+   — element thực tế gắn thêm class="admin-select" trong HTML. Ở đây chỉ khai
+   báo phần khác biệt riêng của rich text editor: chiều cao tối thiểu,
+   placeholder khi rỗng, và style ảnh chèn bên trong. */
 .admin-richtext-editor {
   min-height: 74px;
-  padding: 9px 12px;
-  border: 1px solid var(--border-md);
-  border-radius: var(--radius-sm);
-  font-family: var(--font-sans);
-  font-size: 13px;
-  color: var(--ink);
-  background: var(--paper-card);
-  transition: border-color var(--transition);
-}
-
-.admin-richtext-editor:focus {
-  outline: none;
-  border-color: var(--vermillion);
 }
 
 .admin-richtext-editor:empty::before {
@@ -1078,21 +1069,12 @@ body {
   border-color: var(--vermillion);
 }
 
+/* Style khung nhập TÁI DÙNG từ .admin-select (element gắn thêm
+   class="admin-select" trong HTML) — ở đây chỉ khai báo phần khác biệt:
+   input đáp án cần chiếm full chiều rộng ô lưới, không theo min-width mặc
+   định của .admin-select (vốn dùng cho <select> ngắn). */
 .admin-choice-row input[type="text"] {
-  padding: 9px 12px;
-  font-size: 13px;
-  border: 1px solid var(--border-md);
-  border-radius: var(--radius-sm);
-  font-family: var(--font-sans);
-  color: var(--ink);
-  background: var(--paper-card);
-  transition: border-color var(--transition);
   width: 100%;
-}
-
-.admin-choice-row input[type="text"]:focus {
-  outline: none;
-  border-color: var(--vermillion);
 }
 
 .admin-choice-row input[type="radio"] {

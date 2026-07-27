@@ -522,7 +522,7 @@
             <button type="button" class="admin-richtext-btn" id="question-text-bold-btn" title="In đậm" style="font-weight:700;">B</button>
             <button type="button" class="admin-richtext-btn" id="question-text-underline-btn" title="Gạch chân" style="text-decoration:underline;">U</button>
           </div>
-          <div id="question-text" class="admin-richtext-editor" contenteditable="true" data-placeholder="Nhập nội dung câu hỏi..."></div>
+          <div id="question-text" class="admin-richtext-editor admin-select" contenteditable="true" data-placeholder="Nhập nội dung câu hỏi..."></div>
         </div>
 
         <!-- Khối riêng cho multiple_choice — ẩn/hiện bằng JS theo #question-type -->
@@ -535,7 +535,7 @@
             <span class="admin-choice-drag-handle" draggable="true" title="Kéo để đổi vị trí"><i class="ti ti-grip-vertical"></i></span>
             <label for="question-choice-0">A.</label>
             <div class="admin-choice-input-wrap">
-              <input type="text" id="question-choice-0" placeholder="Nhập đáp án A" />
+              <input type="text" id="question-choice-0" class="admin-select" placeholder="Nhập đáp án A" />
               <div class="admin-choice-image-wrap" id="question-choice-0-image-wrap" style="display:none;">
                 <img id="question-choice-0-image-preview" src="" alt="Đáp án A" />
                 <button type="button" class="admin-choice-image-remove-btn" data-choice-index="0" title="Bỏ ảnh, dùng lại chữ">✕</button>
@@ -551,7 +551,7 @@
             <span class="admin-choice-drag-handle" draggable="true" title="Kéo để đổi vị trí"><i class="ti ti-grip-vertical"></i></span>
             <label for="question-choice-1">B.</label>
             <div class="admin-choice-input-wrap">
-              <input type="text" id="question-choice-1" placeholder="Nhập đáp án B" />
+              <input type="text" id="question-choice-1" class="admin-select" placeholder="Nhập đáp án B" />
               <div class="admin-choice-image-wrap" id="question-choice-1-image-wrap" style="display:none;">
                 <img id="question-choice-1-image-preview" src="" alt="Đáp án B" />
                 <button type="button" class="admin-choice-image-remove-btn" data-choice-index="1" title="Bỏ ảnh, dùng lại chữ">✕</button>
@@ -567,7 +567,7 @@
             <span class="admin-choice-drag-handle" draggable="true" title="Kéo để đổi vị trí"><i class="ti ti-grip-vertical"></i></span>
             <label for="question-choice-2">C.</label>
             <div class="admin-choice-input-wrap">
-              <input type="text" id="question-choice-2" placeholder="Nhập đáp án C" />
+              <input type="text" id="question-choice-2" class="admin-select" placeholder="Nhập đáp án C" />
               <div class="admin-choice-image-wrap" id="question-choice-2-image-wrap" style="display:none;">
                 <img id="question-choice-2-image-preview" src="" alt="Đáp án C" />
                 <button type="button" class="admin-choice-image-remove-btn" data-choice-index="2" title="Bỏ ảnh, dùng lại chữ">✕</button>
@@ -583,7 +583,7 @@
             <span class="admin-choice-drag-handle" draggable="true" title="Kéo để đổi vị trí"><i class="ti ti-grip-vertical"></i></span>
             <label for="question-choice-3">D.</label>
             <div class="admin-choice-input-wrap">
-              <input type="text" id="question-choice-3" placeholder="Nhập đáp án D" />
+              <input type="text" id="question-choice-3" class="admin-select" placeholder="Nhập đáp án D" />
               <div class="admin-choice-image-wrap" id="question-choice-3-image-wrap" style="display:none;">
                 <img id="question-choice-3-image-preview" src="" alt="Đáp án D" />
                 <button type="button" class="admin-choice-image-remove-btn" data-choice-index="3" title="Bỏ ảnh, dùng lại chữ">✕</button>
@@ -677,7 +677,7 @@
             </button>
             <input type="file" id="passage-content-image-file" accept="image/*" style="display:none;" />
           </div>
-          <div id="passage-content" class="admin-richtext-editor" contenteditable="true" data-placeholder="Nhập đoạn văn (dùng cho Đọc hiểu) hoặc lời thoại (dùng cho Nghe hiểu)... có thể chèn ảnh thay cho văn bản."></div>
+          <div id="passage-content" class="admin-richtext-editor admin-select" contenteditable="true" data-placeholder="Nhập đoạn văn (dùng cho Đọc hiểu) hoặc lời thoại (dùng cho Nghe hiểu)... có thể chèn ảnh thay cho văn bản."></div>
           <p class="admin-hint-text" id="passage-content-image-status"></p>
         </div>
 
