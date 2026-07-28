@@ -194,7 +194,8 @@ const ADMIN_SECTION_META = {
   overview:  { title: 'Tổng quan', sub: 'Số liệu chung của toàn bộ hệ thống' },
   vocab:     { title: 'Vocab',     sub: 'Quản lý từ vựng' },
   students:  { title: 'Học viên',  sub: 'Danh sách học viên đã đăng ký' },
-  questions: { title: 'Ngân hàng câu hỏi', sub: 'Quản lý câu hỏi cho các đề thi JLPT' }
+  questions: { title: 'Ngân hàng câu hỏi', sub: 'Quản lý câu hỏi cho các đề thi JLPT' },
+  exams:     { title: 'Đề thi',            sub: 'Quản lý đề thi JLPT' }
 };
 
 function switchAdminSection(sectionKey) {
@@ -224,6 +225,9 @@ function switchAdminSection(sectionKey) {
     // Hàm này định nghĩa trong admin/questions.js (nạp sau admin.js) —
     // kiểm tra tồn tại trước để tránh vỡ nếu file chưa kịp load.
     if (typeof loadQuestionsSection === 'function') loadQuestionsSection();
+  } else if (sectionKey === 'exams') {
+    // Hàm này định nghĩa trong admin/exams.js (nạp sau questions.js).
+    if (typeof loadExamsSection === 'function') loadExamsSection();
   }
 }
 

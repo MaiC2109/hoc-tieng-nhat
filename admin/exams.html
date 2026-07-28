@@ -1,0 +1,165 @@
+<!--
+  admin/exams.html
+  Fragment HTML cho module Quản lý đề thi (exams).
+  KHÔNG tự đứng một mình — được fetch() và inject bởi
+  ensureExamsFragmentLoaded() trong admin/exams.js, vào đúng
+  <div id="exams-fragment-mount"></div> đặt sẵn trong index.html.
+
+  Bước hiện tại: CHỈ danh sách đề thi + form tạo/sửa thông tin exams
+  (title, exam_type, pass_threshold_pct, is_published).
+  Section/subsection/câu hỏi sẽ làm ở màn chi tiết đề (bước sau).
+-->
+
+<!-- ═══ VIEW 1: DANH SÁCH ĐỀ THI ═══ -->
+<div id="exam-list-view">
+
+  <div class="admin-vocab-toolbar">
+    <div class="admin-filter-group"></div>
+    <div class="admin-toolbar-actions">
+      <button type="button" class="btn btn-primary" id="btn-add-exam" onclick="openExamForm()">
+        <i class="ti ti-plus"></i> Tạo đề mới
+      </button>
+    </div>
+  </div>
+
+  <div class="admin-panel-card admin-table-card">
+    <div class="admin-table-scroll">
+      <table class="admin-vocab-table">
+        <thead>
+          <tr>
+            <th>Tên đề thi</th>
+            <th style="width:100px;">Loại</th>
+            <th style="width:130px;">Trạng thái</th>
+            <th style="width:100px; text-align:center;">Số section</th>
+            <th style="width:110px;">Ngày tạo</th>
+          </tr>
+        </thead>
+        <tbody id="exam-table-body">
+          <tr><td colspan="5"><div class="empty-state">Đang tải dữ liệu...</div></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<!-- ═══ VIEW 2: CHI TIẾT ĐỀ THI — quản lý section ═══
+     Ẩn mặc định — chỉ hiện khi openExamDetail() được gọi từ click 1 dòng
+     ở bảng trên. CHƯA có subsection / chọn câu hỏi (bước sau). -->
+<div id="exam-detail-view" style="display:none;">
+
+  <button type="button" class="btn btn-outline" id="exam-detail-back-btn" style="margin-bottom:14px;">
+    <i class="ti ti-arrow-left"></i> Quay lại danh sách đề thi
+  </button>
+
+  <div class="admin-panel-card" style="margin-bottom:16px;">
+    <h3 id="exam-detail-title" style="margin:0 0 4px;">—</h3>
+    <p id="exam-detail-sub" style="margin:0; color:var(--ink-soft); font-size:13px;"></p>
+  </div>
+
+  <div class="admin-vocab-toolbar">
+    <div class="admin-filter-group">
+      <span style="font-weight:600;">Các phần thi (section)</span>
+    </div>
+    <div class="admin-toolbar-actions">
+      <button type="button" class="btn btn-primary" id="btn-add-section" onclick="openSectionForm()">
+        <i class="ti ti-plus"></i> Thêm phần
+      </button>
+    </div>
+  </div>
+  <p class="admin-hint-text" id="section-add-limit-hint" style="display:none;">
+    Đề loại "skill" chỉ được có 1 phần thi duy nhất.
+  </p>
+
+  <div id="exam-sections-list">
+    <div class="empty-state">Đang tải danh sách phần thi...</div>
+  </div>
+
+</div>
+
+<!-- ── PANEL TRƯỢT: TẠO / SỬA ĐỀ THI (bảng exams) ── -->
+<div id="exam-form-overlay" class="admin-overlay" style="display:none;"></div>
+
+<div id="exam-form-panel" class="admin-slide-panel" style="display:none;">
+  <div class="admin-slide-panel-header">
+    <h3 id="exam-form-title">Tạo đề thi</h3>
+    <button type="button" class="admin-slide-close-btn" id="exam-form-close-btn">
+      <i class="ti ti-x"></i>
+    </button>
+  </div>
+
+  <div class="admin-slide-panel-body">
+    <form id="exam-form">
+      <div class="admin-form-group">
+        <label for="exam-title">Tên đề thi</label>
+        <input type="text" id="exam-title" class="admin-select" placeholder="Ví dụ: JLPT N4 thử số 1" />
+      </div>
+
+      <div class="admin-form-group">
+        <label for="exam-type">Loại đề</label>
+        <select id="exam-type" class="admin-select">
+          <option value="full">full — đủ các kỹ năng</option>
+          <option value="skill">skill — 1 kỹ năng riêng</option>
+        </select>
+      </div>
+
+      <div class="admin-form-group">
+        <label for="exam-pass-threshold">Ngưỡng đạt (%)</label>
+        <input type="number" id="exam-pass-threshold" class="admin-select" min="0" max="100" step="1" value="70" />
+        <p class="admin-hint-text">Phần trăm điểm tối thiểu để được coi là đạt đề thi này.</p>
+      </div>
+
+      <div class="admin-form-group admin-form-row" style="align-items:center; gap:10px;">
+        <input type="checkbox" id="exam-is-published" style="width:auto;" />
+        <label for="exam-is-published" style="margin:0;">Xuất bản đề thi này cho học viên</label>
+      </div>
+
+      <div id="exam-form-error" class="admin-login-error"></div>
+
+      <div class="admin-form-actions">
+        <button type="button" class="btn btn-outline" id="exam-form-cancel-btn">Hủy</button>
+        <button type="submit" class="btn btn-primary" id="exam-form-submit-btn">Lưu đề thi</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ── PANEL TRƯỢT: TẠO / SỬA PHẦN THI (bảng exam_sections) ── -->
+<div id="section-form-overlay" class="admin-overlay" style="display:none;"></div>
+
+<div id="section-form-panel" class="admin-slide-panel" style="display:none;">
+  <div class="admin-slide-panel-header">
+    <h3 id="section-form-title">Thêm phần thi</h3>
+    <button type="button" class="admin-slide-close-btn" id="section-form-close-btn">
+      <i class="ti ti-x"></i>
+    </button>
+  </div>
+
+  <div class="admin-slide-panel-body">
+    <form id="section-form">
+      <div class="admin-form-group">
+        <label for="section-skill">Kỹ năng</label>
+        <select id="section-skill" class="admin-select">
+          <option value="">— Chọn kỹ năng —</option>
+        </select>
+      </div>
+
+      <div class="admin-form-group">
+        <label for="section-title">Tiêu đề phần thi</label>
+        <input type="text" id="section-title" class="admin-select" placeholder="Tự điền theo kỹ năng, có thể sửa lại" />
+      </div>
+
+      <div class="admin-form-group">
+        <label for="section-minutes">Thời gian làm bài (phút)</label>
+        <input type="number" id="section-minutes" class="admin-select" min="1" step="1" placeholder="Ví dụ: 15" />
+      </div>
+
+      <div id="section-form-error" class="admin-login-error"></div>
+
+      <div class="admin-form-actions">
+        <button type="button" class="btn btn-outline" id="section-form-cancel-btn">Hủy</button>
+        <button type="submit" class="btn btn-primary" id="section-form-submit-btn">Lưu phần thi</button>
+      </div>
+    </form>
+  </div>
+</div>
