@@ -93,9 +93,11 @@ function renderExamAdminTable(exams, sectionCountByExam) {
       <td>${escHtml(exam.title)}</td>
       <td>${escHtml(exam.exam_type || '—')}</td>
       <td>
-        <span class="exam-status-badge ${exam.is_published ? 'is-published' : 'is-draft'}">
+        <button type="button" class="exam-status-badge ${exam.is_published ? 'is-published' : 'is-draft'}"
+          onclick="event.stopPropagation(); toggleExamPublished('${escHtml(exam.id)}', ${exam.is_published})"
+          title="Bấm để ${exam.is_published ? 'chuyển về nháp' : 'xuất bản'}">
           ${exam.is_published ? 'Đã xuất bản' : 'Nháp'}
-        </span>
+        </button>
       </td>
       <td style="text-align:center;">${sectionCountByExam[exam.id] || 0}</td>
       <td>${formatDateVN(exam.created_at)}</td>
@@ -103,12 +105,38 @@ function renderExamAdminTable(exams, sectionCountByExam) {
   `).join('');
 }
 
+// Toggle nhanh is_published — dùng ở cả bảng danh sách lẫn màn chi tiết.
+// Không validate gì thêm (không như submitExamForm), vì đây chỉ đổi 1 cột
+// duy nhất, không đụng tới title/exam_type/pass_threshold_pct.
+async function toggleExamPublished(examId, currentValue) {
+  try {
+    const headers = await sbAuthedHeaders();
+    const res = await fetch(`${ADMIN_CONFIG.supabaseUrl}/rest/v1/exams?id=eq.${examId}`, {
+      method: 'PATCH', headers,
+      body: JSON.stringify({ is_published: !currentValue, updated_at: new Date().toISOString() })
+    });
+    if (!res.ok) throw new Error(`Lỗi đổi trạng thái xuất bản (HTTP ${res.status})`);
+
+    await loadExamAdminList();
+    // Nếu đang mở đúng đề thi này ở màn chi tiết, cập nhật lại luôn phần hiển thị ở đó.
+    if (examDetailState.examId === examId) {
+      const exam = examAdminState.rows.find(r => r.id === examId);
+      examDetailState.exam = exam || examDetailState.exam;
+      renderExamDetailHeader();
+    }
+  } catch (err) {
+    console.error('Lỗi đổi trạng thái xuất bản:', err);
+    alert('Có lỗi khi đổi trạng thái xuất bản. Vui lòng thử lại.');
+  }
+}
+
 // ── Chi tiết đề thi (view 2) — quản lý section ─────────────────────────
 // CHƯA làm subsection / chọn câu hỏi (bước sau).
 const examDetailState = {
   examId: null,
   exam: null,
-  sections: []
+  sections: [],
+  subsectionsBySection: {} // { [sectionId]: [{id, instruction_text, order_index, questionCount}] }
 };
 
 function showExamListView() {
@@ -129,17 +157,26 @@ async function openExamDetail(examId) {
   // không cần fetch lại riêng, chỉ fetch phần sections.
   const exam = examAdminState.rows.find(r => r.id === examId) || null;
   examDetailState.exam = exam;
+  renderExamDetailHeader();
 
+  await loadExamSections();
+}
+
+function renderExamDetailHeader() {
+  const exam = examDetailState.exam;
   const titleEl = document.getElementById('exam-detail-title');
   const subEl = document.getElementById('exam-detail-sub');
   if (titleEl) titleEl.textContent = exam ? exam.title : 'Đề thi';
   if (subEl) {
-    subEl.textContent = exam
-      ? `Loại: ${exam.exam_type || '—'} · Ngưỡng đạt: ${exam.pass_threshold_pct}% · ${exam.is_published ? 'Đã xuất bản' : 'Nháp'}`
-      : '';
+    subEl.innerHTML = exam ? `
+      Loại: ${escHtml(exam.exam_type || '—')} · Ngưỡng đạt: ${exam.pass_threshold_pct}% ·
+      <button type="button" class="exam-status-badge ${exam.is_published ? 'is-published' : 'is-draft'}"
+        onclick="toggleExamPublished('${escHtml(exam.id)}', ${exam.is_published})"
+        title="Bấm để ${exam.is_published ? 'chuyển về nháp' : 'xuất bản'}">
+        ${exam.is_published ? 'Đã xuất bản' : 'Nháp'}
+      </button>
+    ` : '';
   }
-
-  await loadExamSections();
 }
 
 async function loadExamSections() {
@@ -157,12 +194,56 @@ async function loadExamSections() {
 
     examDetailState.sections = await res.json();
     await fetchSkillsList(); // đảm bảo cache tên kỹ năng sẵn có để hiển thị
+    await loadSubsectionsForSections(headers);
     renderExamSectionsList();
     updateAddSectionButtonState();
   } catch (err) {
     console.error('Lỗi tải danh sách phần thi:', err);
     listEl.innerHTML = '<div class="empty-state">Có lỗi khi tải danh sách phần thi.</div>';
   }
+}
+
+// Nạp toàn bộ subsection của các section thuộc đề thi này (1 request, lọc
+// theo exam_section_id=in.(...)), rồi đếm số câu hỏi mỗi subsection bằng
+// 1 request phụ tới exam_questions (cùng cách đếm client-side như "Số
+// section" ở bảng danh sách — đủ dùng ở quy mô admin thao tác thủ công).
+async function loadSubsectionsForSections(headers) {
+  examDetailState.subsectionsBySection = {};
+
+  const sectionIds = examDetailState.sections.map(s => s.id);
+  if (!sectionIds.length) return;
+
+  const subsRes = await fetch(
+    `${ADMIN_CONFIG.supabaseUrl}/rest/v1/exam_subsections?exam_section_id=in.(${sectionIds.join(',')})&select=id,exam_section_id,instruction_text,order_index&order=order_index.asc`,
+    { headers }
+  );
+  if (!subsRes.ok) throw new Error(`Lỗi tải danh sách dạng bài (HTTP ${subsRes.status})`);
+  const subsections = await subsRes.json();
+
+  const subsectionIds = subsections.map(s => s.id);
+  let questionCountBySubsection = {};
+  if (subsectionIds.length) {
+    const qRes = await fetch(
+      `${ADMIN_CONFIG.supabaseUrl}/rest/v1/exam_questions?exam_subsection_id=in.(${subsectionIds.join(',')})&select=exam_subsection_id`,
+      { headers }
+    );
+    if (qRes.ok) {
+      const rows = await qRes.json();
+      rows.forEach(r => {
+        questionCountBySubsection[r.exam_subsection_id] = (questionCountBySubsection[r.exam_subsection_id] || 0) + 1;
+      });
+    } else {
+      console.error('Lỗi đếm câu hỏi theo dạng bài:', qRes.status);
+    }
+  }
+
+  subsections.forEach(sub => {
+    sub.questionCount = questionCountBySubsection[sub.id] || 0;
+    if (!examDetailState.subsectionsBySection[sub.exam_section_id]) {
+      examDetailState.subsectionsBySection[sub.exam_section_id] = [];
+    }
+    examDetailState.subsectionsBySection[sub.exam_section_id].push(sub);
+  });
 }
 
 function skillNameById(skillId) {
@@ -203,6 +284,55 @@ function renderExamSectionsList() {
             <i class="ti ti-trash"></i>
           </button>
         </div>
+      </div>
+
+      <div style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border-md);">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+          <span style="font-size:13px; font-weight:600; color:var(--ink-soft);">Dạng bài</span>
+          <button type="button" class="btn btn-outline" style="padding:4px 10px; font-size:12px;"
+            onclick="openSubsectionForm('${escHtml(sec.id)}')">
+            <i class="ti ti-plus"></i> Thêm dạng bài
+          </button>
+        </div>
+        ${renderSubsectionsForSection(sec.id)}
+      </div>
+    </div>
+  `).join('');
+}
+
+function renderSubsectionsForSection(sectionId) {
+  const subs = examDetailState.subsectionsBySection[sectionId] || [];
+  if (!subs.length) {
+    return '<div class="empty-state" style="padding:10px 0;">Chưa có dạng bài nào trong phần này.</div>';
+  }
+
+  return subs.map((sub, idx) => `
+    <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; padding:8px 0; ${idx > 0 ? 'border-top:1px solid var(--border-md);' : ''}">
+      <div style="min-width:0;">
+        <div style="font-size:13px;">${escHtml(truncateText(sub.instruction_text, 80))}</div>
+        <div style="font-size:12px; color:var(--ink-soft);">${sub.questionCount} câu hỏi đã chọn</div>
+        <!-- TODO: sắp xếp thứ tự câu hỏi trong subsection, để bổ sung sau.
+             Sẽ cần: (1) fetch exam_questions join question_bank theo
+             order_index, (2) UI danh sách rút gọn từng câu, (3) nút ▲▼
+             hoán đổi order_index — giống hệt pattern moveExamSubsection(). -->
+      </div>
+      <div style="display:flex; align-items:center; gap:4px; flex-shrink:0;">
+        <button type="button" class="admin-row-action-btn" title="Chọn câu hỏi"
+          onclick="openQuestionPicker('${escHtml(sub.id)}')">
+          <i class="ti ti-list-check"></i>
+        </button>
+        <button type="button" class="admin-row-action-btn" title="Đưa lên trên"
+          onclick="moveExamSubsection('${escHtml(sub.id)}', -1)" ${idx === 0 ? 'disabled' : ''}>
+          <i class="ti ti-chevron-up"></i>
+        </button>
+        <button type="button" class="admin-row-action-btn" title="Đưa xuống dưới"
+          onclick="moveExamSubsection('${escHtml(sub.id)}', 1)" ${idx === subs.length - 1 ? 'disabled' : ''}>
+          <i class="ti ti-chevron-down"></i>
+        </button>
+        <button type="button" class="admin-row-action-btn" title="Xóa dạng bài"
+          onclick="deleteExamSubsection('${escHtml(sub.id)}')" style="color:var(--vermillion);">
+          <i class="ti ti-trash"></i>
+        </button>
       </div>
     </div>
   `).join('');
@@ -373,6 +503,133 @@ function onSectionSkillChange() {
   if (skill && titleInput) titleInput.value = skill.name;
 }
 
+// ── Đổi thứ tự dạng bài (▲▼) trong cùng 1 section ──────────────────
+async function moveExamSubsection(subsectionId, direction) {
+  // Tìm subsection đang thao tác thuộc section nào để lấy đúng mảng thứ tự.
+  const sectionId = Object.keys(examDetailState.subsectionsBySection)
+    .find(sid => examDetailState.subsectionsBySection[sid].some(s => s.id === subsectionId));
+  if (!sectionId) return;
+
+  const subs = examDetailState.subsectionsBySection[sectionId];
+  const idx = subs.findIndex(s => s.id === subsectionId);
+  const targetIdx = idx + direction;
+  if (targetIdx < 0 || targetIdx >= subs.length) return;
+
+  const current = subs[idx];
+  const target = subs[targetIdx];
+
+  try {
+    const headers = await sbAuthedHeaders();
+    await Promise.all([
+      fetch(`${ADMIN_CONFIG.supabaseUrl}/rest/v1/exam_subsections?id=eq.${current.id}`, {
+        method: 'PATCH', headers, body: JSON.stringify({ order_index: target.order_index })
+      }),
+      fetch(`${ADMIN_CONFIG.supabaseUrl}/rest/v1/exam_subsections?id=eq.${target.id}`, {
+        method: 'PATCH', headers, body: JSON.stringify({ order_index: current.order_index })
+      })
+    ]);
+    await loadExamSections();
+  } catch (err) {
+    console.error('Lỗi đổi thứ tự dạng bài:', err);
+    alert('Có lỗi khi đổi thứ tự dạng bài. Vui lòng thử lại.');
+  }
+}
+
+// ── Xóa subsection — CASCADE xóa cả exam_questions bên trong ──────────
+async function deleteExamSubsection(subsectionId) {
+  const confirmed = confirm(
+    'Xóa dạng bài này sẽ xóa CẢ các câu hỏi đã gắn bên trong (không thể khôi phục). Bạn có chắc chắn muốn xóa?'
+  );
+  if (!confirmed) return;
+
+  try {
+    const headers = await sbAuthedHeaders();
+    const res = await fetch(`${ADMIN_CONFIG.supabaseUrl}/rest/v1/exam_subsections?id=eq.${subsectionId}`, {
+      method: 'DELETE', headers
+    });
+    if (!res.ok) throw new Error(`Lỗi xóa dạng bài (HTTP ${res.status})`);
+
+    await loadExamSections();
+  } catch (err) {
+    console.error('Lỗi xóa dạng bài:', err);
+    alert('Có lỗi khi xóa dạng bài. Vui lòng thử lại.');
+  }
+}
+
+// ── Form tạo dạng bài (subsection) ─────────────────────────────────
+// Bước hiện tại: CHỈ tạo mới (chưa làm sửa, chỉ xóa + đổi thứ tự) —
+// giống đúng pattern của form section.
+const subsectionFormState = { targetSectionId: null };
+
+function openSubsectionForm(sectionId) {
+  subsectionFormState.targetSectionId = sectionId;
+
+  const form = document.getElementById('subsection-form');
+  if (form) form.reset();
+  document.getElementById('subsection-form-error').textContent = '';
+
+  document.getElementById('subsection-form-overlay').style.display = 'block';
+  document.getElementById('subsection-form-panel').style.display = 'flex';
+}
+
+function closeSubsectionForm() {
+  document.getElementById('subsection-form-overlay').style.display = 'none';
+  document.getElementById('subsection-form-panel').style.display = 'none';
+  subsectionFormState.targetSectionId = null;
+}
+
+async function submitSubsectionForm(e) {
+  e.preventDefault();
+
+  const errorEl = document.getElementById('subsection-form-error');
+  const submitBtn = document.getElementById('subsection-form-submit-btn');
+  errorEl.textContent = '';
+
+  const instructionText = document.getElementById('subsection-instruction').value.trim();
+
+  if (!instructionText) {
+    errorEl.textContent = 'Vui lòng nhập hướng dẫn làm bài cho dạng bài này.';
+    return;
+  }
+  if (!subsectionFormState.targetSectionId) {
+    errorEl.textContent = 'Không xác định được phần thi để thêm dạng bài. Vui lòng thử lại.';
+    return;
+  }
+
+  submitBtn.disabled = true;
+  const originalText = submitBtn.innerHTML;
+  submitBtn.innerHTML = 'Đang lưu...';
+
+  try {
+    const headers = await sbAuthedHeaders({ 'Prefer': 'return=representation' });
+    const existingSubs = examDetailState.subsectionsBySection[subsectionFormState.targetSectionId] || [];
+
+    const body = JSON.stringify({
+      exam_section_id: subsectionFormState.targetSectionId,
+      instruction_text: instructionText,
+      order_index: existingSubs.length // thêm vào cuối danh sách hiện có của section đó
+    });
+
+    const res = await fetch(`${ADMIN_CONFIG.supabaseUrl}/rest/v1/exam_subsections`, {
+      method: 'POST', headers, body
+    });
+
+    if (!res.ok) {
+      const errBody = await res.json().catch(() => null);
+      throw new Error(errBody?.message || `Lỗi lưu dạng bài (HTTP ${res.status})`);
+    }
+
+    await loadExamSections();
+    closeSubsectionForm();
+  } catch (err) {
+    console.error('Lỗi lưu dạng bài:', err);
+    errorEl.textContent = err?.message || 'Có lỗi khi lưu dạng bài. Vui lòng thử lại.';
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.innerHTML = originalText;
+  }
+}
+
 // ── Form tạo / sửa thông tin đề thi ─────────────────────────────────
 const examFormState = {
   mode: 'create',   // 'create' | 'edit'
@@ -501,6 +758,183 @@ async function submitExamForm(e) {
 // Gắn sự kiện cho form — gọi 1 lần ngay sau khi fragment được inject
 // (không thể addEventListener lúc DOMContentLoaded vì lúc đó form chưa tồn
 // tại trong DOM, nó chỉ có sau khi ensureExamsFragmentLoaded() chạy xong).
+// ── Modal chọn câu hỏi cho 1 dạng bài (exam_questions) ───────────────
+const questionPickerState = {
+  subsectionId: null,
+  skillId: null,
+  allQuestions: [],       // toàn bộ câu hỏi của đúng skill_id (question_bank)
+  existingIds: new Set(), // question_id đã có sẵn trong exam_questions của subsection này (lúc mở modal)
+  selectedIds: new Set()  // trạng thái tick hiện tại trên UI (thay đổi theo checkbox)
+};
+
+// Tìm section (id) đang chứa subsection này — dò qua subsectionsBySection,
+// vì subsection không lưu trực tiếp thông tin section trong state hiển thị.
+function findSectionIdForSubsection(subsectionId) {
+  return Object.keys(examDetailState.subsectionsBySection)
+    .find(sid => examDetailState.subsectionsBySection[sid].some(s => s.id === subsectionId));
+}
+
+async function openQuestionPicker(subsectionId) {
+  const sectionId = findSectionIdForSubsection(subsectionId);
+  const section = examDetailState.sections.find(s => s.id === sectionId);
+  if (!section) {
+    alert('Không xác định được kỹ năng của phần thi chứa dạng bài này.');
+    return;
+  }
+
+  questionPickerState.subsectionId = subsectionId;
+  questionPickerState.skillId = section.skill_id;
+  questionPickerState.allQuestions = [];
+  questionPickerState.existingIds = new Set();
+  questionPickerState.selectedIds = new Set();
+
+  document.getElementById('question-picker-search').value = '';
+  document.getElementById('question-picker-error').textContent = '';
+  document.getElementById('question-picker-skill-hint').textContent =
+    `Chỉ hiện câu hỏi thuộc kỹ năng: ${skillNameById(section.skill_id)}`;
+  document.getElementById('question-picker-list').innerHTML = '<div class="empty-state">Đang tải câu hỏi...</div>';
+
+  document.getElementById('question-picker-overlay').style.display = 'block';
+  document.getElementById('question-picker-panel').style.display = 'flex';
+
+  try {
+    const headers = await sbAuthedHeaders();
+
+    const [questionsRes, existingRes] = await Promise.all([
+      fetch(`${ADMIN_CONFIG.supabaseUrl}/rest/v1/question_bank?skill_id=eq.${section.skill_id}&select=id,question_text,correct_answer,explanation,audio_url&order=created_at.desc`, { headers }),
+      fetch(`${ADMIN_CONFIG.supabaseUrl}/rest/v1/exam_questions?exam_subsection_id=eq.${subsectionId}&select=question_id`, { headers })
+    ]);
+
+    if (!questionsRes.ok) throw new Error(`Lỗi tải ngân hàng câu hỏi (HTTP ${questionsRes.status})`);
+    if (!existingRes.ok) throw new Error(`Lỗi tải câu hỏi đã chọn (HTTP ${existingRes.status})`);
+
+    questionPickerState.allQuestions = await questionsRes.json();
+    const existingRows = await existingRes.json();
+    questionPickerState.existingIds = new Set(existingRows.map(r => r.question_id));
+    questionPickerState.selectedIds = new Set(questionPickerState.existingIds); // tick sẵn câu đã có
+
+    renderQuestionPickerList('');
+  } catch (err) {
+    console.error('Lỗi mở modal chọn câu hỏi:', err);
+    document.getElementById('question-picker-list').innerHTML =
+      '<div class="empty-state">Có lỗi khi tải câu hỏi.</div>';
+  }
+}
+
+function closeQuestionPicker() {
+  document.getElementById('question-picker-overlay').style.display = 'none';
+  document.getElementById('question-picker-panel').style.display = 'none';
+}
+
+function renderQuestionPickerList(keyword) {
+  const listEl = document.getElementById('question-picker-list');
+  if (!listEl) return;
+
+  const kw = (keyword || '').trim().toLowerCase();
+  const rows = kw
+    ? questionPickerState.allQuestions.filter(q => stripHtml(q.question_text).toLowerCase().includes(kw))
+    : questionPickerState.allQuestions;
+
+  if (!rows.length) {
+    listEl.innerHTML = '<div class="empty-state">Không tìm thấy câu hỏi phù hợp.</div>';
+    return;
+  }
+
+  listEl.innerHTML = rows.map(q => `
+    <label class="question-picker-row">
+      <input type="checkbox" data-question-id="${escHtml(q.id)}"
+        ${questionPickerState.selectedIds.has(q.id) ? 'checked' : ''}
+        onchange="toggleQuestionPickerSelect('${escHtml(q.id)}', this.checked)" />
+      <div style="min-width:0;">
+        <div style="font-size:13px;">${escHtml(truncateText(stripHtml(q.question_text), 90))}</div>
+        <div style="font-size:12px; color:var(--ink-soft); margin-top:2px;">
+          Đáp án đúng: ${escHtml(truncateText(String(q.correct_answer || '—'), 40))}
+        </div>
+        <div class="question-picker-meta">
+          <span class="question-picker-tag ${q.explanation ? 'has-feedback' : ''}">
+            ${q.explanation ? 'Có feedback' : 'Không feedback'}
+          </span>
+          <span class="question-picker-tag ${q.audio_url ? 'has-audio' : ''}">
+            ${q.audio_url ? 'Có audio' : 'Không audio'}
+          </span>
+        </div>
+      </div>
+    </label>
+  `).join('');
+}
+
+function toggleQuestionPickerSelect(questionId, isChecked) {
+  if (isChecked) questionPickerState.selectedIds.add(questionId);
+  else questionPickerState.selectedIds.delete(questionId);
+}
+
+// So sánh selectedIds (trạng thái tick hiện tại) với existingIds (trạng
+// thái lúc mở modal) -> chỉ INSERT câu mới tick, chỉ DELETE câu bị bỏ tick,
+// câu không đổi thì bỏ qua hoàn toàn (không đụng vào order_index/points
+// đã có của chúng).
+async function submitQuestionPicker() {
+  const errorEl = document.getElementById('question-picker-error');
+  const submitBtn = document.getElementById('question-picker-submit-btn');
+  errorEl.textContent = '';
+
+  const toAdd = [...questionPickerState.selectedIds].filter(id => !questionPickerState.existingIds.has(id));
+  const toRemove = [...questionPickerState.existingIds].filter(id => !questionPickerState.selectedIds.has(id));
+
+  if (!toAdd.length && !toRemove.length) {
+    closeQuestionPicker();
+    return;
+  }
+
+  submitBtn.disabled = true;
+  const originalText = submitBtn.innerHTML;
+  submitBtn.innerHTML = 'Đang lưu...';
+
+  try {
+    const headers = await sbAuthedHeaders({ 'Prefer': 'return=representation' });
+    const subsectionId = questionPickerState.subsectionId;
+
+    // order_index cho câu mới nối tiếp sau số câu đang có sẵn (giữ nguyên
+    // câu cũ, không tính lại toàn bộ thứ tự).
+    const existingCount = questionPickerState.existingIds.size;
+
+    if (toAdd.length) {
+      const insertBody = toAdd.map((qid, i) => ({
+        exam_subsection_id: subsectionId,
+        question_id: qid,
+        order_index: existingCount + i,
+        points: 1
+      }));
+      const insertRes = await fetch(`${ADMIN_CONFIG.supabaseUrl}/rest/v1/exam_questions`, {
+        method: 'POST', headers, body: JSON.stringify(insertBody)
+      });
+      if (!insertRes.ok) {
+        const errBody = await insertRes.json().catch(() => null);
+        throw new Error(errBody?.message || `Lỗi thêm câu hỏi (HTTP ${insertRes.status})`);
+      }
+    }
+
+    if (toRemove.length) {
+      const removeRes = await fetch(
+        `${ADMIN_CONFIG.supabaseUrl}/rest/v1/exam_questions?exam_subsection_id=eq.${subsectionId}&question_id=in.(${toRemove.join(',')})`,
+        { method: 'DELETE', headers }
+      );
+      if (!removeRes.ok) {
+        const errBody = await removeRes.json().catch(() => null);
+        throw new Error(errBody?.message || `Lỗi bỏ câu hỏi (HTTP ${removeRes.status})`);
+      }
+    }
+
+    closeQuestionPicker();
+    await loadExamSections(); // nạp lại để cập nhật số đếm "N câu hỏi đã chọn"
+  } catch (err) {
+    console.error('Lỗi lưu danh sách câu hỏi:', err);
+    errorEl.textContent = err?.message || 'Có lỗi khi lưu danh sách câu hỏi. Vui lòng thử lại.';
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.innerHTML = originalText;
+  }
+}
+
 function initExamFormControls() {
   document.getElementById('exam-form-close-btn')?.addEventListener('click', closeExamForm);
   document.getElementById('exam-form-cancel-btn')?.addEventListener('click', closeExamForm);
@@ -518,4 +952,17 @@ function initExamFormControls() {
   document.getElementById('section-form')?.addEventListener('submit', submitSectionForm);
   document.getElementById('section-skill')?.addEventListener('change', onSectionSkillChange);
   document.getElementById('section-title')?.addEventListener('input', () => { sectionTitleTouchedByUser = true; });
+
+  document.getElementById('subsection-form-close-btn')?.addEventListener('click', closeSubsectionForm);
+  document.getElementById('subsection-form-cancel-btn')?.addEventListener('click', closeSubsectionForm);
+  document.getElementById('subsection-form-overlay')?.addEventListener('click', closeSubsectionForm);
+  document.getElementById('subsection-form')?.addEventListener('submit', submitSubsectionForm);
+
+  document.getElementById('question-picker-close-btn')?.addEventListener('click', closeQuestionPicker);
+  document.getElementById('question-picker-cancel-btn')?.addEventListener('click', closeQuestionPicker);
+  document.getElementById('question-picker-overlay')?.addEventListener('click', closeQuestionPicker);
+  document.getElementById('question-picker-submit-btn')?.addEventListener('click', submitQuestionPicker);
+  document.getElementById('question-picker-search')?.addEventListener('input', (e) => {
+    renderQuestionPickerList(e.target.value);
+  });
 }

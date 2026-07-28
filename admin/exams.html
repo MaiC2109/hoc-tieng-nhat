@@ -159,3 +159,66 @@
     </form>
   </div>
 </div>
+
+<!-- ── PANEL TRƯỢT: TẠO DẠNG BÀI (bảng exam_subsections) ──
+     Chưa hỗ trợ sửa — chỉ tạo mới + xóa + đổi thứ tự, giống pattern section. -->
+<div id="subsection-form-overlay" class="admin-overlay" style="display:none;"></div>
+
+<div id="subsection-form-panel" class="admin-slide-panel" style="display:none;">
+  <div class="admin-slide-panel-header">
+    <h3>Thêm dạng bài</h3>
+    <button type="button" class="admin-slide-close-btn" id="subsection-form-close-btn">
+      <i class="ti ti-x"></i>
+    </button>
+  </div>
+
+  <div class="admin-slide-panel-body">
+    <form id="subsection-form">
+      <div class="admin-form-group">
+        <label for="subsection-instruction">Hướng dẫn làm bài (instruction)</label>
+        <textarea id="subsection-instruction" class="admin-select" rows="4"
+          placeholder="Ví dụ: 問題1　＿＿＿の　ことばは　ひらがなで　どう　かきますか。１・２・３・４から　いちばん　いい　ものを　一つ　えらんで　ください。"></textarea>
+      </div>
+
+      <div id="subsection-form-error" class="admin-login-error"></div>
+
+      <div class="admin-form-actions">
+        <button type="button" class="btn btn-outline" id="subsection-form-cancel-btn">Hủy</button>
+        <button type="submit" class="btn btn-primary" id="subsection-form-submit-btn">Lưu dạng bài</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ── MODAL: CHỌN CÂU HỎI CHO 1 DẠNG BÀI (exam_questions) ──
+     Rộng hơn slide panel thường (dùng class admin-slide-panel-wide),
+     vì cần hiện đủ nội dung câu hỏi + các badge trạng thái. -->
+<div id="question-picker-overlay" class="admin-overlay" style="display:none;"></div>
+
+<div id="question-picker-panel" class="admin-slide-panel admin-slide-panel-wide" style="display:none;">
+  <div class="admin-slide-panel-header">
+    <h3>Chọn câu hỏi</h3>
+    <button type="button" class="admin-slide-close-btn" id="question-picker-close-btn">
+      <i class="ti ti-x"></i>
+    </button>
+  </div>
+
+  <div class="admin-slide-panel-body">
+    <div class="admin-form-group">
+      <input type="text" id="question-picker-search" class="admin-select" placeholder="Tìm theo nội dung câu hỏi..." />
+    </div>
+
+    <p id="question-picker-skill-hint" class="admin-hint-text"></p>
+
+    <div id="question-picker-list" style="max-height:52vh; overflow-y:auto; margin-top:8px;">
+      <div class="empty-state">Đang tải câu hỏi...</div>
+    </div>
+
+    <div id="question-picker-error" class="admin-login-error"></div>
+  </div>
+
+  <div class="admin-form-actions" style="padding:14px 22px; border-top:1px solid var(--border);">
+    <button type="button" class="btn btn-outline" id="question-picker-cancel-btn">Hủy</button>
+    <button type="button" class="btn btn-primary" id="question-picker-submit-btn">Thêm vào phần này</button>
+  </div>
+</div>

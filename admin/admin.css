@@ -1100,8 +1100,22 @@ body {
 .admin-clickable-row { cursor: pointer; }
 .admin-clickable-row:hover { background: var(--paper-warm); }
 
-.admin-row-action-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+/* Nút ▲▼/xóa trong khu vực section/subsection của module Đề thi — admin.css
+   gốc chỉ có sẵn style disabled scoped cho .admin-pagination-controls,
+   nên cần thêm riêng cho #exam-sections-list (không lặp lại y nguyên rule
+   gốc, chỉ mở rộng phạm vi áp dụng sang khu vực mới). */
+#exam-sections-list .admin-row-action-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
 .btn:disabled { opacity: 0.45; cursor: not-allowed; background: var(--paper-warm); color: var(--ink-soft); border-color: var(--border-md); }
 .btn:disabled:hover { background: var(--paper-warm); }
+
+.admin-slide-panel-wide { width: 640px; }
+
+.question-picker-row { display:flex; align-items:flex-start; gap:10px; padding:10px 4px; border-bottom:1px solid var(--border-md); }
+.question-picker-row:last-child { border-bottom:none; }
+.question-picker-row input[type="checkbox"] { margin-top:3px; width:auto; flex-shrink:0; }
+.question-picker-meta { display:flex; flex-wrap:wrap; gap:6px; margin-top:4px; }
+.question-picker-tag { font-size:11px; padding:2px 8px; border-radius:999px; background: var(--paper-warm); color: var(--ink-soft); }
+.question-picker-tag.has-feedback { background:#e1f5ee; color:#0f6e56; }
+.question-picker-tag.has-audio { background:#eaf1fb; color:#1f5aa8; }
 
