@@ -109,21 +109,12 @@
         <input type="number" id="exam-pass-threshold" class="admin-select" min="0" max="100" step="1" value="70" />
       </div>
 
-      <div class="admin-form-group admin-form-row" style="align-items:center; justify-content:space-between;">
-        <div>
-          <label style="margin:0;">Trạng thái xuất bản</label>
-          <p class="admin-hint-text" style="margin-top:-2px;">Đề nháp chỉ admin xem được, chưa hiện với học viên.</p>
-        </div>
-        <button type="button" class="btn btn-outline" id="exam-publish-toggle-btn" data-published="false">
-          Xuất bản
-        </button>
-      </div>
-
       <div id="exam-form-error" class="admin-login-error"></div>
 
       <div class="admin-form-actions">
         <button type="button" class="btn btn-outline" id="exam-form-cancel-btn">Hủy</button>
-        <button type="submit" class="btn btn-primary" id="exam-form-submit-btn">Lưu đề thi</button>
+        <button type="submit" class="btn btn-outline" id="exam-form-draft-btn">Draft</button>
+        <button type="submit" class="btn btn-primary" id="exam-form-publish-btn">Publish</button>
       </div>
     </form>
   </div>
