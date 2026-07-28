@@ -47,7 +47,7 @@ async function loadExamsSection() {
 async function loadExamAdminList() {
   const tbody = document.getElementById('exam-table-body');
   if (!tbody) return;
-  tbody.innerHTML = '<tr><td colspan="5"><div class="empty-state">Đang tải dữ liệu...</div></td></tr>';
+  tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state">Đang tải dữ liệu...</div></td></tr>';
 
   try {
     const headers = await sbAuthedHeaders();
@@ -75,7 +75,7 @@ async function loadExamAdminList() {
     renderExamAdminTable(exams, sectionCountByExam);
   } catch (err) {
     console.error('Lỗi tải danh sách đề thi:', err);
-    tbody.innerHTML = '<tr><td colspan="5"><div class="empty-state">Có lỗi khi tải danh sách đề thi.</div></td></tr>';
+    tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state">Có lỗi khi tải danh sách đề thi.</div></td></tr>';
   }
 }
 
@@ -84,7 +84,7 @@ function renderExamAdminTable(exams, sectionCountByExam) {
   if (!tbody) return;
 
   if (!exams.length) {
-    tbody.innerHTML = '<tr><td colspan="5"><div class="empty-state">Chưa có đề thi nào. Bấm "Tạo đề mới" để bắt đầu.</div></td></tr>';
+    tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state">Chưa có đề thi nào. Bấm "Tạo đề mới" để bắt đầu.</div></td></tr>';
     return;
   }
 
@@ -93,41 +93,20 @@ function renderExamAdminTable(exams, sectionCountByExam) {
       <td>${escHtml(exam.title)}</td>
       <td>${escHtml(exam.exam_type || '—')}</td>
       <td>
-        <button type="button" class="exam-status-badge ${exam.is_published ? 'is-published' : 'is-draft'}"
-          onclick="event.stopPropagation(); toggleExamPublished('${escHtml(exam.id)}', ${exam.is_published})"
-          title="Bấm để ${exam.is_published ? 'chuyển về nháp' : 'xuất bản'}">
-          ${exam.is_published ? 'Đã xuất bản' : 'Nháp'}
-        </button>
+        <span class="exam-status-badge ${exam.is_published ? 'is-published' : 'is-draft'}">
+          ${exam.is_published ? 'Published' : 'Draft'}
+        </span>
       </td>
       <td style="text-align:center;">${sectionCountByExam[exam.id] || 0}</td>
       <td>${formatDateVN(exam.created_at)}</td>
+      <td style="text-align:right;">
+        <button type="button" class="admin-row-action-btn" title="Sửa đề thi"
+          onclick="event.stopPropagation(); openExamForm(examAdminState.rows.find(r => r.id === '${escHtml(exam.id)}'))">
+          <i class="ti ti-pencil"></i>
+        </button>
+      </td>
     </tr>
   `).join('');
-}
-
-// Toggle nhanh is_published — dùng ở cả bảng danh sách lẫn màn chi tiết.
-// Không validate gì thêm (không như submitExamForm), vì đây chỉ đổi 1 cột
-// duy nhất, không đụng tới title/exam_type/pass_threshold_pct.
-async function toggleExamPublished(examId, currentValue) {
-  try {
-    const headers = await sbAuthedHeaders();
-    const res = await fetch(`${ADMIN_CONFIG.supabaseUrl}/rest/v1/exams?id=eq.${examId}`, {
-      method: 'PATCH', headers,
-      body: JSON.stringify({ is_published: !currentValue, updated_at: new Date().toISOString() })
-    });
-    if (!res.ok) throw new Error(`Lỗi đổi trạng thái xuất bản (HTTP ${res.status})`);
-
-    await loadExamAdminList();
-    // Nếu đang mở đúng đề thi này ở màn chi tiết, cập nhật lại luôn phần hiển thị ở đó.
-    if (examDetailState.examId === examId) {
-      const exam = examAdminState.rows.find(r => r.id === examId);
-      examDetailState.exam = exam || examDetailState.exam;
-      renderExamDetailHeader();
-    }
-  } catch (err) {
-    console.error('Lỗi đổi trạng thái xuất bản:', err);
-    alert('Có lỗi khi đổi trạng thái xuất bản. Vui lòng thử lại.');
-  }
 }
 
 // ── Chi tiết đề thi (view 2) — quản lý section ─────────────────────────
@@ -166,17 +145,17 @@ function renderExamDetailHeader() {
   const exam = examDetailState.exam;
   const titleEl = document.getElementById('exam-detail-title');
   const subEl = document.getElementById('exam-detail-sub');
+  const editBtn = document.getElementById('exam-detail-edit-btn');
   if (titleEl) titleEl.textContent = exam ? exam.title : 'Đề thi';
   if (subEl) {
     subEl.innerHTML = exam ? `
       Loại: ${escHtml(exam.exam_type || '—')} · Ngưỡng đạt: ${exam.pass_threshold_pct}% ·
-      <button type="button" class="exam-status-badge ${exam.is_published ? 'is-published' : 'is-draft'}"
-        onclick="toggleExamPublished('${escHtml(exam.id)}', ${exam.is_published})"
-        title="Bấm để ${exam.is_published ? 'chuyển về nháp' : 'xuất bản'}">
-        ${exam.is_published ? 'Đã xuất bản' : 'Nháp'}
-      </button>
+      <span class="exam-status-badge ${exam.is_published ? 'is-published' : 'is-draft'}">
+        ${exam.is_published ? 'Published' : 'Draft'}
+      </span>
     ` : '';
   }
+  if (editBtn) editBtn.onclick = () => openExamForm(exam);
 }
 
 async function loadExamSections() {

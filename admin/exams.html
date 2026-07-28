@@ -32,10 +32,11 @@
             <th style="width:130px;">Trạng thái</th>
             <th style="width:100px; text-align:center;">Số section</th>
             <th style="width:110px;">Ngày tạo</th>
+            <th style="width:60px;"></th>
           </tr>
         </thead>
         <tbody id="exam-table-body">
-          <tr><td colspan="5"><div class="empty-state">Đang tải dữ liệu...</div></td></tr>
+          <tr><td colspan="6"><div class="empty-state">Đang tải dữ liệu...</div></td></tr>
         </tbody>
       </table>
     </div>
@@ -52,9 +53,14 @@
     <i class="ti ti-arrow-left"></i> Quay lại danh sách đề thi
   </button>
 
-  <div class="admin-panel-card" style="margin-bottom:16px;">
-    <h3 id="exam-detail-title" style="margin:0 0 4px;">—</h3>
-    <p id="exam-detail-sub" style="margin:0; color:var(--ink-soft); font-size:13px;"></p>
+  <div class="admin-panel-card" style="margin-bottom:16px; display:flex; justify-content:space-between; align-items:flex-start; gap:12px;">
+    <div>
+      <h3 id="exam-detail-title" style="margin:0 0 4px;">—</h3>
+      <p id="exam-detail-sub" style="margin:0; color:var(--ink-soft); font-size:13px;"></p>
+    </div>
+    <button type="button" class="btn btn-outline" id="exam-detail-edit-btn">
+      <i class="ti ti-pencil"></i> Sửa đề thi
+    </button>
   </div>
 
   <div class="admin-vocab-toolbar">

@@ -1093,7 +1093,7 @@ body {
 }
 
 /* ── Module Đề thi (exams) ── */
-.exam-status-badge { font-size: 12px; padding: 2px 10px; border-radius: 999px; font-weight: 500; }
+.exam-status-badge { font-size: 12px; padding: 2px 10px; border-radius: 999px; font-weight: 500; border: none; cursor: pointer; }
 .exam-status-badge.is-draft { background: var(--paper-warm); color: var(--ink-soft); }
 .exam-status-badge.is-published { background: #e1f5ee; color: #0f6e56; }
 
