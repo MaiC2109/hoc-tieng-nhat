@@ -105,13 +105,18 @@
 
       <div class="admin-form-group">
         <label for="exam-pass-threshold">Ngưỡng đạt (%)</label>
+        <p class="admin-hint-text" style="margin-top:-2px;">Phần trăm điểm tối thiểu để được coi là đạt đề thi này.</p>
         <input type="number" id="exam-pass-threshold" class="admin-select" min="0" max="100" step="1" value="70" />
-        <p class="admin-hint-text">Phần trăm điểm tối thiểu để được coi là đạt đề thi này.</p>
       </div>
 
-      <div class="admin-form-group admin-form-row" style="align-items:center; gap:10px;">
-        <input type="checkbox" id="exam-is-published" style="width:auto;" />
-        <label for="exam-is-published" style="margin:0;">Xuất bản đề thi này cho học viên</label>
+      <div class="admin-form-group admin-form-row" style="align-items:center; justify-content:space-between;">
+        <div>
+          <label style="margin:0;">Trạng thái xuất bản</label>
+          <p class="admin-hint-text" style="margin-top:-2px;">Đề nháp chỉ admin xem được, chưa hiện với học viên.</p>
+        </div>
+        <button type="button" class="btn btn-outline" id="exam-publish-toggle-btn" data-published="false">
+          Xuất bản
+        </button>
       </div>
 
       <div id="exam-form-error" class="admin-login-error"></div>

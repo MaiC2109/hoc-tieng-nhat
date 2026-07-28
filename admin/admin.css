@@ -1101,3 +1101,10 @@ body {
 .admin-clickable-row:hover { background: var(--paper-warm); }
 
 .admin-row-action-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.btn:disabled { opacity: 0.45; cursor: not-allowed; background: var(--paper-warm); color: var(--ink-soft); border-color: var(--border-md); }
+.btn:disabled:hover { background: var(--paper-warm); }
+
+#exam-publish-toggle-btn.is-published { background: #e1f5ee; color: #0f6e56; border-color: #0f6e56; }
+#exam-publish-toggle-btn.is-published:hover { background: #cfeee0; }
+

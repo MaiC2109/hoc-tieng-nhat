@@ -384,14 +384,22 @@ function resetExamForm() {
   if (form) form.reset();
   document.getElementById('exam-form-error').textContent = '';
   document.getElementById('exam-pass-threshold').value = 70;
-  document.getElementById('exam-is-published').checked = false;
+  setExamPublishToggle(false);
+}
+
+function setExamPublishToggle(isPublished) {
+  const btn = document.getElementById('exam-publish-toggle-btn');
+  if (!btn) return;
+  btn.dataset.published = String(isPublished);
+  btn.classList.toggle('is-published', isPublished);
+  btn.textContent = isPublished ? 'Đã xuất bản ✓' : 'Xuất bản';
 }
 
 function populateExamFormFromRow(row) {
   document.getElementById('exam-title').value = row.title || '';
   document.getElementById('exam-type').value = row.exam_type || 'full';
   document.getElementById('exam-pass-threshold').value = row.pass_threshold_pct ?? 70;
-  document.getElementById('exam-is-published').checked = !!row.is_published;
+  setExamPublishToggle(!!row.is_published);
 }
 
 // row = null -> mode TẠO MỚI. Truyền row (từ examAdminState.rows) -> mode SỬA.
@@ -434,7 +442,7 @@ async function submitExamForm(e) {
   const title = document.getElementById('exam-title').value.trim();
   const examType = document.getElementById('exam-type').value;
   const passThreshold = parseInt(document.getElementById('exam-pass-threshold').value, 10);
-  const isPublished = document.getElementById('exam-is-published').checked;
+  const isPublished = document.getElementById('exam-publish-toggle-btn').dataset.published === 'true';
 
   if (!title) {
     errorEl.textContent = 'Vui lòng nhập tên đề thi.';
@@ -502,6 +510,10 @@ function initExamFormControls() {
   document.getElementById('exam-form-cancel-btn')?.addEventListener('click', closeExamForm);
   document.getElementById('exam-form-overlay')?.addEventListener('click', closeExamForm);
   document.getElementById('exam-form')?.addEventListener('submit', submitExamForm);
+  document.getElementById('exam-publish-toggle-btn')?.addEventListener('click', () => {
+    const btn = document.getElementById('exam-publish-toggle-btn');
+    setExamPublishToggle(btn.dataset.published !== 'true');
+  });
 
   document.getElementById('exam-detail-back-btn')?.addEventListener('click', () => {
     showExamListView();
