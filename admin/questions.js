@@ -245,7 +245,7 @@ function renderQuestionAdminTable() {
         <td style="text-align:center;">${stt}</td>
         <td>${escHtml(skillName)}</td>
         <td>${escHtml(typeLabel)}</td>
-        <td>${escHtml(truncateText(stripHtml(r.question_text), 50))}</td>
+        <td>${escHtml(truncateText(stripHtml(r.question_text), 50)) || '<span style="color:var(--ink-soft);">[Hình ảnh]</span>'}</td>
         <td style="text-align:center;">${hasFeedback ? '✓' : '—'}</td>
         <td>${escHtml(formatDateVN(r.created_at))}</td>
         <td onclick="event.stopPropagation();" style="text-align:center;">
@@ -907,6 +907,11 @@ function validateAndBuildQuestionPayload() {
   const questionTextEditor = document.getElementById('question-text');
   const questionTextHtml = (questionTextEditor?.innerHTML || '').trim();
   const questionTextPlain = stripHtml(questionTextHtml).trim();
+  // Coi là "có nội dung" nếu còn chữ HOẶC có ít nhất 1 ảnh đã chèn (trường
+  // hợp dùng ảnh thay hoàn toàn cho văn bản — vd hình minh họa Nghe hiểu).
+  // Không dùng questionTextPlain đơn thuần vì stripHtml() xóa luôn thẻ
+  // <img>, sẽ chặn nhầm câu hỏi chỉ có ảnh không có chữ.
+  const questionHasTextOrImage = !!questionTextPlain || /<img\b/i.test(questionTextHtml);
   const explanation = document.getElementById('question-explanation').value.trim();
   const difficulty = document.getElementById('question-difficulty').value;
 
@@ -914,8 +919,8 @@ function validateAndBuildQuestionPayload() {
     errorEl.textContent = 'Vui lòng chọn Kỹ năng.';
     return null;
   }
-  if (!questionTextPlain) {
-    errorEl.textContent = 'Vui lòng nhập nội dung câu hỏi.';
+  if (!questionHasTextOrImage) {
+    errorEl.textContent = 'Vui lòng nhập nội dung câu hỏi (hoặc chèn ảnh thay cho văn bản).';
     return null;
   }
 
@@ -1110,6 +1115,44 @@ function syncRichTextToolbarState() {
   }
 }
 
+// Chèn ảnh thay cho văn bản vào #question-text (dùng cho câu Nghe hiểu cần
+// hình minh họa thay vì mô tả bằng chữ). Copy y hệt pattern
+// uploadAndInsertPassageContentImage() — dùng chung bucket "passage-images"
+// (bucket ảnh dùng chung của cả module, không tạo bucket riêng).
+async function uploadAndInsertQuestionTextImage(file) {
+  const statusEl = document.getElementById('question-text-image-status');
+  const editor = document.getElementById('question-text');
+
+  if (statusEl) { statusEl.textContent = '⏳ Đang tải ảnh lên...'; statusEl.style.color = ''; }
+
+  try {
+    const safeFileName = file.name.replace(/[^\w.\-]/g, '_');
+    const path = `${crypto.randomUUID()}-${safeFileName}`;
+
+    const { error: uploadError } = await supabaseClient
+      .storage
+      .from('passage-images')
+      .upload(path, file, { cacheControl: '3600', upsert: false });
+
+    if (uploadError) throw uploadError;
+
+    const { data: publicUrlData } = supabaseClient.storage.from('passage-images').getPublicUrl(path);
+    const publicUrl = publicUrlData?.publicUrl;
+    if (!publicUrl) throw new Error('Không lấy được public URL sau khi upload ảnh.');
+
+    editor.focus();
+    document.execCommand('insertHTML', false, `<img src="${publicUrl}" alt="" />`);
+
+    if (statusEl) { statusEl.textContent = '✓ Đã chèn ảnh vào nội dung câu hỏi.'; statusEl.style.color = 'var(--success, #2e7d32)'; }
+  } catch (err) {
+    console.error('Lỗi upload ảnh cho nội dung câu hỏi:', err);
+    if (statusEl) {
+      statusEl.textContent = `❌ Chèn ảnh thất bại: ${err?.message || 'Lỗi không xác định'}`;
+      statusEl.style.color = 'var(--vermillion)';
+    }
+  }
+}
+
 // ── Upload audio lên Supabase Storage (bucket exam-audio) ────────────────
 // Dùng thẳng supabaseClient.storage (client đã khởi tạo sẵn trong
 // admin.js) thay vì tự gọi fetch REST — đây là cách chuẩn của supabase-js
@@ -1179,6 +1222,15 @@ function initQuestionFormControls() {
   document.getElementById('question-text-underline-btn')?.addEventListener('click', () => applyQuestionTextFormat('underline'));
   document.getElementById('question-text')?.addEventListener('keyup', syncRichTextToolbarState);
   document.getElementById('question-text')?.addEventListener('mouseup', syncRichTextToolbarState);
+
+  document.getElementById('question-text-image-btn')?.addEventListener('click', () => {
+    document.getElementById('question-text-image-file')?.click();
+  });
+  document.getElementById('question-text-image-file')?.addEventListener('change', (e) => {
+    const file = e.target.files?.[0];
+    if (file) uploadAndInsertQuestionTextImage(file);
+    e.target.value = ''; // cho phép chọn lại đúng file đó lần nữa nếu cần
+  });
 
   document.getElementById('question-audio-file')?.addEventListener('change', (e) => {
     const file = e.target.files?.[0];

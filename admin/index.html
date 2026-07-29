@@ -529,8 +529,13 @@
           <div class="admin-richtext-toolbar">
             <button type="button" class="admin-richtext-btn" id="question-text-bold-btn" title="In đậm" style="font-weight:700;">B</button>
             <button type="button" class="admin-richtext-btn" id="question-text-underline-btn" title="Gạch chân" style="text-decoration:underline;">U</button>
+            <button type="button" class="admin-richtext-btn" id="question-text-image-btn" title="Chèn ảnh (dùng cho Nghe hiểu, thay cho văn bản)">
+              <i class="ti ti-photo"></i>
+            </button>
+            <input type="file" id="question-text-image-file" accept="image/*" style="display:none;" />
           </div>
-          <div id="question-text" class="admin-richtext-editor admin-select" contenteditable="true" data-placeholder="Nhập nội dung câu hỏi..."></div>
+          <div id="question-text" class="admin-richtext-editor admin-select" contenteditable="true" data-placeholder="Nhập nội dung câu hỏi... hoặc chèn ảnh thay cho văn bản (vd hình minh họa cho Nghe hiểu)"></div>
+          <p class="admin-hint-text" id="question-text-image-status"></p>
         </div>
 
         <!-- Khối riêng cho multiple_choice — ẩn/hiện bằng JS theo #question-type -->
