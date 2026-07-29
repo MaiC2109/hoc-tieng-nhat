@@ -186,6 +186,17 @@
           placeholder="Ví dụ: 問題1　＿＿＿の　ことばは　ひらがなで　どう　かきますか。１・２・３・４から　いちばん　いい　ものを　一つ　えらんで　ください。"></textarea>
       </div>
 
+      <!-- Chỉ hiện khi section cha thuộc kỹ năng Nghe hiểu (skill code =
+           'listening') — JS toggle qua toggleSubsectionAudioVisibility(). -->
+      <div class="admin-form-group" id="subsection-audio-group" style="display:none;">
+        <label for="subsection-audio-file">File audio cho dạng bài này</label>
+        <input type="file" id="subsection-audio-file" accept="audio/*" />
+        <p class="admin-hint-text" id="subsection-audio-status"></p>
+        <input type="hidden" id="subsection-audio-url" value="" />
+        <audio id="subsection-audio-preview" controls style="display:none; margin-top:8px; width:100%;"></audio>
+        <p class="admin-hint-text">Nếu cả phần Nghe chỉ dùng 1 audio duy nhất, chỉ cần tạo 1 dạng bài và gom hết câu hỏi vào đây.</p>
+      </div>
+
       <div id="subsection-form-error" class="admin-login-error"></div>
 
       <div class="admin-form-actions">

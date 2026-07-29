@@ -14,6 +14,10 @@
 let examsFragmentLoaded = false;
 const examAdminState = { rows: [] };
 
+// skills.code của kỹ năng Nghe hiểu — xác nhận từ DB thực tế, KHÔNG đoán.
+// Dùng để quyết định có hiện ô upload audio ở form "Thêm dạng bài" hay không.
+const LISTENING_SKILL_CODE = 'listening';
+
 // admin/exams.html chỉ là fragment (không phải trang đứng riêng) — fetch
 // và inject 1 lần duy nhất vào #exams-fragment-mount (đặt sẵn trong
 // index.html, bên trong <section data-section="exams">).
@@ -193,7 +197,7 @@ async function loadSubsectionsForSections(headers) {
   if (!sectionIds.length) return;
 
   const subsRes = await fetch(
-    `${ADMIN_CONFIG.supabaseUrl}/rest/v1/exam_subsections?exam_section_id=in.(${sectionIds.join(',')})&select=id,exam_section_id,instruction_text,order_index&order=order_index.asc`,
+    `${ADMIN_CONFIG.supabaseUrl}/rest/v1/exam_subsections?exam_section_id=in.(${sectionIds.join(',')})&select=id,exam_section_id,instruction_text,audio_url,order_index&order=order_index.asc`,
     { headers }
   );
   if (!subsRes.ok) throw new Error(`Lỗi tải danh sách dạng bài (HTTP ${subsRes.status})`);
@@ -289,7 +293,9 @@ function renderSubsectionsForSection(sectionId) {
     <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; padding:8px 0; ${idx > 0 ? 'border-top:1px solid var(--border-md);' : ''}">
       <div style="min-width:0;">
         <div style="font-size:13px;">${escHtml(truncateText(sub.instruction_text, 80))}</div>
-        <div style="font-size:12px; color:var(--ink-soft);">${sub.questionCount} câu hỏi đã chọn</div>
+        <div style="font-size:12px; color:var(--ink-soft);">
+          ${sub.questionCount} câu hỏi đã chọn${sub.audio_url ? ' · <i class="ti ti-volume" title="Đã có audio"></i> Có audio' : ''}
+        </div>
         <!-- TODO: sắp xếp thứ tự câu hỏi trong subsection, để bổ sung sau.
              Sẽ cần: (1) fetch exam_questions join question_bank theo
              order_index, (2) UI danh sách rút gọn từng câu, (3) nút ▲▼
@@ -538,7 +544,7 @@ async function deleteExamSubsection(subsectionId) {
 // ── Form tạo dạng bài (subsection) ─────────────────────────────────
 // Bước hiện tại: CHỈ tạo mới (chưa làm sửa, chỉ xóa + đổi thứ tự) —
 // giống đúng pattern của form section.
-const subsectionFormState = { targetSectionId: null };
+const subsectionFormState = { targetSectionId: null, audioUploading: false };
 
 function openSubsectionForm(sectionId) {
   subsectionFormState.targetSectionId = sectionId;
@@ -546,9 +552,29 @@ function openSubsectionForm(sectionId) {
   const form = document.getElementById('subsection-form');
   if (form) form.reset();
   document.getElementById('subsection-form-error').textContent = '';
+  resetSubsectionAudioState();
+
+  const section = examDetailState.sections.find(s => s.id === sectionId);
+  const skill = (questionsAdminState.skills || []).find(sk => sk.id === section?.skill_id);
+  toggleSubsectionAudioVisibility(skill?.code === LISTENING_SKILL_CODE);
 
   document.getElementById('subsection-form-overlay').style.display = 'block';
   document.getElementById('subsection-form-panel').style.display = 'flex';
+}
+
+function toggleSubsectionAudioVisibility(shouldShow) {
+  const group = document.getElementById('subsection-audio-group');
+  if (group) group.style.display = shouldShow ? 'block' : 'none';
+}
+
+function resetSubsectionAudioState() {
+  const fileInput = document.getElementById('subsection-audio-file');
+  if (fileInput) fileInput.value = '';
+  document.getElementById('subsection-audio-url').value = '';
+  const statusEl = document.getElementById('subsection-audio-status');
+  if (statusEl) { statusEl.textContent = ''; statusEl.style.color = ''; }
+  const preview = document.getElementById('subsection-audio-preview');
+  if (preview) { preview.style.display = 'none'; preview.removeAttribute('src'); }
 }
 
 function closeSubsectionForm() {
@@ -565,7 +591,12 @@ async function submitSubsectionForm(e) {
   errorEl.textContent = '';
 
   const instructionText = document.getElementById('subsection-instruction').value.trim();
+  const audioUrl = document.getElementById('subsection-audio-url').value || null;
 
+  if (subsectionFormState.audioUploading) {
+    errorEl.textContent = 'File audio đang được tải lên, vui lòng đợi upload xong rồi mới bấm Lưu.';
+    return;
+  }
   if (!instructionText) {
     errorEl.textContent = 'Vui lòng nhập hướng dẫn làm bài cho dạng bài này.';
     return;
@@ -586,6 +617,7 @@ async function submitSubsectionForm(e) {
     const body = JSON.stringify({
       exam_section_id: subsectionFormState.targetSectionId,
       instruction_text: instructionText,
+      audio_url: audioUrl,
       order_index: existingSubs.length // thêm vào cuối danh sách hiện có của section đó
     });
 
@@ -914,6 +946,48 @@ async function submitQuestionPicker() {
   }
 }
 
+// Upload audio cho 1 dạng bài (Mondai) — cùng bucket exam-audio, cùng
+// pattern {uuid}-{filename} như uploadPassageAudioFile() trong questions.js.
+// Copy riêng (không import chung hàm) để không tạo phụ thuộc chéo giữa
+// exams.js và questions.js ngoài các global helper đã thống nhất dùng chung.
+async function uploadSubsectionAudioFile(file) {
+  const statusEl = document.getElementById('subsection-audio-status');
+  const previewEl = document.getElementById('subsection-audio-preview');
+  const hiddenUrlInput = document.getElementById('subsection-audio-url');
+
+  subsectionFormState.audioUploading = true;
+  if (statusEl) { statusEl.textContent = '⏳ Đang tải file audio lên...'; statusEl.style.color = ''; }
+
+  try {
+    const safeFileName = file.name.replace(/[^\w.\-]/g, '_');
+    const path = `${crypto.randomUUID()}-${safeFileName}`;
+
+    const { error: uploadError } = await supabaseClient
+      .storage
+      .from('exam-audio')
+      .upload(path, file, { cacheControl: '3600', upsert: false });
+
+    if (uploadError) throw uploadError;
+
+    const { data: publicUrlData } = supabaseClient.storage.from('exam-audio').getPublicUrl(path);
+    const publicUrl = publicUrlData?.publicUrl;
+    if (!publicUrl) throw new Error('Không lấy được public URL sau khi upload.');
+
+    if (hiddenUrlInput) hiddenUrlInput.value = publicUrl;
+    if (previewEl) { previewEl.src = publicUrl; previewEl.style.display = 'block'; }
+    if (statusEl) { statusEl.textContent = '✓ Đã tải audio lên thành công.'; statusEl.style.color = 'var(--success, #2e7d32)'; }
+  } catch (err) {
+    console.error('Lỗi upload audio cho dạng bài:', err);
+    if (statusEl) {
+      statusEl.textContent = `❌ Tải audio thất bại: ${err?.message || 'Lỗi không xác định'}`;
+      statusEl.style.color = 'var(--vermillion)';
+    }
+    if (hiddenUrlInput) hiddenUrlInput.value = '';
+  } finally {
+    subsectionFormState.audioUploading = false;
+  }
+}
+
 function initExamFormControls() {
   document.getElementById('exam-form-close-btn')?.addEventListener('click', closeExamForm);
   document.getElementById('exam-form-cancel-btn')?.addEventListener('click', closeExamForm);
@@ -936,6 +1010,10 @@ function initExamFormControls() {
   document.getElementById('subsection-form-cancel-btn')?.addEventListener('click', closeSubsectionForm);
   document.getElementById('subsection-form-overlay')?.addEventListener('click', closeSubsectionForm);
   document.getElementById('subsection-form')?.addEventListener('submit', submitSubsectionForm);
+  document.getElementById('subsection-audio-file')?.addEventListener('change', (e) => {
+    const file = e.target.files?.[0];
+    if (file) uploadSubsectionAudioFile(file);
+  });
 
   document.getElementById('question-picker-close-btn')?.addEventListener('click', closeQuestionPicker);
   document.getElementById('question-picker-cancel-btn')?.addEventListener('click', closeQuestionPicker);
