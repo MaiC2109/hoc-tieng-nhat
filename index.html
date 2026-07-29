@@ -65,6 +65,9 @@
         Review
         <span id="review-due-badge" class="nav-badge" style="display:none;"></span>
       </button>
+      <button class="main-nav-btn" data-section="practice" onclick="openPracticeTest()">
+        Luyện đề
+      </button>
       <button class="main-nav-btn" data-section="grammar" disabled>
         Grammar
         <span class="badge-soon">Soon</span>
@@ -168,6 +171,21 @@
       </div>
     </div>
 
+    <div class="section-panel" id="section-practice">
+      <div class="review-page-wrap">
+        <div class="review-page-header">
+          <h2>📝 Luyện đề</h2>
+          <p>Chọn một đề thi để bắt đầu hoặc tiếp tục làm bài.</p>
+        </div>
+        <div id="practice-zone"></div>
+      </div>
+    </div>
+
+    <div class="section-panel" id="section-exam-taking">
+      <div class="review-page-wrap" id="exam-taking-zone">
+      </div>
+    </div>
+
     <div class="section-panel" id="section-grammar">
       <div class="placeholder-panel">
         <div class="placeholder-icon">✍️</div>
@@ -190,6 +208,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="streak-utils.js"></script>
 <script src="app.js"></script>
+<script src="exam.js"></script>
 <script>
   // Toggle dropdown "Account" ở góc phải header — logic UI thuần túy,
   // không liên quan Supabase nên để riêng ở đây thay vì app.js.
