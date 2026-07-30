@@ -1314,3 +1314,168 @@ body {
   justify-content: space-between;
   margin-top: 16px;
 }
+
+/* ============================================================
+   EXAM MODULE — Chỉ báo autosave (Đang lưu / Đã lưu / Lỗi)
+   ============================================================ */
+.exam-save-status {
+  min-height: 18px;
+  font-size: 12px;
+  margin-top: 10px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.exam-save-status-saving {
+  color: var(--ink-mute);
+}
+
+.exam-save-status-saved {
+  color: var(--sage);
+}
+
+.exam-save-status-error {
+  color: var(--vermillion);
+  font-weight: 500;
+}
+
+/* ============================================================
+   EXAM MODULE — Timer đếm ngược theo section + banner khóa
+   ============================================================ */
+.exam-timer-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.exam-timer-section-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+
+.exam-timer-display {
+  font-variant-numeric: tabular-nums;
+  font-size: 15px;
+  font-weight: 700;
+  padding: 4px 14px;
+  border-radius: 20px;
+  background: var(--paper-warm);
+  color: var(--ink-soft);
+}
+
+.exam-timer-display.exam-timer-warning {
+  background: var(--gold-light);
+  color: var(--gold);
+}
+
+.exam-timer-display.exam-timer-danger {
+  background: var(--verm-glow);
+  color: var(--vermillion);
+}
+
+.exam-locked-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--verm-glow);
+  color: var(--vermillion);
+  font-size: 13px;
+  font-weight: 500;
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  margin-bottom: 16px;
+}
+
+.exam-choice-btn:disabled,
+.exam-fill-blank-input:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* ============================================================
+   EXAM MODULE — Màn kết quả đơn giản (Xem lại)
+   ============================================================ */
+.exam-result-box {
+  background: var(--paper-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-sm);
+  padding: 24px;
+  max-width: 480px;
+  margin: 0 auto;
+}
+
+.exam-result-status-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.exam-result-attempt-number {
+  font-size: 12px;
+  color: var(--ink-mute);
+}
+
+.exam-result-score-big {
+  font-size: 36px;
+  font-weight: 700;
+  color: var(--ink);
+  text-align: center;
+  margin: 12px 0;
+}
+
+.exam-result-score-pct {
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--ink-mute);
+  margin-left: 6px;
+}
+
+.exam-result-threshold {
+  text-align: center;
+  font-size: 13px;
+  color: var(--ink-mute);
+  margin-bottom: 16px;
+}
+
+.exam-result-sections {
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+  margin-top: 12px;
+}
+
+.exam-result-sections-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-bottom: 8px;
+}
+
+.exam-result-section-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  color: var(--ink-soft);
+  padding: 4px 0;
+}
+
+.exam-result-retry-note {
+  background: var(--verm-glow);
+  color: var(--vermillion);
+  font-size: 12px;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  margin-top: 12px;
+}
+
+.exam-result-meta {
+  font-size: 12px;
+  color: var(--ink-mute);
+  margin-top: 12px;
+}
