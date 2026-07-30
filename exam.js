@@ -1107,9 +1107,15 @@ async function submitExamAttempt(opts) {
     }
 
     // 3. Tính total_score / total_possible / section_scores (group theo skill_code)
-    const skillIds = [...new Set(
-      Object.values(questionInfoByBankId).map(i => i.skillId).filter(id => id != null)
-    )];
+    // Gom skill_id từ cả question_bank lẫn section (phòng trường hợp fallback
+    // phải dùng section.skill_id) để query 1 lần, tránh query thiếu.
+    const sectionSkillIds = Object.values(state.examState.sectionsById)
+      .map(s => s.skill_id)
+      .filter(id => id != null);
+    const skillIds = [...new Set([
+      ...Object.values(questionInfoByBankId).map(i => i.skillId).filter(id => id != null),
+      ...sectionSkillIds
+    ])];
 
     let skillCodeById = {};
     if (skillIds.length > 0) {
@@ -1131,8 +1137,17 @@ async function submitExamAttempt(opts) {
 
     state.examState.flatQuestions.forEach(q => {
       const points = q.points || 1;
-      const skillId = q.question_bank ? q.question_bank.skill_id : null;
-      const skillCode = skillCodeById[skillId] || String(skillId);
+
+      // Ưu tiên skill_id của chính câu hỏi (question_bank.skill_id). Nếu vì lý
+      // do nào đó không lấy được (join lỗi/thiếu dữ liệu), fallback về
+      // skill_id của SECTION chứa câu này — cột này NOT NULL theo schema
+      // exam_sections nên luôn có giá trị, tránh group_key bị rơi về "null".
+      const section = state.examState.sectionsById[q.sectionId];
+      const skillId = (q.question_bank && q.question_bank.skill_id != null)
+        ? q.question_bank.skill_id
+        : (section ? section.skill_id : null);
+
+      const skillCode = skillCodeById[skillId] || (skillId != null ? String(skillId) : 'khac');
 
       if (!sectionScores[skillCode]) {
         sectionScores[skillCode] = { score: 0, total: 0 };
@@ -1383,12 +1398,18 @@ function renderExamResultScreen(attempt) {
   }
 
   const exam = attempt.exams || {};
-  const scoreText = (attempt.total_score != null && attempt.total_possible != null)
-    ? `${attempt.total_score}/${attempt.total_possible}`
+
+  // Nếu đã có total_possible (tức là bài đã chấm xong) nhưng total_score vì
+  // lý do gì đó là null (dữ liệu cũ/lỗi), coi như 0 điểm — KHÔNG để lộ chữ
+  // "null" ra UI. Chỉ hiện dấu "—" khi bài thực sự chưa được chấm (cả 2 đều null).
+  const hasScoreData = attempt.total_possible != null;
+  const safeTotalScore = attempt.total_score ?? 0;
+  const scoreText = hasScoreData
+    ? `${safeTotalScore}/${attempt.total_possible}`
     : '—';
 
-  const scorePct = (attempt.total_score != null && attempt.total_possible)
-    ? Math.round((attempt.total_score / attempt.total_possible) * 100)
+  const scorePct = hasScoreData && attempt.total_possible > 0
+    ? Math.round((safeTotalScore / attempt.total_possible) * 100)
     : null;
 
   const statusLabelMap = {
@@ -1428,18 +1449,26 @@ function renderExamResultScreen(attempt) {
       ` : ''}
   `;
 
-  // section_scores: chưa chốt format cụ thể vì logic tính điểm (submit thật)
-  // chưa được code — render tổng quát dạng key/value, sẽ chỉnh lại khi
-  // submitExamAttempt() thật sự sinh ra dữ liệu này.
+  // section_scores format: { "<skill_code>": { score, total } } — hiện dạng
+  // "score/total" dễ đọc thay vì dump JSON thô.
   if (attempt.section_scores && typeof attempt.section_scores === 'object') {
     const entries = Object.entries(attempt.section_scores);
     if (entries.length > 0) {
       html += `<div class="exam-result-sections"><div class="exam-result-sections-title">Điểm theo phần</div>`;
       entries.forEach(([key, value]) => {
+        const displayKey = (key === 'null' || key === 'undefined' || !key) ? 'Khác' : key;
+        let displayValue = '—';
+        if (value && typeof value === 'object') {
+          const score = value.score ?? 0;
+          const total = value.total ?? 0;
+          displayValue = `${score}/${total}`;
+        } else if (value != null) {
+          displayValue = String(value);
+        }
         html += `
           <div class="exam-result-section-row">
-            <span>${key}</span>
-            <span>${typeof value === 'object' ? JSON.stringify(value) : value}</span>
+            <span>${displayKey}</span>
+            <span>${displayValue}</span>
           </div>
         `;
       });
