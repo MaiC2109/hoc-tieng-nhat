@@ -321,7 +321,9 @@ async function startExamAttempt(examId) {
     console.log('[exam] Danh sách câu hỏi đã làm phẳng:', flatQuestions);
     console.log('[exam] Passages map:', passagesMap);
 
-    renderExamTaking();
+    // Đề mới bắt đầu -> hạ cánh ở màn "Danh sách các phần" để học viên tự
+    // chọn section muốn làm trước, thay vì ép vào thẳng câu hỏi đầu tiên.
+    renderSectionOverview();
   } catch (err) {
     console.error('Lỗi không xác định khi bắt đầu làm bài:', err);
     alert('Đã có lỗi xảy ra, vui lòng thử lại.');
@@ -496,8 +498,8 @@ function renderExamTaking() {
   }
 
   // Phát hiện khi chuyển sang section khác (kể cả lần render đầu tiên) để
-  // khởi động lại timer đúng section — không restart timer nếu vẫn cùng
-  // section (renderExamTaking() được gọi rất nhiều lần: chọn đáp án, flag...).
+  // khởi động timer đúng section — không restart nếu vẫn cùng section
+  // (renderExamTaking() được gọi rất nhiều lần: chọn đáp án, flag...).
   if (state.examState.timerActiveSectionId !== current.sectionId) {
     state.examState.timerActiveSectionId = current.sectionId;
     startSectionTimer(current.sectionId);
@@ -508,6 +510,10 @@ function renderExamTaking() {
   const isSectionLocked = !!state.examState.lockedSections[current.sectionId];
 
   let html = '';
+
+  // KHÔNG có nút quay lại "Danh sách các phần" ở đây theo đúng model đã chốt:
+  // học viên phải hoàn thành (nút "Hoàn thành phần này" ở dưới) hoặc bị hết
+  // giờ mới được quay ra chọn section khác — không cho rời tự do giữa chừng.
 
   // Đồng hồ đếm ngược của section hiện tại
   html += `
@@ -602,25 +608,34 @@ function renderExamTaking() {
 
   html += `</div>`;
 
-  // Nút điều hướng Câu trước / Câu sau — chặn ở ranh giới section:
-  // không cho "Câu trước" ra khỏi section trước, "Câu sau" ở câu cuối
-  // section phải qua xác nhận chuyển section.
+  // Nút điều hướng Câu trước / Câu sau — CHỈ trong phạm vi section hiện tại.
+  // Chuyển sang section khác giờ chỉ qua "Hoàn thành phần này" (đưa về màn
+  // tổng quan để chọn phần tiếp theo) hoặc khi hết giờ — không cho rời tự do.
   const prevQuestion = flatQuestions[idx - 1];
   const nextQuestion = flatQuestions[idx + 1];
   const isFirstInSection = !prevQuestion || prevQuestion.sectionId !== current.sectionId;
   const isLastInSection = !nextQuestion || nextQuestion.sectionId !== current.sectionId;
-  const isLastQuestionOfExam = idx === flatQuestions.length - 1;
 
   html += `
     <div class="exam-nav-buttons">
       <button class="btn btn-outline" onclick="goToPrevQuestion()" ${isFirstInSection || isSectionLocked ? 'disabled' : ''}>
         <i class="ti ti-arrow-left"></i> Câu trước
       </button>
-      <button class="btn btn-primary" onclick="submitExamAttempt()">
-        Nộp bài
+      <button class="btn btn-primary" onclick="completeCurrentSection()" ${isSectionLocked ? 'disabled' : ''}>
+        Hoàn thành phần này
       </button>
-      <button class="btn btn-outline" onclick="goToNextQuestion()" ${isLastQuestionOfExam ? 'disabled' : ''}>
-        ${isLastInSection && !isLastQuestionOfExam ? 'Hoàn thành phần này' : 'Câu sau'} <i class="ti ti-arrow-right"></i>
+      <button class="btn btn-outline" onclick="goToNextQuestion()" ${isLastInSection || isSectionLocked ? 'disabled' : ''}>
+        Câu sau <i class="ti ti-arrow-right"></i>
+      </button>
+    </div>
+  `;
+
+  // Link phụ "Nộp toàn bộ bài" — vẫn luôn truy cập được kể cả đang làm dở 1
+  // phần (đúng yêu cầu "Nộp bài" luôn hiển thị, cho nộp sớm từ trước).
+  html += `
+    <div class="exam-submit-whole-link-wrap">
+      <button class="exam-submit-whole-link" onclick="submitExamAttempt()">
+        Hoặc nộp toàn bộ bài thi ngay bây giờ
       </button>
     </div>
   `;
@@ -681,8 +696,9 @@ function goToPrevQuestion() {
   const idx = state.examState.currentQuestionIndex;
   const prevQuestion = flatQuestions[idx - 1];
 
-  // Chặn cứng: không cho lùi ra khỏi section hiện tại (đúng thi thật,
-  // không quay lại phần trước sau khi đã rời phần đó).
+  // Chỉ đi trong phạm vi section hiện tại — chuyển sang section khác giờ
+  // phải qua "Hoàn thành phần này" (đưa về màn tổng quan để chọn tiếp),
+  // không cho rời tự do giữa chừng.
   if (!prevQuestion || prevQuestion.sectionId !== flatQuestions[idx].sectionId) return;
 
   goToQuestionIndex(idx - 1);
@@ -694,19 +710,7 @@ function goToNextQuestion() {
   const current = flatQuestions[idx];
   const nextQuestion = flatQuestions[idx + 1];
 
-  if (!nextQuestion) return; // đã ở câu cuối cùng của đề
-
-  const isCrossingSection = nextQuestion.sectionId !== current.sectionId;
-
-  if (isCrossingSection) {
-    // TODO: khi làm timer, đây là chỗ dừng đồng hồ section cũ + khởi động
-    // đồng hồ section mới. Hiện chỉ dùng confirm() đơn giản để xác nhận chuyển.
-    const confirmed = confirm(
-      `Bạn đã hoàn thành phần "${current.sectionTitle || ''}". ` +
-      `Sau khi chuyển sang phần tiếp theo, bạn sẽ không thể quay lại phần này. Tiếp tục?`
-    );
-    if (!confirmed) return;
-  }
+  if (!nextQuestion || nextQuestion.sectionId !== current.sectionId) return;
 
   goToQuestionIndex(idx + 1);
 }
@@ -931,50 +935,84 @@ function playExamAudio(url) {
 }
 
 // ============================================================
-// TIMER THEO SECTION
-// Nguyên tắc: KHÔNG dựa hoàn toàn vào setInterval đếm lùi trong bộ nhớ
-// (dễ sai khi tab bị treo/máy sleep). Mỗi tick đều tính lại từ đầu:
-// remaining = time_limit_seconds - (Date.now() - section_started_at).
-// section_started_at lưu ở exam_attempts.section_timing (jsonb), nên
-// F5 lại trang (khi làm continueExamAttempt sau này) vẫn tính đúng.
+// TIMER THEO SECTION — MODEL "PHẢI HOÀN THÀNH MỚI ĐƯỢC CHUYỂN"
+// Học viên tự chọn THỨ TỰ làm các section qua màn tổng quan, nhưng một khi
+// đã vào 1 section thì phải hoàn thành (bấm "Hoàn thành phần này") hoặc bị
+// hết giờ mới được quay ra chọn section khác — không có khái niệm tạm dừng
+// giữa chừng, nên timer vẫn là wall-clock liên tục đơn giản như bản gốc.
+//
+// section_timing lưu dạng:
+// { "<section_id>": { "started_at": "<ISO>", "completed_at": "<ISO>|null" } }
+// - started_at: mốc bắt đầu, KHÔNG đổi trong suốt vòng đời section.
+// - completed_at: null khi đang làm; có giá trị khi đã hoàn thành thủ công
+//   (hết giờ thì KHÔNG set completed_at, dùng remaining<=0 để suy ra trạng
+//   thái "expired" thay vì set completed_at, để phân biệt lý do kết thúc).
+// remaining = time_limit_seconds - (Date.now() - started_at) — tính lại từ
+// mốc thời gian thật mỗi lần tick, không đếm lùi biến số trong bộ nhớ.
 // ============================================================
 
-// Đảm bảo section đã có started_at — nếu chưa có thì set now() và lưu DB,
-// nếu có rồi (ví dụ quay lại xem sau khi F5) thì dùng lại giá trị cũ.
-async function ensureSectionStartedAt(sectionId) {
+// Đọc/khởi tạo entry cho 1 section (không ghi DB ở đây).
+function getOrCreateTimingEntry(sectionId) {
   const attempt = state.examState.currentAttempt;
   if (!attempt) return null;
 
-  const timing = attempt.section_timing || {};
-  if (timing[sectionId]) {
-    return timing[sectionId];
+  if (!attempt.section_timing) attempt.section_timing = {};
+  if (!attempt.section_timing[sectionId]) {
+    attempt.section_timing[sectionId] = { started_at: null, completed_at: null };
   }
+  return attempt.section_timing[sectionId];
+}
 
-  const startedAt = new Date().toISOString();
-  const newTiming = { ...timing, [sectionId]: startedAt };
+// Ghi toàn bộ section_timing xuống DB.
+async function persistSectionTiming() {
+  const attempt = state.examState.currentAttempt;
+  if (!attempt) return;
 
   try {
     const { error } = await supabaseClient
       .from('exam_attempts')
-      .update({ section_timing: newTiming })
+      .update({ section_timing: attempt.section_timing || {} })
       .eq('id', attempt.id);
 
     if (error) {
-      // Không chặn học viên làm bài nếu lưu timing lỗi, nhưng log rõ vì
-      // lần sau F5 (continueExamAttempt) sẽ tính lại từ đầu — không chính xác.
       console.error('Lỗi lưu section_timing:', error);
     }
   } catch (err) {
     console.error('Lỗi không xác định khi lưu section_timing:', err);
   }
-
-  // Cập nhật cache local dù DB có lỗi hay không, để timer vẫn chạy đúng trong phiên này.
-  attempt.section_timing = newTiming;
-  return startedAt;
 }
 
-// Khởi động timer cho 1 section — gọi mỗi khi vào section mới (kể cả lần đầu).
-function startSectionTimer(sectionId) {
+// Tính remaining hiện tại — luôn tính lại từ started_at thật, wall-clock liên tục.
+function computeSectionRemaining(section) {
+  const entry = getOrCreateTimingEntry(section.id);
+  if (!entry || !entry.started_at) return section.time_limit_seconds;
+
+  const elapsedSeconds = Math.floor((Date.now() - new Date(entry.started_at).getTime()) / 1000);
+  return Math.max(0, section.time_limit_seconds - elapsedSeconds);
+}
+
+// Trạng thái hiển thị của 1 section trên màn tổng quan:
+// not_started | in_progress | expired (hết giờ) | completed (đã hoàn thành thủ công)
+function getSectionDisplayStatus(section) {
+  const attempt = state.examState.currentAttempt;
+  const entry = attempt && attempt.section_timing ? attempt.section_timing[section.id] : null;
+
+  if (!entry || !entry.started_at) return 'not_started';
+  if (entry.completed_at) return 'completed';
+
+  const remaining = computeSectionRemaining(section);
+  return remaining > 0 ? 'in_progress' : 'expired';
+}
+
+// Đã "xong" (không thể vào lại nữa) nếu completed hoặc expired.
+function isSectionDone(section) {
+  const status = getSectionDisplayStatus(section);
+  return status === 'completed' || status === 'expired';
+}
+
+// Bắt đầu đồng hồ cho 1 section — gọi khi học viên VÀO section (lần đầu
+// hoặc F5 quay lại section đang làm dở). Set started_at nếu chưa có, rồi tick.
+async function startSectionTimer(sectionId) {
   clearSectionTimer();
 
   const section = state.examState.sectionsById[sectionId];
@@ -983,18 +1021,28 @@ function startSectionTimer(sectionId) {
     return;
   }
 
-  ensureSectionStartedAt(sectionId).then(startedAtIso => {
-    if (!startedAtIso) return;
+  const entry = getOrCreateTimingEntry(sectionId);
+  if (!entry) return;
 
-    // Nếu section đang được xem lúc này không còn là section đang active nữa
-    // (học viên bấm rất nhanh qua nhiều câu), bỏ qua để tránh 2 timer chồng nhau.
-    if (state.examState.timerActiveSectionId !== sectionId) return;
+  if (!entry.started_at) {
+    entry.started_at = new Date().toISOString();
+    await persistSectionTiming();
+  }
 
-    tickSectionTimer(sectionId, section.time_limit_seconds, startedAtIso);
-    state.examState.currentSectionTimerId = setInterval(() => {
-      tickSectionTimer(sectionId, section.time_limit_seconds, startedAtIso);
-    }, 1000);
-  });
+  // Nếu trong lúc chờ persist học viên đã rời đi thì thôi, không tick nữa.
+  if (state.examState.timerActiveSectionId !== sectionId) return;
+
+  const remainingNow = computeSectionRemaining(section);
+  if (remainingNow <= 0) {
+    updateTimerDisplay(0);
+    handleSectionTimeout(sectionId);
+    return;
+  }
+
+  tickSectionTimer(section);
+  state.examState.currentSectionTimerId = setInterval(() => {
+    tickSectionTimer(section);
+  }, 1000);
 }
 
 function clearSectionTimer() {
@@ -1004,16 +1052,13 @@ function clearSectionTimer() {
   }
 }
 
-// Tính lại remaining từ mốc thời gian thật mỗi lần tick (không phải đếm lùi biến số).
-function tickSectionTimer(sectionId, limitSeconds, startedAtIso) {
-  const elapsedSeconds = Math.floor((Date.now() - new Date(startedAtIso).getTime()) / 1000);
-  const remaining = limitSeconds - elapsedSeconds;
-
+function tickSectionTimer(section) {
+  const remaining = computeSectionRemaining(section);
   updateTimerDisplay(remaining);
 
   if (remaining <= 0) {
     clearSectionTimer();
-    handleSectionTimeout(sectionId);
+    handleSectionTimeout(section.id);
   }
 }
 
@@ -1032,34 +1077,189 @@ function updateTimerDisplay(remainingSeconds) {
   el.classList.toggle('exam-timer-danger', clamped > 0 && clamped <= 60);
 }
 
-// Xử lý khi 1 section hết giờ: khóa input, thông báo, rồi tự chuyển
-// sang section tiếp theo — hoặc gọi nộp bài (bước 9) nếu là section cuối.
+// Học viên bấm "Hoàn thành phần này" — hoàn thành thủ công trước khi hết
+// giờ, khóa input, quay về màn tổng quan để chọn section tiếp theo.
+async function completeCurrentSection() {
+  const current = state.examState.flatQuestions[state.examState.currentQuestionIndex];
+  if (!current) return;
+
+  if (!confirm('Hoàn thành phần này? Bạn sẽ không thể quay lại chỉnh sửa sau khi xác nhận.')) return;
+
+  clearSectionTimer();
+
+  const entry = getOrCreateTimingEntry(current.sectionId);
+  if (entry) {
+    entry.completed_at = new Date().toISOString();
+    await persistSectionTiming();
+  }
+
+  state.examState.lockedSections[current.sectionId] = true; // khóa input nếu còn render lại
+  state.examState.timerActiveSectionId = null;
+
+  goToNextIncompleteSectionOrSubmit();
+}
+
+// Xử lý khi 1 section hết giờ trong lúc đang active: khóa input, thông báo,
+// rồi quay về màn tổng quan để chọn section khác — hoặc tự nộp bài nếu
+// không còn section nào khác để làm.
 function handleSectionTimeout(sectionId) {
   state.examState.lockedSections[sectionId] = true;
+  state.examState.timerActiveSectionId = null;
 
   const section = state.examState.sectionsById[sectionId];
+  alert(`Đã hết giờ phần "${section ? section.title : ''}".`);
+
+  goToNextIncompleteSectionOrSubmit();
+}
+
+// Sau khi 1 section kết thúc (hoàn thành thủ công hoặc hết giờ): nếu còn
+// section khác chưa xong -> về màn tổng quan để chọn; nếu tất cả đã xong
+// -> để học viên tự bấm Nộp bài ở màn tổng quan (không tự động nộp), TRỪ
+// khi tất cả đều do HẾT GIỜ (không còn gì để làm chủ động) thì tự nộp luôn.
+function goToNextIncompleteSectionOrSubmit() {
+  const allSections = Object.values(state.examState.sectionsById);
+  const hasIncomplete = allSections.some(s => !isSectionDone(s));
+
+  if (hasIncomplete) {
+    renderSectionOverview();
+    return;
+  }
+
+  const allExpired = allSections.every(s => getSectionDisplayStatus(s) === 'expired');
+  if (allExpired) {
+    submitExamAttempt({ skipConfirm: true });
+  } else {
+    renderSectionOverview();
+  }
+}
+
+// ------------------------------------------------------------
+// Học viên chọn 1 section từ màn tổng quan để vào làm — nhảy tới câu đầu
+// tiên của section đó (hoặc câu đầu tiên CHƯA trả lời nếu đang làm dở).
+// ------------------------------------------------------------
+function enterSection(sectionId) {
+  const section = state.examState.sectionsById[sectionId];
+  if (!section) return;
+
+  if (isSectionDone(section)) {
+    alert('Phần này đã hoàn thành hoặc đã hết giờ, không thể vào lại.');
+    return;
+  }
+
+  const flatQuestions = state.examState.flatQuestions;
+  const sectionQuestions = flatQuestions.filter(q => q.sectionId === sectionId);
+  if (sectionQuestions.length === 0) {
+    alert('Phần này chưa có câu hỏi nào.');
+    return;
+  }
+
+  // Vào lại section đang làm dở thì nhảy tới câu đầu tiên CHƯA trả lời (nếu
+  // có), tiện hơn là luôn bắt đầu lại từ câu 1.
+  const firstUnanswered = sectionQuestions.find(q => {
+    const val = state.examState.selectedAnswers[q.id];
+    return val === undefined || val === null || val === '';
+  });
+  const target = firstUnanswered || sectionQuestions[0];
+
+  state.examState.currentQuestionIndex = flatQuestions.findIndex(q => q.id === target.id);
+  renderExamTaking();
+}
+
+// ------------------------------------------------------------
+// Màn "Danh sách các phần" — hiển thị toàn bộ section của đề, học viên tự
+// chọn THỨ TỰ muốn làm. Section đang làm dở phải hoàn thành/hết giờ mới
+// được vào section khác (nút "Vào làm" bị khóa với section đã "done").
+// ------------------------------------------------------------
+function renderSectionOverview() {
+  switchMainSection('exam-taking');
+
+  const zone = document.getElementById('exam-taking-zone');
+  if (!zone) {
+    console.error('Không tìm thấy #exam-taking-zone trong HTML.');
+    return;
+  }
+
+  const structure = state.examState.currentExamStructure || [];
   const flatQuestions = state.examState.flatQuestions;
 
-  // Tìm vị trí câu hỏi đầu tiên của section tiếp theo (nếu có), bằng cách
-  // tìm index cuối cùng thuộc sectionId này rồi +1.
-  let lastIndexOfSection = -1;
-  flatQuestions.forEach((q, i) => {
-    if (q.sectionId === sectionId) lastIndexOfSection = i;
-  });
-  const nextIndex = lastIndexOfSection + 1;
-  const hasNextSection = nextIndex < flatQuestions.length;
+  const statusLabelMap = {
+    not_started: 'Chưa làm',
+    in_progress: 'Đang làm dở',
+    expired: 'Đã hết giờ',
+    completed: 'Đã hoàn thành'
+  };
+  const statusClassMap = {
+    not_started: 'exam-status-new',
+    in_progress: 'exam-status-progress',
+    expired: 'exam-status-retry',
+    completed: 'exam-status-passed'
+  };
 
-  alert(`Đã hết giờ phần "${section ? section.title : ''}". ` +
-    (hasNextSection
-      ? 'Hệ thống sẽ tự động chuyển sang phần tiếp theo.'
-      : 'Bài làm sẽ được nộp tự động.'));
+  const cardsHtml = structure.map(section => {
+    const sectionQuestions = flatQuestions.filter(q => q.sectionId === section.id);
+    const answeredCount = sectionQuestions.filter(q => {
+      const val = state.examState.selectedAnswers[q.id];
+      return val !== undefined && val !== null && val !== '';
+    }).length;
 
-  if (hasNextSection) {
-    state.examState.currentQuestionIndex = nextIndex;
-    renderExamTaking(); // renderExamTaking tự phát hiện đổi section và khởi động timer mới
-  } else {
-    submitExamAttempt({ skipConfirm: true }); // section cuối hết giờ -> tự nộp, không hỏi lại
-  }
+    const status = getSectionDisplayStatus(section);
+    const done = status === 'expired' || status === 'completed';
+
+    let timeLabel;
+    if (status === 'not_started') {
+      timeLabel = `Thời gian: ${Math.floor(section.time_limit_seconds / 60)} phút`;
+    } else if (done) {
+      timeLabel = status === 'expired' ? 'Đã hết thời gian' : 'Đã nộp phần này';
+    } else {
+      const remaining = computeSectionRemaining(section);
+      const m = Math.floor(remaining / 60);
+      const s = remaining % 60;
+      timeLabel = `Còn lại: ${m}:${String(s).padStart(2, '0')}`;
+    }
+
+    const buttonLabel = status === 'not_started' ? 'Vào làm' : (done ? statusLabelMap[status] : 'Tiếp tục làm');
+
+    return `
+      <div class="exam-section-overview-card">
+        <div class="exam-section-overview-info">
+          <div class="exam-section-overview-title">${section.title || ''}</div>
+          <div class="exam-section-overview-meta">
+            <span>${sectionQuestions.length} câu</span>
+            <span>·</span>
+            <span>${answeredCount}/${sectionQuestions.length} đã làm</span>
+            <span>·</span>
+            <span>${timeLabel}</span>
+          </div>
+          <span class="exam-status-badge ${statusClassMap[status]}">${statusLabelMap[status]}</span>
+        </div>
+        <div class="exam-section-overview-actions">
+          <button class="btn ${done ? 'btn-outline' : 'btn-primary'}" ${done ? 'disabled' : ''} onclick="enterSection('${section.id}')">
+            ${buttonLabel}
+          </button>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  const allDone = structure.every(s => isSectionDone(s));
+
+  const html = `
+    <div class="review-page-header">
+      <h2>📝 Danh sách các phần</h2>
+      <p>Chọn phần bạn muốn làm trước — lưu ý sau khi vào 1 phần cần hoàn thành hoặc hết giờ mới chọn được phần khác.</p>
+    </div>
+
+    <div class="exam-section-overview-list">
+      ${cardsHtml}
+    </div>
+
+    <button class="btn btn-primary" style="margin-top:20px;" onclick="submitExamAttempt()">
+      Nộp bài
+    </button>
+    ${allDone ? '<div class="exam-all-done-note">✓ Bạn đã hoàn thành tất cả các phần. Hãy bấm "Nộp bài" để kết thúc.</div>' : ''}
+  `;
+
+  zone.innerHTML = html;
 }
 
 // ============================================================
@@ -1220,8 +1420,20 @@ async function submitExamAttempt(opts) {
 
     console.log('[exam] Đã nộp bài, kết quả:', updatedAttempt);
 
-    // 5. Hiển thị màn kết quả đơn giản (dùng chung renderExamResultScreen với "Xem lại")
-    renderExamResultScreen(updatedAttempt);
+    // 5. Build danh sách review từng câu (đúng/sai/đáp án đúng/feedback) từ
+    // dữ liệu đã có sẵn trong bộ nhớ (savedAnswers + gradedByBankId), không
+    // cần query lại vì vừa mới chấm xong ngay phía trên.
+    const answersByBankId = {};
+    (savedAnswers || []).forEach(a => {
+      answersByBankId[a.question_id] = {
+        selected_answer: a.selected_answer,
+        is_correct: gradedByBankId[a.question_id] || false
+      };
+    });
+    const questionsReview = buildQuestionsReview(state.examState.flatQuestions, answersByBankId);
+
+    // 6. Hiển thị màn kết quả đầy đủ (điểm tổng + chi tiết từng câu)
+    renderExamResultScreen(updatedAttempt, questionsReview);
   } catch (err) {
     console.error('Lỗi khi nộp bài:', err);
     alert('Đã có lỗi xảy ra khi nộp bài, vui lòng thử lại. Chi tiết: ' + (err.message || err));
@@ -1325,48 +1537,62 @@ async function continueExamAttempt(attemptId) {
     console.log('[exam] selectedAnswers khôi phục từ attempt_answers:', selectedAnswers);
     console.log('[exam] flaggedQuestions khôi phục từ attempt_answers:', flaggedQuestions);
 
-    // 3. Xác định section nên resume dựa vào section_timing + time_limit_seconds
-    const timing = attempt.section_timing || {};
-    const now = Date.now();
+    // 3. Xác định nên resume ở đâu, dựa trên section_timing (format mới:
+    // { started_at, completed_at }) — tái dùng đúng getSectionDisplayStatus/
+    // isSectionDone để nhất quán với logic đang dùng lúc làm bài trực tiếp.
     let resumeSectionId = null;
 
-    // structure đã được order theo order_index từ loadExamStructure()
     for (const section of structure) {
-      const startedAtIso = timing[section.id];
+      const entry = attempt.section_timing ? attempt.section_timing[section.id] : null;
 
-      if (!startedAtIso) {
-        // Section chưa từng bắt đầu -> đây chính là section nên vào (dù là
-        // section đầu tiên của đề, hay section đầu tiên chưa kịp chạy vì
-        // học viên thoát ngay khi section trước đó vừa hết giờ).
-        resumeSectionId = section.id;
-        break;
+      if (!entry || !entry.started_at) {
+        continue; // chưa từng vào, không phải section đang làm dở
+      }
+      if (entry.completed_at) {
+        continue; // đã hoàn thành thủ công trước đó, không resume vào đây
       }
 
-      const elapsedSeconds = Math.floor((now - new Date(startedAtIso).getTime()) / 1000);
+      const elapsedSeconds = Math.floor((Date.now() - new Date(entry.started_at).getTime()) / 1000);
       const remaining = section.time_limit_seconds - elapsedSeconds;
 
       if (remaining > 0) {
+        // Đây chính là section đang làm dở (đã bắt đầu, chưa hoàn thành, còn giờ).
         resumeSectionId = section.id;
-        break;
+      } else {
+        // Hết giờ trong lúc vắng mặt -> khóa lại.
+        state.examState.lockedSections[section.id] = true;
       }
-
-      // Section này đã hết giờ trong lúc học viên vắng mặt -> khóa lại, xét section kế tiếp.
-      state.examState.lockedSections[section.id] = true;
     }
 
-    if (!resumeSectionId) {
-      // Tất cả section đều đã hết giờ khi quay lại -> nộp bài luôn.
-      console.log('[exam] Tất cả section đã hết giờ khi quay lại, tự động nộp bài.');
-      submitExamAttempt();
+    console.log('[exam] Resume attempt:', attempt);
+    console.log('[exam] Cấu trúc đề đã load lại:', structure);
+    console.log('[exam] selectedAnswers khôi phục từ attempt_answers:', selectedAnswers);
+    console.log('[exam] flaggedQuestions khôi phục từ attempt_answers:', flaggedQuestions);
+
+    if (resumeSectionId) {
+      // Có đúng 1 section đang làm dở (còn giờ, chưa hoàn thành) -> vào thẳng
+      // section đó, đúng model "phải hoàn thành mới được chuyển".
+      const resumeIndex = flatQuestions.findIndex(q => q.sectionId === resumeSectionId);
+      state.examState.currentQuestionIndex = resumeIndex >= 0 ? resumeIndex : 0;
+      console.log('[exam] Resume tại section đang làm dở:', resumeSectionId);
+      renderExamTaking();
       return;
     }
 
-    const resumeIndex = flatQuestions.findIndex(q => q.sectionId === resumeSectionId);
-    state.examState.currentQuestionIndex = resumeIndex >= 0 ? resumeIndex : 0;
+    // Không có section nào đang làm dở (chưa bắt đầu section nào, hoặc vừa
+    // hoàn thành/hết giờ 1 section và chưa kịp chọn section tiếp theo trước
+    // khi thoát) -> hạ cánh ở màn tổng quan để tự chọn.
+    const allSections = Object.values(state.examState.sectionsById);
+    const allDoneOrExpired = allSections.length > 0 && allSections.every(s => isSectionDone(s));
+    const allExpired = allSections.length > 0 && allSections.every(s => getSectionDisplayStatus(s) === 'expired');
 
-    console.log('[exam] Resume tại section:', resumeSectionId, '- question index:', state.examState.currentQuestionIndex);
+    if (allDoneOrExpired && allExpired) {
+      console.log('[exam] Tất cả section đã hết giờ khi quay lại, tự động nộp bài.');
+      submitExamAttempt({ skipConfirm: true });
+      return;
+    }
 
-    renderExamTaking();
+    renderSectionOverview();
   } catch (err) {
     console.error('Lỗi không xác định khi tiếp tục làm bài:', err);
     alert('Đã có lỗi xảy ra, vui lòng thử lại.');
@@ -1403,7 +1629,39 @@ async function viewExamAttemptResult(attemptId) {
       return;
     }
 
-    renderExamResultScreen(attempt);
+    // Cần load lại đầy đủ cấu trúc đề (câu hỏi/đáp án/giải thích) để hiện
+    // chi tiết từng câu — khác với thiết kế ban đầu (chỉ load điểm tổng),
+    // đánh đổi này là cần thiết để đáp ứng yêu cầu hiện lại toàn bộ bài làm.
+    const structure = await loadExamStructure(attempt.exam_id);
+    if (!structure) {
+      alert('Không thể tải nội dung đề thi để xem chi tiết.');
+      renderExamResultScreen(attempt, []);
+      return;
+    }
+    const flatQuestions = flattenExamStructure(structure);
+
+    const { data: savedAnswers, error: answersError } = await supabaseClient
+      .from('attempt_answers')
+      .select('question_id, selected_answer, is_correct')
+      .eq('attempt_id', attemptId);
+
+    if (answersError) {
+      console.error('Lỗi tải attempt_answers:', answersError);
+      renderExamResultScreen(attempt, []);
+      return;
+    }
+
+    const answersByBankId = {};
+    (savedAnswers || []).forEach(a => {
+      answersByBankId[a.question_id] = {
+        selected_answer: a.selected_answer,
+        is_correct: !!a.is_correct
+      };
+    });
+
+    const questionsReview = buildQuestionsReview(flatQuestions, answersByBankId);
+
+    renderExamResultScreen(attempt, questionsReview);
   } catch (err) {
     console.error('Lỗi không xác định khi tải kết quả:', err);
     alert('Đã có lỗi xảy ra, vui lòng thử lại.');
@@ -1411,15 +1669,155 @@ async function viewExamAttemptResult(attemptId) {
 }
 
 // ------------------------------------------------------------
-// Render màn kết quả đơn giản — dùng chung cho "Xem lại" (viewExamAttemptResult)
-// và tương lai sẽ dùng lại khi submitExamAttempt() tính điểm xong.
+// Build danh sách review từng câu từ flatQuestions + map đáp án đã chấm
+// (answersByBankId keyed theo question_bank.id, khớp attempt_answers.question_id).
+// Dùng chung cho cả 2 nơi: vừa nộp xong (submitExamAttempt) và "Xem lại"
+// (viewExamAttemptResult) — đảm bảo hiển thị nhất quán.
+// ------------------------------------------------------------
+function buildQuestionsReview(flatQuestions, answersByBankId) {
+  // Đếm số thứ tự cục bộ trong từng section, giống hệt cách đánh số lúc làm bài.
+  const localCounters = {};
+
+  return flatQuestions.map(q => {
+    const qb = q.question_bank || {};
+    const answer = answersByBankId[q.question_id] || { selected_answer: null, is_correct: false };
+
+    localCounters[q.sectionId] = (localCounters[q.sectionId] || 0) + 1;
+
+    return {
+      examQuestionId: q.id,
+      sectionId: q.sectionId,
+      sectionTitle: q.sectionTitle,
+      localNumber: localCounters[q.sectionId],
+      question_type: qb.question_type,
+      question_text: qb.question_text,
+      choices: qb.choices,
+      correct_answer: qb.correct_answer,
+      explanation: qb.explanation,
+      audio_url: qb.audio_url,
+      selected_answer: answer.selected_answer,
+      is_correct: !!answer.is_correct
+    };
+  });
+}
+
+// ------------------------------------------------------------
+// Render lưới tổng quan tất cả câu hỏi, tô xanh (đúng) / đỏ (sai hoặc chưa
+// trả lời) — click nhảy xuống đúng câu đó trong danh sách chi tiết bên dưới.
+// ------------------------------------------------------------
+function renderResultQuestionsGrid(questionsReview) {
+  const cellsHtml = questionsReview.map((q, i) => {
+    const cls = q.is_correct ? 'exam-review-navnum-correct' : 'exam-review-navnum-wrong';
+    return `
+      <button type="button" class="exam-review-navnum ${cls}" onclick="scrollToReviewQuestion('${q.examQuestionId}')">
+        ${i + 1}
+      </button>
+    `;
+  }).join('');
+
+  return `<div class="exam-review-navnum-grid">${cellsHtml}</div>`;
+}
+
+function scrollToReviewQuestion(examQuestionId) {
+  const el = document.getElementById(`review-q-${examQuestionId}`);
+  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// ------------------------------------------------------------
+// Render chi tiết từng câu: câu hỏi, đáp án đã chọn, đáp án đúng (nếu sai),
+// và feedback/explanation nếu có trong question_bank.
+// ------------------------------------------------------------
+function renderResultQuestionDetail(q) {
+  let answerHtml = '';
+
+  const normalizedType = (q.question_type || '').trim().toLowerCase();
+
+  if (normalizedType === 'multiple_choice' && Array.isArray(q.choices)) {
+    const optionsHtml = q.choices.map(choiceValue => {
+      const isSelected = q.selected_answer === choiceValue;
+      const isCorrectChoice = q.correct_answer === choiceValue;
+
+      let cls = '';
+      let badge = '';
+      if (isSelected && isCorrectChoice) {
+        cls = 'exam-review-choice-correct';
+        badge = '<span class="exam-review-choice-badge">✓ Bạn đã chọn — Đúng</span>';
+      } else if (isSelected && !isCorrectChoice) {
+        cls = 'exam-review-choice-wrong';
+        badge = '<span class="exam-review-choice-badge">✗ Bạn đã chọn</span>';
+      } else if (!isSelected && isCorrectChoice) {
+        cls = 'exam-review-choice-correct-unselected';
+        badge = '<span class="exam-review-choice-badge">✓ Đáp án đúng</span>';
+      }
+
+      return `
+        <div class="exam-choice-btn exam-review-choice ${cls}">
+          <span class="exam-choice-content">${choiceValue}</span>
+          ${badge}
+        </div>
+      `;
+    }).join('');
+
+    answerHtml = `<div class="exam-choices-grid">${optionsHtml}</div>`;
+  } else if (normalizedType === 'fill_blank') {
+    const yourAnswerText = (q.selected_answer != null && q.selected_answer !== '')
+      ? q.selected_answer
+      : '(Chưa trả lời)';
+
+    answerHtml = `
+      <div class="exam-review-fillblank">
+        <div class="${q.is_correct ? 'exam-review-answer-correct' : 'exam-review-answer-wrong'}">
+          Bạn đã trả lời: <strong>${yourAnswerText}</strong>
+        </div>
+        ${!q.is_correct ? `<div class="exam-review-answer-correct">Đáp án đúng: <strong>${q.correct_answer || ''}</strong></div>` : ''}
+      </div>
+    `;
+  }
+
+  const feedbackHtml = q.explanation ? `
+    <div class="exam-review-feedback">💡 Feedback: ${q.explanation}</div>
+  ` : '';
+
+  return `
+    <div class="exam-question-block exam-review-question-block" id="review-q-${q.examQuestionId}">
+      <div class="exam-question-number">
+        ${q.sectionTitle || ''} — Câu ${q.localNumber}
+        <span class="exam-status-badge ${q.is_correct ? 'exam-status-passed' : 'exam-status-retry'}">
+          ${q.is_correct ? 'Đúng' : 'Sai'}
+        </span>
+      </div>
+      <div class="exam-question-content">${q.question_text || ''}</div>
+      ${answerHtml}
+      ${feedbackHtml}
+    </div>
+  `;
+}
+
+function renderResultQuestionsReview(questionsReview) {
+  if (!questionsReview || questionsReview.length === 0) return '';
+
+  const detailsHtml = questionsReview.map(q => renderResultQuestionDetail(q)).join('');
+
+  return `
+    <div class="exam-review-section-title">Chi tiết bài làm</div>
+    ${renderResultQuestionsGrid(questionsReview)}
+    <div class="exam-review-questions-list">
+      ${detailsHtml}
+    </div>
+  `;
+}
+
+// ------------------------------------------------------------
+// Render màn kết quả — điểm tổng + (nếu có questionsReview) chi tiết từng
+// câu kèm lưới đúng/sai. Dùng chung cho "Xem lại" (viewExamAttemptResult)
+// và ngay sau khi nộp bài (submitExamAttempt).
 // `attempt` cần có: total_score, total_possible, section_scores, status,
 // và nested `exams` { title, pass_threshold_pct } (từ join hoặc tự gán tay).
 //
 // needs_retry hiển thị/xử lý giống hệt submitted ở tier này — dùng chung
 // 1 khối hiển thị, chỉ khác nhãn trạng thái (statusLabelMap y hệt renderExamCard).
 // ------------------------------------------------------------
-function renderExamResultScreen(attempt) {
+function renderExamResultScreen(attempt, questionsReview) {
   switchMainSection('exam-result');
 
   const zone = document.getElementById('exam-result-zone');
@@ -1521,6 +1919,8 @@ function renderExamResultScreen(attempt) {
       </button>
     </div>
   `;
+
+  html += renderResultQuestionsReview(questionsReview);
 
   zone.innerHTML = html;
 }
