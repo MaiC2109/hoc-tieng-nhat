@@ -565,10 +565,34 @@ function renderExamTaking() {
     `;
   }
 
-  if (qb.question_type === 'multiple_choice') {
-    html += renderMultipleChoiceAnswers(current, qb.choices, qb.correct_answer, isSectionLocked);
-  } else if (qb.question_type === 'fill_blank') {
+  // Nội dung câu hỏi theo đúng loại — chuẩn hóa question_type (trim/lowercase)
+  // để tránh lệch do khoảng trắng/hoa-thường lỡ nhập từ admin, và LUÔN có
+  // fallback hiển thị rõ nếu vẫn không khớp, thay vì để trống âm thầm.
+  html += `<div class="exam-question-block">`;
+  html += `<div class="exam-question-content">${qb.question_text || ''}</div>`;
+
+  if (qb.audio_url) {
+    html += `
+      <button class="btn btn-outline exam-audio-btn" onclick="playExamAudio('${qb.audio_url}')">
+        <i class="ti ti-player-play"></i> Nghe audio
+      </button>
+    `;
+  }
+
+  const normalizedType = (qb.question_type || '').trim().toLowerCase();
+
+  if (normalizedType === 'multiple_choice') {
+    if (Array.isArray(qb.choices) && qb.choices.length > 0) {
+      html += renderMultipleChoiceAnswers(current, qb.choices, qb.correct_answer, isSectionLocked);
+    } else {
+      console.warn('[exam] Câu multiple_choice nhưng thiếu/rỗng choices:', current.id, qb);
+      html += `<div class="exam-question-warning">⚠️ Câu hỏi này chưa có đáp án (choices rỗng trong question_bank).</div>`;
+    }
+  } else if (normalizedType === 'fill_blank') {
     html += renderFillBlankAnswer(current, isSectionLocked);
+  } else {
+    console.warn('[exam] question_type không nhận diện được:', JSON.stringify(qb.question_type), '- câu:', current.id, qb);
+    html += `<div class="exam-question-warning">⚠️ Không nhận diện được loại câu hỏi ("${qb.question_type}"). Kiểm tra lại question_bank.question_type trong DB.</div>`;
   }
 
   html += renderSaveStatusIndicator(current.id);

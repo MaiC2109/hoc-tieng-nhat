@@ -1491,3 +1491,11 @@ body {
   color: var(--ink-mute);
   margin-top: 12px;
 }
+
+.exam-question-warning {
+  background: var(--verm-glow);
+  color: var(--vermillion);
+  font-size: 13px;
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+}
