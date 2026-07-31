@@ -1499,3 +1499,12 @@ body {
   padding: 10px 14px;
   border-radius: var(--radius-sm);
 }
+
+.exam-question-number {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--sage);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-bottom: 8px;
+}
