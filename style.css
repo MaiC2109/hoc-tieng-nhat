@@ -1084,11 +1084,22 @@ body {
 /* ============================================================
    EXAM MODULE — Màn làm bài (câu hỏi, đáp án, passage)
    ============================================================ */
+/* .review-page-wrap là flex-column với align-items:center — mặc định KHÔNG
+   tự stretch full-width các phần tử con như block thường, mỗi khối sẽ co
+   theo nội dung riêng và bị lệch width. Ép stretch + box-sizing để toàn bộ
+   khối trong màn làm bài đồng nhất đúng 1 độ rộng. */
+#exam-taking-zone > * {
+  align-self: stretch;
+  box-sizing: border-box;
+  width: 100%;
+}
+
 .exam-instruction-box {
   background: var(--paper-warm);
   border-radius: var(--radius-sm);
   padding: 12px 16px;
   margin-bottom: 16px;
+  box-sizing: border-box;
 }
 
 .exam-instruction-label {
@@ -1312,6 +1323,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 12px;
   margin-top: 16px;
 }
 

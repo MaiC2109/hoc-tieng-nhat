@@ -724,11 +724,17 @@ function renderMultipleChoiceAnswers(current, choices, correctAnswer, isLocked) 
   const optionsHtml = choices.map((choiceValue, i) => {
     const label = labels[i] || (i + 1);
     const isSelected = selected === choiceValue;
+    // Truyền INDEX thay vì giá trị đáp án thô vào onclick — đáp án có thể
+    // chứa dấu ngoặc kép (HTML <img src="..." alt="...">), nếu escape rồi
+    // nhét thẳng vào thuộc tính onclick="..." (cũng dùng ngoặc kép) sẽ làm
+    // vỡ HTML attribute giữa chừng khiến click không chạy được hàm gì cả.
+    // Dùng index -> selectMultipleChoiceAnswer tự tra lại đúng giá trị gốc
+    // từ choices[i], tuyệt đối an toàn, không cần escape.
     return `
       <button
         type="button"
         class="exam-choice-btn ${isSelected ? 'selected' : ''}"
-        ${isLocked ? 'disabled' : `onclick="selectMultipleChoiceAnswer('${current.id}', ${escapeForAttr(choiceValue)})"`}
+        ${isLocked ? 'disabled' : `onclick="selectMultipleChoiceAnswer('${current.id}', ${i})"`}
       >
         <span class="exam-choice-label">${label}</span>
         <span class="exam-choice-content">${choiceValue}</span>
@@ -763,10 +769,16 @@ function renderFillBlankAnswer(current, isLocked) {
 // ------------------------------------------------------------
 // multiple_choice: chọn xong autosave NGAY (không debounce, vì click
 // là hành động rời rạc, không cần đợi).
+// Nhận choiceIndex thay vì giá trị đáp án thô (xem lý do ở renderMultipleChoiceAnswers).
 // ------------------------------------------------------------
-function selectMultipleChoiceAnswer(examQuestionId, value) {
+function selectMultipleChoiceAnswer(examQuestionId, choiceIndex) {
   const current = state.examState.flatQuestions.find(q => q.id === examQuestionId);
   if (!current) return;
+
+  const choices = current.question_bank && current.question_bank.choices;
+  if (!Array.isArray(choices) || !choices[choiceIndex]) return;
+
+  const value = choices[choiceIndex];
 
   state.examState.selectedAnswers[examQuestionId] = value;
   renderExamTaking();
