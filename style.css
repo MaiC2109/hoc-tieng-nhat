@@ -1658,6 +1658,7 @@ body {
 
 .exam-review-choice-correct-unselected {
   border-color: var(--sage);
+  background: var(--sage-light);
   border-style: dashed;
 }
 
@@ -1748,4 +1749,11 @@ body {
    hơn max-width mặc định 700px của .review-page-wrap để đủ chỗ, tránh chật. */
 #exam-result-zone {
   max-width: 960px;
+}
+
+.exam-review-section-tag {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--ink-mute);
+  text-transform: none;
 }

@@ -1686,20 +1686,18 @@ async function viewExamAttemptResult(attemptId) {
 // (viewExamAttemptResult) — đảm bảo hiển thị nhất quán.
 // ------------------------------------------------------------
 function buildQuestionsReview(flatQuestions, answersByBankId) {
-  // Đếm số thứ tự cục bộ trong từng section, giống hệt cách đánh số lúc làm bài.
-  const localCounters = {};
-
-  return flatQuestions.map(q => {
+  return flatQuestions.map((q, i) => {
     const qb = q.question_bank || {};
     const answer = answersByBankId[q.question_id] || { selected_answer: null, is_correct: false };
-
-    localCounters[q.sectionId] = (localCounters[q.sectionId] || 0) + 1;
 
     return {
       examQuestionId: q.id,
       sectionId: q.sectionId,
       sectionTitle: q.sectionTitle,
-      localNumber: localCounters[q.sectionId],
+      // Đánh số TUẦN TỰ TOÀN ĐỀ (không reset theo từng section) — khớp
+      // đúng với số hiện trên lưới tổng quan (renderResultQuestionsGrid
+      // cũng dùng chính index toàn mảng này, i + 1).
+      globalNumber: i + 1,
       question_type: qb.question_type,
       question_text: qb.question_text,
       choices: qb.choices,
@@ -1717,11 +1715,11 @@ function buildQuestionsReview(flatQuestions, answersByBankId) {
 // trả lời) — click nhảy xuống đúng câu đó trong danh sách chi tiết bên dưới.
 // ------------------------------------------------------------
 function renderResultQuestionsGrid(questionsReview) {
-  const cellsHtml = questionsReview.map((q, i) => {
+  const cellsHtml = questionsReview.map(q => {
     const cls = q.is_correct ? 'exam-review-navnum-correct' : 'exam-review-navnum-wrong';
     return `
       <button type="button" class="exam-review-navnum ${cls}" onclick="scrollToReviewQuestion('${q.examQuestionId}')">
-        ${i + 1}
+        ${q.globalNumber}
       </button>
     `;
   }).join('');
@@ -1792,7 +1790,7 @@ function renderResultQuestionDetail(q) {
   return `
     <div class="exam-question-block exam-review-question-block" id="review-q-${q.examQuestionId}">
       <div class="exam-question-number">
-        ${q.sectionTitle || ''} — Câu ${q.localNumber}
+        Câu ${q.globalNumber} <span class="exam-review-section-tag">${q.sectionTitle || ''}</span>
         <span class="exam-status-badge ${q.is_correct ? 'exam-status-passed' : 'exam-status-retry'}">
           ${q.is_correct ? 'Đúng' : 'Sai'}
         </span>
