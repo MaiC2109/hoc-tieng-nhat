@@ -621,6 +621,7 @@ body {
 .btn {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
   padding: 8px 16px;
   border: none;
@@ -1416,8 +1417,8 @@ body {
   border-radius: var(--radius-sm);
   box-shadow: var(--shadow-sm);
   padding: 24px;
-  max-width: 480px;
-  margin: 0 auto;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .exam-result-status-row {
@@ -1684,4 +1685,67 @@ body {
   border-radius: var(--radius-sm);
   font-size: 13px;
   line-height: 1.6;
+}
+
+/* ============================================================
+   EXAM MODULE — Layout 2 cột cho màn kết quả: sidebar sticky bên trái
+   (score box + lưới đúng/sai), chi tiết từng câu cuộn bên phải.
+   ============================================================ */
+#exam-result-zone > * {
+  align-self: stretch;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.exam-result-layout {
+  display: flex;
+  align-items: flex-start;
+  gap: 28px;
+}
+
+.exam-result-sidebar {
+  flex: 0 0 300px;
+  position: sticky;
+  top: 20px;
+  align-self: flex-start;
+}
+
+.exam-result-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.exam-review-navnum-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-mute);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin: 20px 0 10px;
+}
+
+@media (max-width: 860px) {
+  .exam-result-layout {
+    flex-direction: column;
+  }
+  .exam-result-sidebar {
+    position: static;
+    flex-basis: auto;
+    width: 100%;
+  }
+}
+
+/* Nút "Nộp bài" trong overview bị stretch full-width do rule
+   #exam-taking-zone > * { width:100% } — .btn gốc chỉ có align-items:center
+   (căn dọc) mà thiếu justify-content:center (căn ngang), nên text/icon lệch
+   trái khi button bị kéo rộng. Bổ sung căn giữa, không ảnh hưởng các nút
+   .btn khác vì chúng vốn co theo nội dung (không bị stretch). */
+.btn {
+  justify-content: center;
+}
+
+/* Màn kết quả dùng layout 2 cột (sidebar sticky 300px + nội dung), nới rộng
+   hơn max-width mặc định 700px của .review-page-wrap để đủ chỗ, tránh chật. */
+#exam-result-zone {
+  max-width: 960px;
 }

@@ -1083,7 +1083,18 @@ async function completeCurrentSection() {
   const current = state.examState.flatQuestions[state.examState.currentQuestionIndex];
   if (!current) return;
 
-  if (!confirm('Hoàn thành phần này? Bạn sẽ không thể quay lại chỉnh sửa sau khi xác nhận.')) return;
+  // Đếm số câu chưa trả lời TRONG PHẠM VI section này (không tính toàn đề).
+  const sectionQuestions = state.examState.flatQuestions.filter(q => q.sectionId === current.sectionId);
+  const unansweredCount = sectionQuestions.filter(q => {
+    const val = state.examState.selectedAnswers[q.id];
+    return val === undefined || val === null || val === '';
+  }).length;
+
+  const confirmMsg = unansweredCount > 0
+    ? `Bạn còn ${unansweredCount} câu chưa làm trong phần này. Hoàn thành phần này? Bạn sẽ không thể quay lại chỉnh sửa sau khi xác nhận.`
+    : 'Hoàn thành phần này? Bạn sẽ không thể quay lại chỉnh sửa sau khi xác nhận.';
+
+  if (!confirm(confirmMsg)) return;
 
   clearSectionTimer();
 
@@ -1800,7 +1811,6 @@ function renderResultQuestionsReview(questionsReview) {
 
   return `
     <div class="exam-review-section-title">Chi tiết bài làm</div>
-    ${renderResultQuestionsGrid(questionsReview)}
     <div class="exam-review-questions-list">
       ${detailsHtml}
     </div>
@@ -1856,12 +1866,7 @@ function renderExamResultScreen(attempt, questionsReview) {
   const statusLabel = statusLabelMap[attempt.status] || attempt.status;
   const statusClass = statusClassMap[attempt.status] || 'exam-status-submitted';
 
-  let html = `
-    <div class="review-page-header">
-      <h2>📊 Kết quả bài làm</h2>
-      <p>${exam.title || ''}</p>
-    </div>
-
+  let sidebarHtml = `
     <div class="exam-result-box">
       <div class="exam-result-status-row">
         <span class="exam-status-badge ${statusClass}">${statusLabel}</span>
@@ -1883,7 +1888,7 @@ function renderExamResultScreen(attempt, questionsReview) {
   if (attempt.section_scores && typeof attempt.section_scores === 'object') {
     const entries = Object.entries(attempt.section_scores);
     if (entries.length > 0) {
-      html += `<div class="exam-result-sections"><div class="exam-result-sections-title">Điểm theo phần</div>`;
+      sidebarHtml += `<div class="exam-result-sections"><div class="exam-result-sections-title">Điểm theo phần</div>`;
       entries.forEach(([key, value]) => {
         const displayKey = (key === 'null' || key === 'undefined' || !key) ? 'Khác' : key;
         let displayValue = '—';
@@ -1894,22 +1899,22 @@ function renderExamResultScreen(attempt, questionsReview) {
         } else if (value != null) {
           displayValue = String(value);
         }
-        html += `
+        sidebarHtml += `
           <div class="exam-result-section-row">
             <span>${displayKey}</span>
             <span>${displayValue}</span>
           </div>
         `;
       });
-      html += `</div>`;
+      sidebarHtml += `</div>`;
     }
   }
 
   if (attempt.status === 'needs_retry' && attempt.next_retry_date) {
-    html += `<div class="exam-result-retry-note">Ngày có thể làm lại: ${attempt.next_retry_date}${attempt.retry_note ? ' — ' + attempt.retry_note : ''}</div>`;
+    sidebarHtml += `<div class="exam-result-retry-note">Ngày có thể làm lại: ${attempt.next_retry_date}${attempt.retry_note ? ' — ' + attempt.retry_note : ''}</div>`;
   }
 
-  html += `
+  sidebarHtml += `
       <div class="exam-result-meta">
         ${attempt.submitted_at ? `Nộp lúc: ${new Date(attempt.submitted_at).toLocaleString('vi-VN')}` : ''}
       </div>
@@ -1920,7 +1925,27 @@ function renderExamResultScreen(attempt, questionsReview) {
     </div>
   `;
 
-  html += renderResultQuestionsReview(questionsReview);
+  // Lưới đúng/sai cũng nằm trong sidebar sticky bên trái, ngay dưới score box.
+  if (questionsReview && questionsReview.length > 0) {
+    sidebarHtml += `
+      <div class="exam-review-navnum-title">Câu hỏi</div>
+      ${renderResultQuestionsGrid(questionsReview)}
+    `;
+  }
+
+  const mainHtml = renderResultQuestionsReview(questionsReview);
+
+  const html = `
+    <div class="review-page-header">
+      <h2>📊 Kết quả bài làm</h2>
+      <p>${exam.title || ''}</p>
+    </div>
+
+    <div class="exam-result-layout">
+      <div class="exam-result-sidebar">${sidebarHtml}</div>
+      <div class="exam-result-main">${mainHtml}</div>
+    </div>
+  `;
 
   zone.innerHTML = html;
 }
