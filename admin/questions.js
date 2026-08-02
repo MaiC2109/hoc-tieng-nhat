@@ -149,7 +149,7 @@ function toggleQuestionPassageField() {
   if (!group) return;
 
   const skill = questionsAdminState.skills.find(sk => String(sk.id) === String(skillId));
-  const shouldShow = !!skill && (skill.code === 'reading' || skill.code === 'listening');
+  const shouldShow = !!skill && (skill.code === 'reading' || skill.code === 'listening' || skill.code === 'grammar');
 
   group.style.display = shouldShow ? 'block' : 'none';
   if (!shouldShow) {
@@ -1252,7 +1252,10 @@ function initQuestionFormControls() {
       ?.addEventListener('click', () => removeChoiceImage(i));
   });
 
-  document.getElementById('btn-open-passage-form')?.addEventListener('click', openPassageForm);
+  document.getElementById('btn-open-passage-form')?.addEventListener('click', () => openPassageForm());
+  document.getElementById('passage-type')?.addEventListener('change', (e) => {
+    togglePassageContentVisibility(e.target.value);
+  });
   document.getElementById('passage-form-close-btn')?.addEventListener('click', closePassageForm);
   document.getElementById('passage-form-cancel-btn')?.addEventListener('click', closePassageForm);
   document.getElementById('passage-form-overlay')?.addEventListener('click', closePassageForm);
@@ -1284,12 +1287,12 @@ function initQuestionFormControls() {
 async function loadPassagesAdminList() {
   const tbody = document.getElementById('passage-table-body');
   if (tbody) {
-    tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state">Đang tải dữ liệu...</div></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state">Đang tải dữ liệu...</div></td></tr>`;
   }
 
   try {
     const [passagesRes, usageRes] = await Promise.all([
-      fetch(`${ADMIN_CONFIG.supabaseUrl}/rest/v1/passages?select=id,title,audio_url,created_at&order=created_at.desc`, { headers: sbHeaders() }),
+      fetch(`${ADMIN_CONFIG.supabaseUrl}/rest/v1/passages?select=id,title,passage_type,content,audio_url,created_at&order=created_at.desc`, { headers: sbHeaders() }),
       fetch(`${ADMIN_CONFIG.supabaseUrl}/rest/v1/question_bank?select=passage_id&passage_id=not.is.null`, { headers: await sbAuthedHeaders() })
     ]);
 
@@ -1314,7 +1317,7 @@ async function loadPassagesAdminList() {
   } catch (err) {
     console.error('Lỗi tải bảng đoạn văn/hội thoại:', err);
     if (tbody) {
-      tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state">❌ Không tải được danh sách đoạn văn/hội thoại.</div></td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state">❌ Không tải được danh sách đoạn văn/hội thoại.</div></td></tr>`;
     }
   }
 }
@@ -1326,7 +1329,7 @@ function renderPassagesAdminTable() {
 
   const rows = questionsAdminState.passageTableRows || [];
   if (rows.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state">Chưa có đoạn văn/hội thoại nào.</div></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state">Chưa có đoạn văn/hội thoại nào.</div></td></tr>`;
     if (pagEl) pagEl.style.display = 'none';
     return;
   }
@@ -1338,10 +1341,17 @@ function renderPassagesAdminTable() {
   const startIdx = (questionsAdminState.passageCurrentPage - 1) * PASSAGE_PAGE_SIZE;
   const pageRows = rows.slice(startIdx, startIdx + PASSAGE_PAGE_SIZE);
 
+  const passageTypeLabel = (type) => {
+    if (type === 'reading') return 'Đọc hiểu';
+    if (type === 'listening') return 'Nghe hiểu';
+    return '<span style="color:var(--ink-soft);">—</span>';
+  };
+
   tbody.innerHTML = pageRows.map((p, idx) => `
     <tr onclick="editPassageRow('${p.id}')" style="cursor:pointer;">
       <td style="text-align:center;">${startIdx + idx + 1}</td>
       <td>${escHtml(p.title || '(Chưa đặt tiêu đề)')}</td>
+      <td>${passageTypeLabel(p.passage_type)}</td>
       <td style="text-align:center;">${p.questionCount}</td>
       <td style="text-align:center;">${p.audio_url ? '✓' : '—'}</td>
       <td>${escHtml(formatDateVN(p.created_at))}</td>
@@ -1450,6 +1460,8 @@ function resetPassageForm() {
   if (form) form.reset();
 
   document.getElementById('passage-form-error').textContent = '';
+  document.getElementById('passage-type').value = '';
+  togglePassageContentVisibility(''); // reset -> hiện lại content group mặc định
 
   // form.reset() không tác dụng lên div contenteditable -> dọn tay
   const contentEditor = document.getElementById('passage-content');
@@ -1466,10 +1478,20 @@ function resetPassageForm() {
   if (preview) { preview.style.display = 'none'; preview.removeAttribute('src'); }
 }
 
+// Ẩn hẳn khối "Nội dung văn bản" khi chọn Nghe hiểu (không cần content) —
+// chỉ ẩn UI, KHÔNG xóa nội dung đã gõ (phòng trường hợp admin đổi qua đổi
+// lại loại, tránh mất dữ liệu đang nhập dở).
+function togglePassageContentVisibility(passageType) {
+  const group = document.getElementById('passage-content-group');
+  if (group) group.style.display = passageType === 'listening' ? 'none' : 'block';
+}
+
 // Đổ dữ liệu 1 passage vào form — dùng khi mở mode edit
 function populatePassageFormFromRow(row) {
   document.getElementById('passage-title').value = row.title || '';
   document.getElementById('passage-content').innerHTML = row.content || '';
+  document.getElementById('passage-type').value = row.passage_type || '';
+  togglePassageContentVisibility(row.passage_type || '');
 
   if (row.audio_url) {
     document.getElementById('passage-audio-url').value = row.audio_url;
@@ -1619,6 +1641,7 @@ async function submitPassageForm(e) {
   // toàn ảnh thay text, không còn chữ nào).
   const hasTextOrImage = !!stripHtml(contentHtml).trim() || /<img\b/i.test(contentHtml);
   const audioUrl = document.getElementById('passage-audio-url').value || null;
+  const passageType = document.getElementById('passage-type').value || null;
 
   if (!title) {
     errorEl.textContent = 'Vui lòng nhập tiêu đề cho đoạn văn/hội thoại (dùng để nhận diện trong dropdown).';
@@ -1633,7 +1656,7 @@ async function submitPassageForm(e) {
 
   try {
     const headers = await sbAuthedHeaders({ 'Prefer': 'return=representation' });
-    const body = JSON.stringify({ title, content: hasTextOrImage ? contentHtml : null, audio_url: audioUrl });
+    const body = JSON.stringify({ title, content: hasTextOrImage ? contentHtml : null, audio_url: audioUrl, passage_type: passageType });
 
     let res;
     if (isEdit) {

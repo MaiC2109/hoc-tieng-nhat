@@ -254,6 +254,10 @@ function renderExamSectionsList() {
           </div>
         </div>
         <div style="display:flex; align-items:center; gap:4px;">
+          <button type="button" class="admin-row-action-btn" title="Sửa phần thi"
+            onclick="openSectionForm(examDetailState.sections.find(s => s.id === '${escHtml(sec.id)}'))">
+            <i class="ti ti-pencil"></i>
+          </button>
           <button type="button" class="admin-row-action-btn" title="Đưa lên trên"
             onclick="moveExamSection('${escHtml(sec.id)}', -1)" ${idx === 0 ? 'disabled' : ''}>
             <i class="ti ti-chevron-up"></i>
@@ -302,9 +306,17 @@ function renderSubsectionsForSection(sectionId) {
              hoán đổi order_index — giống hệt pattern moveExamSubsection(). -->
       </div>
       <div style="display:flex; align-items:center; gap:4px; flex-shrink:0;">
+        <button type="button" class="admin-row-action-btn" title="Xem danh sách câu hỏi đã chọn"
+          onclick="openSubsectionQuestionList('${escHtml(sub.id)}')" ${sub.questionCount === 0 ? 'disabled' : ''}>
+          <i class="ti ti-list-details"></i>
+        </button>
         <button type="button" class="admin-row-action-btn" title="Chọn câu hỏi"
           onclick="openQuestionPicker('${escHtml(sub.id)}')">
           <i class="ti ti-list-check"></i>
+        </button>
+        <button type="button" class="admin-row-action-btn" title="Sửa dạng bài"
+          onclick="openSubsectionForm('${escHtml(sectionId)}', examDetailState.subsectionsBySection['${escHtml(sectionId)}'].find(s => s.id === '${escHtml(sub.id)}'))">
+          <i class="ti ti-pencil"></i>
         </button>
         <button type="button" class="admin-row-action-btn" title="Đưa lên trên"
           onclick="moveExamSubsection('${escHtml(sub.id)}', -1)" ${idx === 0 ? 'disabled' : ''}>
@@ -391,20 +403,51 @@ async function deleteExamSection(sectionId) {
 // ── Form tạo phần thi (section) ─────────────────────────────────────
 // Bước hiện tại: CHỈ tạo mới (chưa làm sửa section, chỉ xóa + đổi thứ tự).
 let sectionTitleTouchedByUser = false;
+const sectionFormState = { mode: 'create', editingId: null };
 
-async function openSectionForm() {
+// row = null -> tạo mới. Truyền row (từ examDetailState.sections) -> sửa.
+async function openSectionForm(row = null) {
   const form = document.getElementById('section-form');
   if (form) form.reset();
   document.getElementById('section-form-error').textContent = '';
   sectionTitleTouchedByUser = false;
 
   const skillSelect = document.getElementById('section-skill');
+  const titleEl = document.getElementById('section-form-title');
+  const submitBtn = document.getElementById('section-form-submit-btn');
+  const lockHint = document.getElementById('section-skill-lock-hint');
+
   try {
     const skills = await fetchSkillsList();
     skillSelect.innerHTML = '<option value="">— Chọn kỹ năng —</option>' +
       skills.map(sk => `<option value="${sk.id}">${escHtml(sk.name)}</option>`).join('');
   } catch (err) {
     console.error('Lỗi tải danh sách kỹ năng cho form phần thi:', err);
+  }
+
+  if (row) {
+    sectionFormState.mode = 'edit';
+    sectionFormState.editingId = row.id;
+    if (titleEl) titleEl.textContent = 'Sửa phần thi';
+    if (submitBtn) submitBtn.textContent = 'Cập nhật phần thi';
+    sectionTitleTouchedByUser = true; // đã có tiêu đề cũ -> không tự điền đè khi sửa
+
+    skillSelect.value = String(row.skill_id);
+    // Khóa đổi kỹ năng khi sửa — đổi skill_id của 1 section đã có
+    // subsection/câu hỏi bên trong sẽ làm sai lệch dữ liệu đã chọn theo
+    // đúng kỹ năng cũ (modal chọn câu hỏi lọc theo skill_id của section).
+    skillSelect.disabled = true;
+    if (lockHint) lockHint.style.display = 'block';
+
+    document.getElementById('section-title').value = row.title || '';
+    document.getElementById('section-minutes').value = Math.round(row.time_limit_seconds / 60);
+  } else {
+    sectionFormState.mode = 'create';
+    sectionFormState.editingId = null;
+    if (titleEl) titleEl.textContent = 'Thêm phần thi';
+    if (submitBtn) submitBtn.textContent = 'Lưu phần thi';
+    skillSelect.disabled = false;
+    if (lockHint) lockHint.style.display = 'none';
   }
 
   document.getElementById('section-form-overlay').style.display = 'block';
@@ -423,6 +466,7 @@ async function submitSectionForm(e) {
   const submitBtn = document.getElementById('section-form-submit-btn');
   errorEl.textContent = '';
 
+  const isEdit = sectionFormState.mode === 'edit' && sectionFormState.editingId !== null;
   const skillId = document.getElementById('section-skill').value;
   const title = document.getElementById('section-title').value.trim();
   const minutesRaw = document.getElementById('section-minutes').value;
@@ -436,9 +480,9 @@ async function submitSectionForm(e) {
     errorEl.textContent = 'Vui lòng nhập thời gian làm bài hợp lệ (số phút > 0).';
     return;
   }
-  // exam_type = 'skill' chỉ được 1 section — chặn double-check ở client
-  // phòng trường hợp admin mở form trước khi nút bị disable kịp cập nhật.
-  if (examDetailState.exam?.exam_type === 'skill' && examDetailState.sections.length >= 1) {
+  // exam_type = 'skill' chỉ được 1 section — chỉ áp dụng khi TẠO MỚI, sửa
+  // section đã có sẵn không tính là thêm section mới nên bỏ qua check này.
+  if (!isEdit && examDetailState.exam?.exam_type === 'skill' && examDetailState.sections.length >= 1) {
     errorEl.textContent = 'Đề loại "skill" chỉ được có 1 phần thi duy nhất.';
     return;
   }
@@ -449,17 +493,24 @@ async function submitSectionForm(e) {
 
   try {
     const headers = await sbAuthedHeaders({ 'Prefer': 'return=representation' });
-    const body = JSON.stringify({
-      exam_id: examDetailState.examId,
-      skill_id: parseInt(skillId, 10),
-      title: title || null,
-      time_limit_seconds: minutes * 60,
-      order_index: examDetailState.sections.length // thêm vào cuối danh sách hiện có
-    });
 
-    const res = await fetch(`${ADMIN_CONFIG.supabaseUrl}/rest/v1/exam_sections`, {
-      method: 'POST', headers, body
-    });
+    const res = isEdit
+      ? await fetch(`${ADMIN_CONFIG.supabaseUrl}/rest/v1/exam_sections?id=eq.${sectionFormState.editingId}`, {
+          method: 'PATCH', headers,
+          // Sửa chỉ đổi title/thời gian, KHÔNG đổi skill_id (đã khóa ở UI)
+          // và KHÔNG đổi order_index (giữ nguyên vị trí hiện tại).
+          body: JSON.stringify({ title: title || null, time_limit_seconds: minutes * 60 })
+        })
+      : await fetch(`${ADMIN_CONFIG.supabaseUrl}/rest/v1/exam_sections`, {
+          method: 'POST', headers,
+          body: JSON.stringify({
+            exam_id: examDetailState.examId,
+            skill_id: parseInt(skillId, 10),
+            title: title || null,
+            time_limit_seconds: minutes * 60,
+            order_index: examDetailState.sections.length // thêm vào cuối danh sách hiện có
+          })
+        });
 
     if (!res.ok) {
       const errBody = await res.json().catch(() => null);
@@ -544,9 +595,11 @@ async function deleteExamSubsection(subsectionId) {
 // ── Form tạo dạng bài (subsection) ─────────────────────────────────
 // Bước hiện tại: CHỈ tạo mới (chưa làm sửa, chỉ xóa + đổi thứ tự) —
 // giống đúng pattern của form section.
-const subsectionFormState = { targetSectionId: null, audioUploading: false };
+const subsectionFormState = { targetSectionId: null, audioUploading: false, mode: 'create', editingId: null };
 
-function openSubsectionForm(sectionId) {
+// sectionId luôn cần (để biết audio hiện/ẩn theo skill), row (từ
+// examDetailState.subsectionsBySection) truyền vào -> mode sửa.
+function openSubsectionForm(sectionId, row = null) {
   subsectionFormState.targetSectionId = sectionId;
 
   const form = document.getElementById('subsection-form');
@@ -557,6 +610,30 @@ function openSubsectionForm(sectionId) {
   const section = examDetailState.sections.find(s => s.id === sectionId);
   const skill = (questionsAdminState.skills || []).find(sk => sk.id === section?.skill_id);
   toggleSubsectionAudioVisibility(skill?.code === LISTENING_SKILL_CODE);
+
+  const titleEl = document.getElementById('subsection-form-heading');
+  const submitBtn = document.getElementById('subsection-form-submit-btn');
+
+  if (row) {
+    subsectionFormState.mode = 'edit';
+    subsectionFormState.editingId = row.id;
+    if (titleEl) titleEl.textContent = 'Sửa dạng bài';
+    if (submitBtn) submitBtn.textContent = 'Cập nhật dạng bài';
+
+    document.getElementById('subsection-instruction').value = row.instruction_text || '';
+    if (row.audio_url) {
+      document.getElementById('subsection-audio-url').value = row.audio_url;
+      const preview = document.getElementById('subsection-audio-preview');
+      if (preview) { preview.src = row.audio_url; preview.style.display = 'block'; }
+      const statusEl = document.getElementById('subsection-audio-status');
+      if (statusEl) { statusEl.textContent = 'Audio hiện có — chọn file khác nếu muốn thay.'; statusEl.style.color = ''; }
+    }
+  } else {
+    subsectionFormState.mode = 'create';
+    subsectionFormState.editingId = null;
+    if (titleEl) titleEl.textContent = 'Thêm dạng bài';
+    if (submitBtn) submitBtn.textContent = 'Lưu dạng bài';
+  }
 
   document.getElementById('subsection-form-overlay').style.display = 'block';
   document.getElementById('subsection-form-panel').style.display = 'flex';
@@ -590,6 +667,7 @@ async function submitSubsectionForm(e) {
   const submitBtn = document.getElementById('subsection-form-submit-btn');
   errorEl.textContent = '';
 
+  const isEdit = subsectionFormState.mode === 'edit' && subsectionFormState.editingId !== null;
   const instructionText = document.getElementById('subsection-instruction').value.trim();
   const audioUrl = document.getElementById('subsection-audio-url').value || null;
 
@@ -612,18 +690,22 @@ async function submitSubsectionForm(e) {
 
   try {
     const headers = await sbAuthedHeaders({ 'Prefer': 'return=representation' });
-    const existingSubs = examDetailState.subsectionsBySection[subsectionFormState.targetSectionId] || [];
 
-    const body = JSON.stringify({
-      exam_section_id: subsectionFormState.targetSectionId,
-      instruction_text: instructionText,
-      audio_url: audioUrl,
-      order_index: existingSubs.length // thêm vào cuối danh sách hiện có của section đó
-    });
-
-    const res = await fetch(`${ADMIN_CONFIG.supabaseUrl}/rest/v1/exam_subsections`, {
-      method: 'POST', headers, body
-    });
+    const res = isEdit
+      ? await fetch(`${ADMIN_CONFIG.supabaseUrl}/rest/v1/exam_subsections?id=eq.${subsectionFormState.editingId}`, {
+          method: 'PATCH', headers,
+          // Sửa chỉ đổi instruction/audio, KHÔNG đổi order_index (giữ nguyên vị trí).
+          body: JSON.stringify({ instruction_text: instructionText, audio_url: audioUrl })
+        })
+      : await fetch(`${ADMIN_CONFIG.supabaseUrl}/rest/v1/exam_subsections`, {
+          method: 'POST', headers,
+          body: JSON.stringify({
+            exam_section_id: subsectionFormState.targetSectionId,
+            instruction_text: instructionText,
+            audio_url: audioUrl,
+            order_index: (examDetailState.subsectionsBySection[subsectionFormState.targetSectionId] || []).length
+          })
+        });
 
     if (!res.ok) {
       const errBody = await res.json().catch(() => null);
@@ -988,6 +1070,84 @@ async function uploadSubsectionAudioFile(file) {
   }
 }
 
+// ── Panel xem danh sách câu hỏi đã chọn trong 1 subsection (chỉ xem) ──
+async function openSubsectionQuestionList(subsectionId) {
+  const bodyEl = document.getElementById('subsection-question-list-body');
+  bodyEl.innerHTML = '<div class="empty-state">Đang tải...</div>';
+
+  document.getElementById('subsection-question-list-overlay').style.display = 'block';
+  document.getElementById('subsection-question-list-panel').style.display = 'flex';
+
+  try {
+    const headers = await sbAuthedHeaders();
+    // Dùng PostgREST embed để lấy luôn question_text từ question_bank
+    // trong 1 request, sắp theo đúng order_index đã lưu.
+    const res = await fetch(
+      `${ADMIN_CONFIG.supabaseUrl}/rest/v1/exam_questions?exam_subsection_id=eq.${subsectionId}` +
+      `&select=id,order_index,points,question_id,question_bank(question_text)&order=order_index.asc`,
+      { headers }
+    );
+    if (!res.ok) throw new Error(`Lỗi tải danh sách câu hỏi (HTTP ${res.status})`);
+
+    const rows = await res.json();
+    if (!rows.length) {
+      bodyEl.innerHTML = '<div class="empty-state">Dạng bài này chưa có câu hỏi nào.</div>';
+      return;
+    }
+
+    bodyEl.innerHTML = rows.map((r, idx) => `
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; padding:10px 4px; ${idx > 0 ? 'border-top:1px solid var(--border-md);' : ''}">
+        <div style="min-width:0;">
+          <span style="color:var(--ink-soft); font-size:12px;">#${r.order_index + 1}</span>
+          <span style="font-size:13px;">${escHtml(truncateText(stripHtml(r.question_bank?.question_text || ''), 90)) || '<span style="color:var(--ink-soft);">[Hình ảnh]</span>'}</span>
+        </div>
+        <button type="button" class="btn btn-outline" style="padding:4px 10px; font-size:12px; flex-shrink:0;"
+          onclick="jumpToEditQuestion('${escHtml(r.question_id)}')">
+          Sửa câu hỏi
+        </button>
+      </div>
+    `).join('');
+  } catch (err) {
+    console.error('Lỗi tải danh sách câu hỏi đã chọn:', err);
+    bodyEl.innerHTML = '<div class="empty-state">Có lỗi khi tải danh sách câu hỏi.</div>';
+  }
+}
+
+function closeSubsectionQuestionList() {
+  document.getElementById('subsection-question-list-overlay').style.display = 'none';
+  document.getElementById('subsection-question-list-panel').style.display = 'none';
+}
+
+// Nhảy sang tab "Câu hỏi" và mở đúng câu hỏi ở mode sửa. Fetch lại row đầy
+// đủ trực tiếp từ question_bank (không dựa vào questionsAdminState.currentRows
+// đang cache, vì filter/tìm kiếm hiện tại ở tab Câu hỏi có thể không chứa
+// đúng câu hỏi này -> tránh trường hợp editQuestionRow() tìm không thấy).
+async function jumpToEditQuestion(questionId) {
+  closeSubsectionQuestionList();
+  closeQuestionPicker();
+
+  try {
+    const headers = await sbAuthedHeaders();
+    const res = await fetch(
+      `${ADMIN_CONFIG.supabaseUrl}/rest/v1/question_bank?id=eq.${questionId}` +
+      `&select=id,skill_id,question_type,question_text,choices,correct_answer,audio_url,explanation,difficulty,passage_id,created_at,skills(name)`,
+      { headers }
+    );
+    if (!res.ok) throw new Error(`Lỗi tải câu hỏi (HTTP ${res.status})`);
+    const rows = await res.json();
+    if (!rows.length) { alert('Không tìm thấy câu hỏi này (có thể đã bị xóa).'); return; }
+
+    switchAdminSection('questions');
+    // Đợi 1 nhịp để #question-form-panel (thuộc tab Câu hỏi) chắc chắn đã
+    // sẵn sàng trong DOM trước khi mở, vì switchAdminSection có thể vẫn
+    // đang nạp lại danh sách câu hỏi ở nền.
+    setTimeout(() => openQuestionForm(rows[0], 'edit'), 50);
+  } catch (err) {
+    console.error('Lỗi mở câu hỏi để sửa từ màn đề thi:', err);
+    alert('Có lỗi khi mở câu hỏi để sửa. Vui lòng thử lại.');
+  }
+}
+
 function initExamFormControls() {
   document.getElementById('exam-form-close-btn')?.addEventListener('click', closeExamForm);
   document.getElementById('exam-form-cancel-btn')?.addEventListener('click', closeExamForm);
@@ -1022,4 +1182,7 @@ function initExamFormControls() {
   document.getElementById('question-picker-search')?.addEventListener('input', (e) => {
     renderQuestionPickerList(e.target.value);
   });
+
+  document.getElementById('subsection-question-list-close-btn')?.addEventListener('click', closeSubsectionQuestionList);
+  document.getElementById('subsection-question-list-overlay')?.addEventListener('click', closeSubsectionQuestionList);
 }

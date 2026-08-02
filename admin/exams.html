@@ -144,6 +144,9 @@
         <select id="section-skill" class="admin-select">
           <option value="">— Chọn kỹ năng —</option>
         </select>
+        <p class="admin-hint-text" id="section-skill-lock-hint" style="display:none;">
+          Không thể đổi kỹ năng của phần thi đã có sẵn dạng bài/câu hỏi — xóa phần này và tạo lại nếu cần đổi kỹ năng.
+        </p>
       </div>
 
       <div class="admin-form-group">
@@ -172,7 +175,7 @@
 
 <div id="subsection-form-panel" class="admin-slide-panel" style="display:none;">
   <div class="admin-slide-panel-header">
-    <h3>Thêm dạng bài</h3>
+    <h3 id="subsection-form-heading">Thêm dạng bài</h3>
     <button type="button" class="admin-slide-close-btn" id="subsection-form-close-btn">
       <i class="ti ti-x"></i>
     </button>
@@ -237,5 +240,26 @@
   <div class="admin-form-actions" style="padding:14px 22px; border-top:1px solid var(--border);">
     <button type="button" class="btn btn-outline" id="question-picker-cancel-btn">Hủy</button>
     <button type="button" class="btn btn-primary" id="question-picker-submit-btn">Thêm vào phần này</button>
+  </div>
+</div>
+
+<!-- ── PANEL: XEM DANH SÁCH CÂU HỎI ĐÃ CHỌN (chỉ xem, không tick) ──
+     Khác question-picker-panel ở chỗ: đây chỉ hiện danh sách theo đúng
+     order_index đã lưu + link "Sửa" nhảy sang bảng Câu hỏi (questions.js),
+     không có checkbox chọn/bỏ chọn. -->
+<div id="subsection-question-list-overlay" class="admin-overlay" style="display:none;"></div>
+
+<div id="subsection-question-list-panel" class="admin-slide-panel admin-slide-panel-wide" style="display:none;">
+  <div class="admin-slide-panel-header">
+    <h3>Câu hỏi trong dạng bài này</h3>
+    <button type="button" class="admin-slide-close-btn" id="subsection-question-list-close-btn">
+      <i class="ti ti-x"></i>
+    </button>
+  </div>
+
+  <div class="admin-slide-panel-body">
+    <div id="subsection-question-list-body" style="max-height:60vh; overflow-y:auto;">
+      <div class="empty-state">Đang tải...</div>
+    </div>
   </div>
 </div>
