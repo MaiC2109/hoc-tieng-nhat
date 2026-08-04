@@ -12,6 +12,17 @@
 // không thuộc `state` vì không phải dữ liệu app cần track/log.
 const examFillBlankDebounceTimers = {};
 
+// Ánh xạ skill_code (khớp cột skills.code, lowercase theo convention hiện có
+// trong DB) -> label hiển thị tiếng Anh cho phần "Điểm theo phần" ở màn kết quả.
+// Key không khớp map (vd 'khac' do skill_id null) fallback về chính key gốc.
+const SKILL_CODE_LABELS = {
+  kanji: 'Kanji',
+  vocab: 'Vocabulary',
+  grammar: 'Grammar',
+  reading: 'Reading',
+  listening: 'Listening'
+};
+
 state.examState = state.examState || {
   examList: [],       // danh sách đề đã join với attempt gần nhất của user
   isLoading: false,
@@ -1901,7 +1912,9 @@ function renderExamResultScreen(attempt, questionsReview) {
     if (entries.length > 0) {
       sidebarHtml += `<div class="exam-result-sections"><div class="exam-result-sections-title">Điểm theo phần</div>`;
       entries.forEach(([key, value]) => {
-        const displayKey = (key === 'null' || key === 'undefined' || !key) ? 'Khác' : key;
+        const displayKey = (key === 'null' || key === 'undefined' || !key)
+          ? 'Khác'
+          : (SKILL_CODE_LABELS[key] || SKILL_CODE_LABELS[key.toLowerCase()] || key);
         let displayValue = '—';
         if (value && typeof value === 'object') {
           const score = value.score ?? 0;

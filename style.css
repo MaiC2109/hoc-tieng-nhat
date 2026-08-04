@@ -1630,7 +1630,7 @@ body {
 }
 
 .exam-review-question-block {
-  scroll-margin-top: 20px;
+  scroll-margin-top: 76px; /* 56px .app-header sticky + 20px đệm — tránh header đè lên .exam-question-number khi scrollIntoView */
 }
 
 .exam-review-question-block .exam-question-number {
@@ -1707,7 +1707,7 @@ body {
 .exam-result-sidebar {
   flex: 0 0 300px;
   position: sticky;
-  top: 20px;
+  top: 76px; /* 56px .app-header sticky + 20px đệm — tránh header đè lên phần trên của box */
   align-self: flex-start;
 }
 
