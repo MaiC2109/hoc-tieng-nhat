@@ -731,6 +731,31 @@ body {
   margin-bottom: 14px;
 }
 
+/* ── BIẾN THỂ: BOX GIỮA MÀN HÌNH (thay vì trượt từ cạnh phải) ──
+   Dùng cho form Tạo/Sửa câu hỏi và form Tạo đoạn văn/hội thoại — cộng thêm
+   class "admin-modal-centered" bên cạnh "admin-slide-panel" sẵn có (giữ
+   nguyên header/body/close-btn), chỉ đè vị trí + kích thước + bo góc.
+   Các panel khác (từ vựng, unit/part, học viên) vẫn dùng .admin-slide-panel
+   thuần nên không bị ảnh hưởng. */
+.admin-modal-centered {
+  top: 50%;
+  right: auto;
+  bottom: auto;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 680px;
+  max-width: 92vw;
+  max-height: 88vh;
+  border-radius: 14px;
+}
+
+@media (max-width: 720px) {
+  .admin-modal-centered {
+    width: 92vw;
+    max-height: 90vh;
+  }
+}
+
 
 /* ── PANEL: QUẢN LÝ UNIT/PART ── */
 .admin-category-add-row {

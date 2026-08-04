@@ -867,7 +867,33 @@ function injectExamLinkBlockIfNeeded() {
       <label for="question-exam-select">Thêm vào đề thi (tùy chọn)</label>
       <select id="question-exam-select" class="admin-input">
         <option value="">— Không thêm vào đề nào —</option>
+        <option value="__create_new__">+ Tạo đề thi mới…</option>
       </select>
+
+      <div id="question-exam-create-wrap" style="display:none; margin-top:8px; padding:12px; border:1px dashed var(--border-md, #ccc); border-radius:8px;">
+        <div class="admin-form-group" style="margin-bottom:8px;">
+          <label for="question-exam-create-title">Tên đề thi mới</label>
+          <input type="text" id="question-exam-create-title" class="admin-input" placeholder="Ví dụ: JLPT N4 - Đề thi thử số 1" />
+        </div>
+        <div class="admin-form-row" style="display:flex; gap:8px; margin-bottom:8px;">
+          <div class="admin-form-group" style="flex:1;">
+            <label for="question-exam-create-type">Loại đề</label>
+            <select id="question-exam-create-type" class="admin-input">
+              <option value="full">Toàn phần (full)</option>
+              <option value="skill">Theo kỹ năng (skill)</option>
+            </select>
+          </div>
+          <div class="admin-form-group" style="flex:1;">
+            <label for="question-exam-create-threshold">Ngưỡng đạt (%)</label>
+            <input type="number" id="question-exam-create-threshold" class="admin-input" value="70" min="0" max="100" />
+          </div>
+        </div>
+        <div id="question-exam-create-error" class="admin-login-error" style="margin-bottom:8px;"></div>
+        <div style="display:flex; gap:8px;">
+          <button type="button" class="btn btn-outline" id="question-exam-create-cancel-btn">Hủy</button>
+          <button type="button" class="btn btn-primary" id="question-exam-create-confirm-btn">Tạo đề</button>
+        </div>
+      </div>
 
       <div id="question-exam-section-wrap" style="display:none; margin-top:8px;">
         <label for="question-exam-section-select">Chọn phần (dạng bài)</label>
@@ -893,12 +919,16 @@ function injectExamLinkBlockIfNeeded() {
     ?.addEventListener('change', onExamLinkExamChange);
   document.getElementById('question-exam-section-select')
     ?.addEventListener('change', onExamLinkSectionChange);
+  document.getElementById('question-exam-create-confirm-btn')
+    ?.addEventListener('click', handleExamCreateConfirm);
+  document.getElementById('question-exam-create-cancel-btn')
+    ?.addEventListener('click', handleExamCreateCancel);
 
   // Đổi Kỹ năng ở đầu form trong lúc đang chọn dở đề/phần -> lọc lại phần
   // theo skill mới (không bắt phải chọn lại đề từ đầu).
   document.getElementById('question-skill')?.addEventListener('change', () => {
     const examId = document.getElementById('question-exam-select')?.value;
-    if (examId) loadExamLinkSections(examId);
+    if (examId && examId !== '__create_new__') loadExamLinkSections(examId);
   });
 }
 
@@ -909,8 +939,9 @@ async function populateExamLinkExamDropdown() {
   try {
     const exams = await fetchExamsList();
     const keepValue = select.value;
-    select.innerHTML = '<option value="">— Không thêm vào đề nào —</option>' +
-      exams.map(ex => `<option value="${ex.id}">${escHtml(ex.title)}${ex.is_published ? '' : ' (nháp)'}</option>`).join('');
+    select.innerHTML = '<option value="">— Không thêm vào đề nào —</option>'
+      + '<option value="__create_new__">+ Tạo đề thi mới…</option>'
+      + exams.map(ex => `<option value="${ex.id}">${escHtml(ex.title)}${ex.is_published ? '' : ' (nháp)'}</option>`).join('');
     if (keepValue) select.value = keepValue;
   } catch (err) {
     console.error('Lỗi nạp dropdown đề thi:', err);
@@ -918,11 +949,23 @@ async function populateExamLinkExamDropdown() {
 }
 
 async function onExamLinkExamChange() {
-  const examId = document.getElementById('question-exam-select')?.value;
+  const select = document.getElementById('question-exam-select');
+  const examId = select?.value;
   const sectionWrap = document.getElementById('question-exam-section-wrap');
   const subsectionWrap = document.getElementById('question-exam-subsection-wrap');
+  const createWrap = document.getElementById('question-exam-create-wrap');
 
   resetExamLinkSectionAndSubsection();
+
+  if (examId === '__create_new__') {
+    if (sectionWrap) sectionWrap.style.display = 'none';
+    if (subsectionWrap) subsectionWrap.style.display = 'none';
+    if (createWrap) createWrap.style.display = 'block';
+    document.getElementById('question-exam-create-title')?.focus();
+    return;
+  }
+
+  if (createWrap) createWrap.style.display = 'none';
 
   if (!examId) {
     if (sectionWrap) sectionWrap.style.display = 'none';
@@ -933,6 +976,92 @@ async function onExamLinkExamChange() {
   if (sectionWrap) sectionWrap.style.display = 'block';
   if (subsectionWrap) subsectionWrap.style.display = 'none';
   await loadExamLinkSections(examId);
+}
+
+// Tạo đề thi mới ngay từ form câu hỏi (không rời trang). Đề mới luôn tạo ở
+// trạng thái nháp (is_published:false) — publish là việc của màn Quản lý
+// đề thi riêng, ngoài phạm vi form này.
+async function handleExamCreateConfirm() {
+  const titleInput = document.getElementById('question-exam-create-title');
+  const typeSelect = document.getElementById('question-exam-create-type');
+  const thresholdInput = document.getElementById('question-exam-create-threshold');
+  const errorEl = document.getElementById('question-exam-create-error');
+  const confirmBtn = document.getElementById('question-exam-create-confirm-btn');
+
+  const title = titleInput?.value.trim();
+  const examType = typeSelect?.value;
+  const threshold = Number(thresholdInput?.value);
+
+  if (errorEl) errorEl.textContent = '';
+
+  if (!title) {
+    if (errorEl) errorEl.textContent = 'Vui lòng nhập tên đề thi.';
+    titleInput?.focus();
+    return;
+  }
+  if (!Number.isFinite(threshold) || threshold < 0 || threshold > 100) {
+    if (errorEl) errorEl.textContent = 'Ngưỡng đạt phải là số từ 0 đến 100.';
+    thresholdInput?.focus();
+    return;
+  }
+
+  const originalText = confirmBtn.textContent;
+  confirmBtn.disabled = true;
+  confirmBtn.textContent = 'Đang tạo...';
+
+  try {
+    const res = await fetch(`${ADMIN_CONFIG.supabaseUrl}/rest/v1/exams`, {
+      method: 'POST',
+      headers: await sbAuthedHeaders({ 'Prefer': 'return=representation' }),
+      body: JSON.stringify({
+        title,
+        exam_type: examType,
+        pass_threshold_pct: threshold,
+        is_published: false
+      })
+    });
+    if (!res.ok) {
+      const errBody = await res.json().catch(() => null);
+      throw new Error(errBody?.message || `Lỗi tạo đề thi mới (HTTP ${res.status})`);
+    }
+    const [newExam] = await res.json();
+
+    // Thêm vào cache local (không fetch lại toàn bộ) rồi chọn sẵn đề vừa tạo
+    examLinkState.exams.unshift(newExam);
+    await populateExamLinkExamDropdown();
+
+    const select = document.getElementById('question-exam-select');
+    if (select) select.value = newExam.id;
+
+    const createWrap = document.getElementById('question-exam-create-wrap');
+    if (createWrap) createWrap.style.display = 'none';
+    if (titleInput) titleInput.value = '';
+    if (thresholdInput) thresholdInput.value = '70';
+    if (typeSelect) typeSelect.value = 'full';
+
+    // Đề mới chưa có section nào -> loadExamLinkSections sẽ tự hiện thông
+    // báo "Đề này chưa có phần [skill]" (đúng hành vi đã thống nhất trước đó).
+    const sectionWrap = document.getElementById('question-exam-section-wrap');
+    if (sectionWrap) sectionWrap.style.display = 'block';
+    await loadExamLinkSections(newExam.id);
+  } catch (err) {
+    console.error('Lỗi tạo đề thi mới:', err);
+    if (errorEl) errorEl.textContent = err?.message || 'Có lỗi khi tạo đề thi. Vui lòng thử lại.';
+  } finally {
+    confirmBtn.disabled = false;
+    confirmBtn.textContent = originalText;
+  }
+}
+
+function handleExamCreateCancel() {
+  const select = document.getElementById('question-exam-select');
+  const createWrap = document.getElementById('question-exam-create-wrap');
+  const errorEl = document.getElementById('question-exam-create-error');
+
+  if (select) select.value = '';
+  if (createWrap) createWrap.style.display = 'none';
+  if (errorEl) errorEl.textContent = '';
+  document.getElementById('question-exam-create-title').value = '';
 }
 
 // Nạp exam_sections của đề đang chọn, LỌC theo skill_id đang chọn ở đầu
@@ -1046,6 +1175,17 @@ function resetExamLinkBlock() {
   const subsectionWrap = document.getElementById('question-exam-subsection-wrap');
   if (sectionWrap) sectionWrap.style.display = 'none';
   if (subsectionWrap) subsectionWrap.style.display = 'none';
+
+  const createWrap = document.getElementById('question-exam-create-wrap');
+  const createError = document.getElementById('question-exam-create-error');
+  const createTitle = document.getElementById('question-exam-create-title');
+  const createType = document.getElementById('question-exam-create-type');
+  const createThreshold = document.getElementById('question-exam-create-threshold');
+  if (createWrap) createWrap.style.display = 'none';
+  if (createError) createError.textContent = '';
+  if (createTitle) createTitle.value = '';
+  if (createType) createType.value = 'full';
+  if (createThreshold) createThreshold.value = '70';
 }
 
 // Câu hỏi đang sửa (mode edit) có thể đã được gắn vào 1 hay nhiều đề thi từ
