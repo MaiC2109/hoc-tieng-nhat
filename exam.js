@@ -1849,6 +1849,12 @@ function renderExamResultScreen(attempt, questionsReview) {
     ? Math.round((safeTotalScore / attempt.total_possible) * 100)
     : null;
 
+  // Đạt/Chưa đạt — CHỈ so sánh scorePct với exam.pass_threshold_pct để hiển thị,
+  // không đụng đến cột `status` trong DB (việc set status='passed'/'needs_retry'
+  // thật sự thuộc logic retry, chưa làm ở tier này — xem comment ở submitExamAttempt()).
+  const hasPassThreshold = scorePct != null && exam.pass_threshold_pct != null;
+  const isPassed = hasPassThreshold && scorePct >= exam.pass_threshold_pct;
+
   const statusLabelMap = {
     submitted: 'Đã nộp bài',
     passed: 'Đạt',
@@ -1876,7 +1882,14 @@ function renderExamResultScreen(attempt, questionsReview) {
         ${scorePct != null ? `<span class="exam-result-score-pct">(${scorePct}%)</span>` : ''}
       </div>
 
-      ${exam.pass_threshold_pct != null ? `
+      ${hasPassThreshold ? `
+        <div class="exam-result-status-row">
+          <span class="exam-status-badge ${isPassed ? 'exam-status-passed' : 'exam-status-retry'}">
+            ${isPassed ? 'Đạt' : 'Chưa đạt'}
+          </span>
+        </div>
+        <div class="exam-result-threshold">Điểm đạt yêu cầu: ${exam.pass_threshold_pct}%</div>
+      ` : exam.pass_threshold_pct != null ? `
         <div class="exam-result-threshold">Điểm đạt yêu cầu: ${exam.pass_threshold_pct}%</div>
       ` : ''}
   `;
