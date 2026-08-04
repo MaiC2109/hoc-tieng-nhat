@@ -424,6 +424,19 @@ body {
   font-size: 11.5px;
 }
 
+/* Dùng cho các dòng gợi ý/thông báo nhỏ chèn qua JS (khối "Câu hỏi này
+   đang thuộc:", "Đề này chưa có phần...") — trước đây thiếu định nghĩa nên
+   rơi về font mặc định to hơn các label khác trong form. */
+.admin-hint {
+  font-size: 12px;
+  color: var(--ink-mute);
+  line-height: 1.5;
+}
+
+.admin-hint ul {
+  font-size: 12px;
+}
+
 .admin-login-error {
   font-size: 12px;
   color: var(--vermillion);
@@ -678,7 +691,7 @@ body {
   top: 0;
   right: 0;
   bottom: 0;
-  width: 440px;
+  width: 520px;
   max-width: 100%;
   background: var(--paper-card);
   box-shadow: var(--shadow-lg);

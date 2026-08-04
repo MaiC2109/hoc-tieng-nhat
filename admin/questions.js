@@ -901,7 +901,7 @@ function injectExamLinkBlockIfNeeded() {
           <option value="">— Chọn phần —</option>
         </select>
         <div id="question-exam-section-empty-msg" class="admin-hint"
-             style="display:none; color: var(--muted, #777); margin-top:4px; font-size: 0.9em;"></div>
+             style="display:none; margin-top:4px;"></div>
       </div>
 
       <div id="question-exam-subsection-wrap" style="display:none; margin-top:8px;">
