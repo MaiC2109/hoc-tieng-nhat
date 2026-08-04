@@ -731,6 +731,10 @@ function resetQuestionForm() {
 
   toggleQuestionTypeFields();
   toggleQuestionPassageField();
+  resetExamLinkBlock();
+
+  const usageInfo = document.getElementById('question-exam-usage-info');
+  if (usageInfo) { usageInfo.style.display = 'none'; usageInfo.innerHTML = ''; }
 }
 
 // Đổ dữ liệu 1 câu hỏi (row từ question_bank) vào các field trên form.
@@ -794,13 +798,318 @@ function populateQuestionFormFromRow(row, includeAudio) {
   // đó trong openQuestionForm) đã dọn sạch field audio sẵn rồi.
 }
 
+// ============================================================
+//  GẮN CÂU HỎI VÀO ĐỀ THI (exams / exam_sections / exam_subsections)
+//  — Bước này CHỈ làm UI liên động 3 dropdown (đề → phần → dạng bài).
+//  CHƯA xử lý lưu (sẽ nối vào submitQuestionForm ở bước sau, khi đó mới
+//  insert vào bảng exam_questions).
+//  Khối HTML được CHÈN BẰNG JS (không sửa admin/index.html) vì file HTML
+//  không có trong phạm vi sửa lần này — chèn ngay trước khu vực chứa nút
+//  Lưu, idempotent (kiểm tra đã tồn tại thì bỏ qua) để an toàn nếu
+//  openQuestionForm() được gọi nhiều lần.
+// ============================================================
+const examLinkState = {
+  exams: [],
+  examsLoaded: false,
+  sections: [],       // exam_sections của đề đang chọn (chưa filter theo skill)
+  subsections: []      // exam_subsections của phần đang chọn
+};
+
+async function fetchExamsList() {
+  if (examLinkState.examsLoaded) return examLinkState.exams;
+
+  // Lấy cả nháp lẫn published — admin cần thấy hết để gắn câu hỏi vào đề
+  // đang soạn dở. RLS bảng exams yêu cầu auth (giống question_bank) nên
+  // dùng sbAuthedHeaders() thay vì sbHeaders().
+  const url = `${ADMIN_CONFIG.supabaseUrl}/rest/v1/exams?select=id,title,is_published&order=created_at.desc`;
+  const res = await fetch(url, { headers: await sbAuthedHeaders() });
+  if (!res.ok) throw new Error(`Lỗi tải danh sách đề thi: ${res.status}`);
+
+  examLinkState.exams = await res.json();
+  examLinkState.examsLoaded = true;
+  return examLinkState.exams;
+}
+
+async function fetchExamSections(examId) {
+  const url = `${ADMIN_CONFIG.supabaseUrl}/rest/v1/exam_sections`
+    + `?exam_id=eq.${encodeURIComponent(examId)}`
+    + `&select=id,skill_id,title,order_index&order=order_index.asc`;
+  const res = await fetch(url, { headers: await sbAuthedHeaders() });
+  if (!res.ok) throw new Error(`Lỗi tải danh sách phần thi: ${res.status}`);
+  return res.json();
+}
+
+async function fetchExamSubsections(sectionId) {
+  const url = `${ADMIN_CONFIG.supabaseUrl}/rest/v1/exam_subsections`
+    + `?exam_section_id=eq.${encodeURIComponent(sectionId)}`
+    + `&select=id,instruction_text,order_index&order=order_index.asc`;
+  const res = await fetch(url, { headers: await sbAuthedHeaders() });
+  if (!res.ok) throw new Error(`Lỗi tải danh sách dạng bài (mondai): ${res.status}`);
+  return res.json();
+}
+
+// Chèn khối 3 dropdown vào DOM ngay trước khu vực nút Lưu — chỉ chèn 1
+// lần (kiểm tra bằng id của khối cha).
+function injectExamLinkBlockIfNeeded() {
+  if (document.getElementById('question-exam-link-group')) return;
+
+  const submitBtn = document.getElementById('question-form-submit-btn');
+  if (!submitBtn) return; // form chưa render trong DOM (an toàn, không throw)
+
+  // Nếu nút Lưu nằm trong 1 khối actions riêng (hàng nút bấm) thì chèn
+  // trước cả khối đó, để 3 dropdown mới nằm thành 1 nhóm field độc lập
+  // ngay phía trên hàng nút — đúng yêu cầu "trước nút Lưu".
+  const actionsWrap = submitBtn.closest('.admin-form-actions') || submitBtn.parentElement;
+
+  const html = `
+    <div id="question-exam-usage-info" class="admin-hint" style="display:none; margin-bottom:8px;"></div>
+    <div class="admin-form-group" id="question-exam-link-group">
+      <label for="question-exam-select">Thêm vào đề thi (tùy chọn)</label>
+      <select id="question-exam-select" class="admin-input">
+        <option value="">— Không thêm vào đề nào —</option>
+      </select>
+
+      <div id="question-exam-section-wrap" style="display:none; margin-top:8px;">
+        <label for="question-exam-section-select">Chọn phần (dạng bài)</label>
+        <select id="question-exam-section-select" class="admin-input">
+          <option value="">— Chọn phần —</option>
+        </select>
+        <div id="question-exam-section-empty-msg" class="admin-hint"
+             style="display:none; color: var(--muted, #777); margin-top:4px; font-size: 0.9em;"></div>
+      </div>
+
+      <div id="question-exam-subsection-wrap" style="display:none; margin-top:8px;">
+        <label for="question-exam-subsection-select">Chọn dạng bài (mondai)</label>
+        <select id="question-exam-subsection-select" class="admin-input">
+          <option value="">— Chọn dạng bài —</option>
+        </select>
+      </div>
+    </div>
+  `;
+
+  actionsWrap.insertAdjacentHTML('beforebegin', html);
+
+  document.getElementById('question-exam-select')
+    ?.addEventListener('change', onExamLinkExamChange);
+  document.getElementById('question-exam-section-select')
+    ?.addEventListener('change', onExamLinkSectionChange);
+
+  // Đổi Kỹ năng ở đầu form trong lúc đang chọn dở đề/phần -> lọc lại phần
+  // theo skill mới (không bắt phải chọn lại đề từ đầu).
+  document.getElementById('question-skill')?.addEventListener('change', () => {
+    const examId = document.getElementById('question-exam-select')?.value;
+    if (examId) loadExamLinkSections(examId);
+  });
+}
+
+async function populateExamLinkExamDropdown() {
+  const select = document.getElementById('question-exam-select');
+  if (!select) return;
+
+  try {
+    const exams = await fetchExamsList();
+    const keepValue = select.value;
+    select.innerHTML = '<option value="">— Không thêm vào đề nào —</option>' +
+      exams.map(ex => `<option value="${ex.id}">${escHtml(ex.title)}${ex.is_published ? '' : ' (nháp)'}</option>`).join('');
+    if (keepValue) select.value = keepValue;
+  } catch (err) {
+    console.error('Lỗi nạp dropdown đề thi:', err);
+  }
+}
+
+async function onExamLinkExamChange() {
+  const examId = document.getElementById('question-exam-select')?.value;
+  const sectionWrap = document.getElementById('question-exam-section-wrap');
+  const subsectionWrap = document.getElementById('question-exam-subsection-wrap');
+
+  resetExamLinkSectionAndSubsection();
+
+  if (!examId) {
+    if (sectionWrap) sectionWrap.style.display = 'none';
+    if (subsectionWrap) subsectionWrap.style.display = 'none';
+    return;
+  }
+
+  if (sectionWrap) sectionWrap.style.display = 'block';
+  if (subsectionWrap) subsectionWrap.style.display = 'none';
+  await loadExamLinkSections(examId);
+}
+
+// Nạp exam_sections của đề đang chọn, LỌC theo skill_id đang chọn ở đầu
+// form câu hỏi (#question-skill). Không có phần khớp -> hiện thông báo nhẹ
+// thay vì dropdown rỗng.
+async function loadExamLinkSections(examId) {
+  const sectionSelect = document.getElementById('question-exam-section-select');
+  const emptyMsg = document.getElementById('question-exam-section-empty-msg');
+  const currentSkillId = document.getElementById('question-skill')?.value;
+
+  if (!currentSkillId) {
+    if (sectionSelect) {
+      sectionSelect.innerHTML = '<option value="">— Chọn phần —</option>';
+      sectionSelect.style.display = 'none';
+    }
+    if (emptyMsg) {
+      emptyMsg.textContent = 'Vui lòng chọn Kỹ năng ở trên trước khi chọn phần thi.';
+      emptyMsg.style.display = 'block';
+    }
+    return;
+  }
+
+  try {
+    const sections = await fetchExamSections(examId);
+    examLinkState.sections = sections;
+
+    const matched = sections.filter(s => String(s.skill_id) === String(currentSkillId));
+
+    if (matched.length === 0) {
+      const skillName = questionsAdminState.skills.find(sk => String(sk.id) === String(currentSkillId))?.name
+        || 'kỹ năng này';
+      if (sectionSelect) {
+        sectionSelect.innerHTML = '<option value="">— Chọn phần —</option>';
+        sectionSelect.style.display = 'none';
+      }
+      if (emptyMsg) {
+        emptyMsg.textContent = `Đề này chưa có phần ${skillName}`;
+        emptyMsg.style.display = 'block';
+      }
+      return;
+    }
+
+    if (emptyMsg) emptyMsg.style.display = 'none';
+    if (sectionSelect) {
+      sectionSelect.style.display = '';
+      sectionSelect.innerHTML = '<option value="">— Chọn phần —</option>' +
+        matched.map(s => `<option value="${s.id}">${escHtml(s.title || '(Chưa đặt tên phần)')}</option>`).join('');
+    }
+  } catch (err) {
+    console.error('Lỗi nạp danh sách phần thi:', err);
+    if (sectionSelect) sectionSelect.style.display = 'none';
+    if (emptyMsg) {
+      emptyMsg.textContent = 'Có lỗi khi tải danh sách phần thi. Vui lòng thử lại.';
+      emptyMsg.style.display = 'block';
+    }
+  }
+}
+
+// Nạp exam_subsections của phần đang chọn — label rút gọn từ instruction_text
+// (bỏ thẻ HTML nếu có, giới hạn độ dài để không vỡ layout dropdown).
+async function onExamLinkSectionChange() {
+  const sectionId = document.getElementById('question-exam-section-select')?.value;
+  const subsectionWrap = document.getElementById('question-exam-subsection-wrap');
+  const subsectionSelect = document.getElementById('question-exam-subsection-select');
+
+  if (subsectionSelect) subsectionSelect.innerHTML = '<option value="">— Chọn dạng bài —</option>';
+
+  if (!sectionId) {
+    if (subsectionWrap) subsectionWrap.style.display = 'none';
+    return;
+  }
+
+  try {
+    const subsections = await fetchExamSubsections(sectionId);
+    examLinkState.subsections = subsections;
+
+    if (subsectionWrap) subsectionWrap.style.display = 'block';
+    if (subsectionSelect) {
+      subsectionSelect.innerHTML = '<option value="">— Chọn dạng bài —</option>' +
+        subsections.map(sub =>
+          `<option value="${sub.id}">${escHtml(truncateText(stripHtml(sub.instruction_text), 60))}</option>`
+        ).join('');
+    }
+  } catch (err) {
+    console.error('Lỗi nạp danh sách dạng bài (mondai):', err);
+  }
+}
+
+function resetExamLinkSectionAndSubsection() {
+  const sectionSelect = document.getElementById('question-exam-section-select');
+  const subsectionSelect = document.getElementById('question-exam-subsection-select');
+  const emptyMsg = document.getElementById('question-exam-section-empty-msg');
+
+  if (sectionSelect) {
+    sectionSelect.innerHTML = '<option value="">— Chọn phần —</option>';
+    sectionSelect.style.display = '';
+  }
+  if (subsectionSelect) subsectionSelect.innerHTML = '<option value="">— Chọn dạng bài —</option>';
+  if (emptyMsg) emptyMsg.style.display = 'none';
+}
+
+// Đưa khối 3 dropdown về trạng thái ban đầu — gọi từ resetQuestionForm()
+// mỗi khi mở form tạo mới / sửa / đóng form.
+function resetExamLinkBlock() {
+  const examSelect = document.getElementById('question-exam-select');
+  if (examSelect) examSelect.value = '';
+
+  resetExamLinkSectionAndSubsection();
+
+  const sectionWrap = document.getElementById('question-exam-section-wrap');
+  const subsectionWrap = document.getElementById('question-exam-subsection-wrap');
+  if (sectionWrap) sectionWrap.style.display = 'none';
+  if (subsectionWrap) subsectionWrap.style.display = 'none';
+}
+
+// Câu hỏi đang sửa (mode edit) có thể đã được gắn vào 1 hay nhiều đề thi từ
+// trước (qua exam_questions) — join 3 tầng để lấy đủ tên đề/phần/dạng bài
+// bằng cú pháp embed resource của PostgREST, KHÔNG gỡ khỏi đề cũ, chỉ hiển
+// thị thông tin để giáo viên biết. Nếu giáo viên chọn thêm ở 3 dropdown bên
+// dưới và bấm Lưu -> linkQuestionToExamIfSelected() sẽ INSERT MỚI một dòng
+// exam_questions khác, không đụng tới các dòng cũ này.
+async function fetchQuestionExamUsage(questionId) {
+  const url = `${ADMIN_CONFIG.supabaseUrl}/rest/v1/exam_questions`
+    + `?question_id=eq.${encodeURIComponent(questionId)}`
+    + `&select=id,exam_subsections(instruction_text,exam_sections(title,exams(title)))`;
+  const res = await fetch(url, { headers: await sbAuthedHeaders() });
+  if (!res.ok) throw new Error(`Lỗi kiểm tra câu hỏi đang thuộc đề thi nào: ${res.status}`);
+  return res.json();
+}
+
+async function loadAndRenderQuestionExamUsage(questionId) {
+  const container = document.getElementById('question-exam-usage-info');
+  if (!container) return;
+
+  if (!questionId) {
+    container.style.display = 'none';
+    container.innerHTML = '';
+    return;
+  }
+
+  try {
+    const rows = await fetchQuestionExamUsage(questionId);
+    if (!rows.length) {
+      container.style.display = 'none';
+      container.innerHTML = '';
+      return;
+    }
+
+    const items = rows.map(r => {
+      const examTitle = r.exam_subsections?.exam_sections?.exams?.title || '(Không rõ đề)';
+      const sectionTitle = r.exam_subsections?.exam_sections?.title || '(Không rõ phần)';
+      const subInstruction = truncateText(stripHtml(r.exam_subsections?.instruction_text || ''), 60);
+      return `<li>${escHtml(examTitle)} - ${escHtml(sectionTitle)} - ${escHtml(subInstruction)}</li>`;
+    }).join('');
+
+    container.innerHTML = `
+      <div>Câu hỏi này đang thuộc:</div>
+      <ul style="margin: 2px 0 0 18px; padding: 0;">${items}</ul>
+    `;
+    container.style.display = 'block';
+  } catch (err) {
+    console.error('Lỗi tải danh sách đề đang dùng câu hỏi này:', err);
+    // Lỗi phụ (không chặn sửa câu hỏi) -> chỉ log, ẩn khối đi thay vì báo lỗi to
+    container.style.display = 'none';
+    container.innerHTML = '';
+  }
+}
+
 // Mở form. `row` = dữ liệu câu hỏi gốc (null nếu tạo mới thuần túy).
 // `mode`: 'create' | 'edit' | 'duplicate'.
 //   - 'edit': sửa đúng câu đang có (giữ nguyên audio, PATCH khi lưu).
 //   - 'duplicate': mở form ở chế độ TẠO MỚI nhưng pre-fill dữ liệu câu gốc,
 //     bỏ qua audio_url. Lưu sẽ INSERT thành câu hỏi mới, không đụng câu gốc.
 function openQuestionForm(row = null, mode = 'create') {
+  injectExamLinkBlockIfNeeded(); // chèn 1 lần, trước nút Lưu
   resetQuestionForm();
+  populateExamLinkExamDropdown(); // nạp lại danh sách đề (không cache stale nếu vừa có đề mới)
 
   const overlay = document.getElementById('question-form-overlay');
   const panel = document.getElementById('question-form-panel');
@@ -815,6 +1124,7 @@ function openQuestionForm(row = null, mode = 'create') {
     if (submitBtn) submitBtn.textContent = 'Cập nhật câu hỏi';
     if (saveContinueBtn) saveContinueBtn.style.display = 'none'; // chỉ có ở mode tạo mới
     populateQuestionFormFromRow(row, /* includeAudio */ true);
+    loadAndRenderQuestionExamUsage(row.id); // hiển thị đề/phần/dạng bài đang chứa câu hỏi này (nếu có)
   } else if (row && mode === 'duplicate') {
     questionFormState.mode = 'create';
     questionFormState.editingId = null;
@@ -993,6 +1303,9 @@ function validateAndBuildQuestionPayload() {
 
 // Gọi Supabase để insert (create) hoặc update (edit) — dùng chung cho cả
 // 2 nút. Ném lỗi (throw) nếu request thất bại, để nơi gọi tự xử lý UI.
+// Trả về { isEdit, questionId } — questionId cần cho bước gắn vào
+// exam_questions ngay sau đó (POST trả representation nên lấy được id mới,
+// PATCH thì id đã biết sẵn từ questionFormState.editingId).
 async function saveQuestionToSupabase(payload) {
   const isEdit = questionFormState.mode === 'edit' && questionFormState.editingId !== null;
   const headers = await sbAuthedHeaders({ 'Prefer': 'return=representation' });
@@ -1006,6 +1319,7 @@ async function saveQuestionToSupabase(payload) {
       const errBody = await res.json().catch(() => null);
       throw new Error(errBody?.message || `Lỗi cập nhật câu hỏi (HTTP ${res.status})`);
     }
+    return { isEdit, questionId: questionFormState.editingId };
   } else {
     const res = await fetch(`${ADMIN_CONFIG.supabaseUrl}/rest/v1/question_bank`, {
       method: 'POST',
@@ -1016,9 +1330,47 @@ async function saveQuestionToSupabase(payload) {
       const errBody = await res.json().catch(() => null);
       throw new Error(errBody?.message || `Lỗi thêm câu hỏi (HTTP ${res.status})`);
     }
+    const [saved] = await res.json();
+    return { isEdit, questionId: saved?.id };
   }
+}
 
-  return { isEdit };
+// Nếu giáo viên đã chọn đủ 3 tầng Đề / Phần / Dạng bài ở khối "Thêm vào đề
+// thi" -> gắn câu hỏi vừa lưu vào exam_questions, order_index = số câu hiện
+// có trong dạng bài đó + 1, points mặc định = 1.
+// Bỏ trống dropdown Đề (hoặc chưa chọn đủ 3 tầng) -> không làm gì cả, hành
+// vi y hệt Tier 1 cũ (chỉ lưu vào question_bank).
+async function linkQuestionToExamIfSelected(questionId) {
+  const examId = document.getElementById('question-exam-select')?.value;
+  const sectionId = document.getElementById('question-exam-section-select')?.value;
+  const subsectionId = document.getElementById('question-exam-subsection-select')?.value;
+
+  if (!examId || !sectionId || !subsectionId) return;
+
+  // Đếm số câu hỏi hiện có trong dạng bài này để tính order_index tiếp theo
+  // (đơn giản, đủ dùng ở quy mô 1 giáo viên soạn đề — không cần lock/transaction).
+  const countRes = await fetch(
+    `${ADMIN_CONFIG.supabaseUrl}/rest/v1/exam_questions?exam_subsection_id=eq.${subsectionId}&select=id`,
+    { headers: await sbAuthedHeaders() }
+  );
+  if (!countRes.ok) throw new Error(`Lỗi đếm số câu hỏi hiện có trong dạng bài: ${countRes.status}`);
+  const existingRows = await countRes.json();
+  const nextOrderIndex = existingRows.length + 1;
+
+  const insertRes = await fetch(`${ADMIN_CONFIG.supabaseUrl}/rest/v1/exam_questions`, {
+    method: 'POST',
+    headers: await sbAuthedHeaders({ 'Prefer': 'return=representation' }),
+    body: JSON.stringify({
+      exam_subsection_id: subsectionId,
+      question_id: questionId,
+      order_index: nextOrderIndex,
+      points: 1
+    })
+  });
+  if (!insertRes.ok) {
+    const errBody = await insertRes.json().catch(() => null);
+    throw new Error(errBody?.message || `Lỗi gắn câu hỏi vào đề thi (HTTP ${insertRes.status})`);
+  }
 }
 
 // Nút "Lưu câu hỏi" / "Cập nhật câu hỏi" (submit form mặc định) — lưu xong
@@ -1037,7 +1389,8 @@ async function submitQuestionForm(e) {
   submitBtn.innerHTML = 'Đang lưu...';
 
   try {
-    await saveQuestionToSupabase(payload);
+    const { questionId } = await saveQuestionToSupabase(payload);
+    await linkQuestionToExamIfSelected(questionId);
     closeQuestionForm();
     await loadQuestionAdminList();
   } catch (err) {
@@ -1065,7 +1418,8 @@ async function handleSaveAndContinue() {
   btn.innerHTML = 'Đang lưu...';
 
   try {
-    await saveQuestionToSupabase(payload);
+    const { questionId } = await saveQuestionToSupabase(payload);
+    await linkQuestionToExamIfSelected(questionId); // đọc dropdown đề/phần/dạng bài trước khi bị reset bên dưới
 
     // Giữ nguyên Kỹ năng + Loại câu hỏi hiện tại (không reset 2 dropdown này)
     const keepSkillId = document.getElementById('question-skill').value;
@@ -1723,4 +2077,5 @@ document.addEventListener('DOMContentLoaded', () => {
   initPassagePaginationControls();
   initQuestionBulkControls();
   initChoiceDragDrop();
+  injectExamLinkBlockIfNeeded(); // idempotent — openQuestionForm() cũng gọi lại khi mở form
 });
