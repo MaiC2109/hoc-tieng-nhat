@@ -83,7 +83,7 @@ async function populateResultFilterDropdowns() {
 async function loadResultAdminList() {
   const tbody = document.getElementById('result-table-body');
   if (!tbody) return;
-  tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state">Đang tải dữ liệu...</div></td></tr>';
+  tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state">Đang tải dữ liệu...</div></td></tr>';
 
   const examId = document.getElementById('filter-result-exam')?.value || '';
   const studentId = document.getElementById('filter-result-student')?.value || '';
@@ -97,7 +97,7 @@ async function loadResultAdminList() {
     // map tên học viên riêng ở phía client từ resultAdminState.studentOptions
     // (đã tải sẵn ở populateResultFilterDropdowns, không gọi lại profiles).
     let url = `${ADMIN_CONFIG.supabaseUrl}/rest/v1/exam_attempts` +
-      `?select=id,exam_id,user_id,attempt_number,status,total_score,total_possible,submitted_at,exams(title)` +
+      `?select=id,exam_id,user_id,attempt_number,status,total_score,total_possible,submitted_at,next_retry_date,exams(title)` +
       `&order=submitted_at.desc.nullslast`;
 
     if (examId) url += `&exam_id=eq.${examId}`;
@@ -111,7 +111,7 @@ async function loadResultAdminList() {
     renderResultAdminTable(rows);
   } catch (err) {
     console.error('Lỗi tải danh sách kết quả thi:', err);
-    tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state">Có lỗi khi tải dữ liệu. Thử tải lại trang.</div></td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state">Có lỗi khi tải dữ liệu. Thử tải lại trang.</div></td></tr>';
   }
 }
 
@@ -137,7 +137,7 @@ function renderResultAdminTable(rows) {
   if (!tbody) return;
 
   if (!rows || rows.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state">Chưa có bài làm nào khớp bộ lọc.</div></td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state">Chưa có bài làm nào khớp bộ lọc.</div></td></tr>';
     return;
   }
 
@@ -157,6 +157,7 @@ function renderResultAdminTable(rows) {
       ? `${r.total_score}/${r.total_possible}`
       : '—';
     const submittedText = r.submitted_at ? formatDateVN(r.submitted_at) : '—';
+    const retryText = r.next_retry_date ? formatDateVN(r.next_retry_date) : '—';
 
     return `
       <tr class="student-row" onclick="openResultDetail('${r.id}')">
@@ -166,6 +167,7 @@ function renderResultAdminTable(rows) {
         <td><span class="exam-status-badge ${cls}">${escHtml(label)}</span></td>
         <td style="text-align:center;">${escHtml(scoreText)}</td>
         <td>${escHtml(submittedText)}</td>
+        <td>${escHtml(retryText)}</td>
       </tr>
     `;
   }).join('');
@@ -453,15 +455,28 @@ async function saveAttemptRetryInfo(attemptId) {
       resultDetailState.attempt.next_retry_date = data.next_retry_date;
       resultDetailState.attempt.retry_note = data.retry_note;
     }
-    // Đồng bộ luôn dòng tương ứng trong bảng danh sách (Bước 4) nếu có,
-    // để không cần tải lại cả bảng khi quay lại danh sách.
+    // Đồng bộ luôn dòng tương ứng trong bảng danh sách (Bước 4) — cập nhật
+    // cả state lẫn render lại bảng (dù đang ẩn) để khi bấm "Quay lại danh
+    // sách" cột Retry dự kiến hiện đúng ngay, không cần tải lại trang.
     const listRow = resultAdminState.rows.find(r => r.id === attemptId);
     if (listRow) {
       listRow.next_retry_date = data.next_retry_date;
       listRow.retry_note = data.retry_note;
     }
+    renderResultAdminTable(resultAdminState.rows);
 
     renderAdminResultDetail();
+
+    // Thông báo cho giáo viên biết đã lưu thành công — hiện sau khi
+    // renderAdminResultDetail() vẽ lại DOM (nếu không sẽ bị ghi đè mất).
+    const successEl = document.getElementById('retry-save-success');
+    if (successEl) {
+      successEl.style.display = 'block';
+      clearTimeout(window.__retrySaveSuccessTimer);
+      window.__retrySaveSuccessTimer = setTimeout(() => {
+        successEl.style.display = 'none';
+      }, 3000);
+    }
   } catch (err) {
     console.error('Lỗi lưu next_retry_date/retry_note:', err);
     if (errorEl) errorEl.textContent = 'Có lỗi khi lưu, vui lòng thử lại.';
@@ -703,6 +718,9 @@ function renderAdminResultDetail() {
         <textarea id="retry-note-input" rows="3" placeholder="Vd: cần ôn lại phần Kanji trước khi thi lại">${escHtml(attempt.retry_note || '')}</textarea>
       </div>
       <div id="retry-save-error" class="login-error" style="margin-bottom:8px;"></div>
+      <div id="retry-save-success" style="display:none; color:#0f6e56; background:#e1f5ee; padding:8px 10px; border-radius:8px; font-size:13px; margin-bottom:8px;">
+        ✓ Đã lưu lịch làm lại.
+      </div>
       <button type="button" class="btn btn-primary" id="retry-save-btn" onclick="saveAttemptRetryInfo('${attempt.id}')">
         <i class="ti ti-device-floppy"></i> Lưu
       </button>
