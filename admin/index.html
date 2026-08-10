@@ -353,6 +353,9 @@
                 </select>
               </div>
               <div class="admin-toolbar-actions">
+                <button class="btn btn-outline" id="btn-import-questions-csv" onclick="openQuestionImportPanel()">
+                  <i class="ti ti-file-import"></i> Import CSV
+                </button>
                 <button class="btn btn-primary" id="btn-add-question" onclick="openQuestionForm()">
                   <i class="ti ti-plus"></i> Thêm câu hỏi mới
                 </button>
@@ -669,6 +672,201 @@
   </div>
 
   <!-- ════════════════════════════════════════════════════════════
+       PANEL TRƯỢT: IMPORT CÂU HỎI TỪ CSV (question_bank, không passage)
+       Mở từ nút "Import CSV" ở toolbar danh sách câu hỏi. Bước 1: chọn
+       file + parse client-side + xem trước bảng. CHƯA insert DB ở bước
+       này — logic ở admin/questions-import.js (nạp sau admin/questions.js).
+  ════════════════════════════════════════════════════════════ -->
+  <div id="question-import-overlay" class="admin-overlay" style="display:none;"></div>
+
+  <div id="question-import-panel" class="admin-slide-panel admin-modal-centered" style="display:none; max-width:900px; width:92vw;">
+    <div class="admin-slide-panel-header">
+      <h3>Import câu hỏi từ CSV</h3>
+      <button type="button" class="admin-slide-close-btn" id="question-import-close-btn">
+        <i class="ti ti-x"></i>
+      </button>
+    </div>
+
+    <div class="admin-slide-panel-body">
+
+      <!-- Tab chọn kiểu import — mỗi tab có bộ cột CSV và luồng validate khác nhau -->
+      <div class="admin-tab-switch" style="display:flex; gap:8px; margin-bottom:16px; border-bottom:1px solid var(--line, #e5e0d8);">
+        <button type="button" class="admin-tab-btn is-active" id="question-import-tabbtn-simple" onclick="switchQuestionImportTab('simple')"
+          style="padding:8px 14px; border:none; background:none; cursor:pointer; font-weight:600; border-bottom:2px solid var(--vermillion); color:var(--ink);">
+          Câu đơn lẻ
+        </button>
+        <button type="button" class="admin-tab-btn" id="question-import-tabbtn-passage" onclick="switchQuestionImportTab('passage')"
+          style="padding:8px 14px; border:none; background:none; cursor:pointer; font-weight:600; border-bottom:2px solid transparent; color:var(--ink-soft, #777);">
+          Câu thuộc đoạn văn/hội thoại
+        </button>
+      </div>
+
+      <!-- ═══ TAB 1: CÂU ĐƠN LẺ (không gắn đoạn văn) ═══ -->
+      <div id="question-import-tab-simple">
+
+      <p class="admin-hint-text">
+        File CSV cần các cột: <code>skill_code, question_type, question_text, audio_url, choice_1, choice_2, choice_3, choice_4, correct_answer, explanation, difficulty</code>.
+        Chỉ hỗ trợ câu hỏi đơn lẻ (không gắn đoạn văn/hội thoại). Dòng đầu tiên phải là header.
+      </p>
+
+      <p style="margin:8px 0 12px;">
+        <a href="#" target="_blank" rel="noopener" class="btn btn-outline" style="display:inline-flex; align-items:center; gap:6px; text-decoration:none;">
+          <i class="ti ti-external-link"></i> Tải template: Câu hỏi thường
+        </a>
+      </p>
+
+      <div class="admin-form-group">
+        <label for="question-import-file">Chọn file CSV</label>
+        <input type="file" id="question-import-file" accept=".csv,text/csv" />
+        <p class="admin-hint-text" id="question-import-status"></p>
+      </div>
+
+      <div id="question-import-preview-wrap" style="display:none;">
+        <div class="admin-vocab-toolbar">
+          <div class="admin-filter-group">
+            <span id="question-import-summary" style="font-size:13px; font-weight:600; color:var(--ink);"></span>
+          </div>
+        </div>
+
+        <div class="admin-panel-card admin-table-card">
+          <div class="admin-table-scroll" style="max-height:420px;">
+            <table class="admin-vocab-table">
+              <thead>
+                <tr>
+                  <th style="width:44px;">Dòng</th>
+                  <th style="width:90px;">Kỹ năng</th>
+                  <th style="width:110px;">Loại</th>
+                  <th>Nội dung</th>
+                  <th style="width:160px;">Đáp án</th>
+                  <th style="width:90px;">Độ khó</th>
+                  <th style="width:200px;">Lỗi</th>
+                </tr>
+              </thead>
+              <tbody id="question-import-preview-body">
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Thanh tiến trình — chỉ hiện trong lúc đang insert tuần tự -->
+      <div id="question-import-progress-wrap" style="display:none; margin-top:14px;">
+        <p class="admin-hint-text" id="question-import-progress-text"></p>
+        <div style="width:100%; height:8px; border-radius:4px; background:var(--paper-alt, #eee); overflow:hidden;">
+          <div id="question-import-progress-bar" style="height:100%; width:0%; background:var(--success, #2e7d32); transition:width 0.15s ease;"></div>
+        </div>
+      </div>
+
+      <!-- Báo cáo kết quả cuối cùng — hiện sau khi insert xong toàn bộ -->
+      <div id="question-import-result-wrap" style="display:none; margin-top:14px;">
+        <p style="font-size:13px; font-weight:600;" id="question-import-result-summary"></p>
+        <div class="admin-panel-card admin-table-card" id="question-import-result-failed-wrap" style="display:none;">
+          <div class="admin-table-scroll" style="max-height:300px;">
+            <table class="admin-vocab-table">
+              <thead>
+                <tr>
+                  <th style="width:44px;">Dòng</th>
+                  <th style="width:90px;">Kỹ năng</th>
+                  <th>Nội dung</th>
+                  <th style="width:260px;">Lý do bị bỏ qua</th>
+                </tr>
+              </thead>
+              <tbody id="question-import-result-failed-body">
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div id="question-import-error" class="admin-login-error"></div>
+
+      <div class="admin-form-actions">
+        <button type="button" class="btn btn-outline" id="question-import-cancel-btn">Hủy</button>
+        <button type="button" class="btn btn-primary" id="question-import-confirm-btn" disabled>
+          Xác nhận nhập <span id="question-import-confirm-count"></span> câu hỏi
+        </button>
+      </div>
+
+      </div>
+      <!-- ═══ HẾT TAB 1 ═══ -->
+
+      <!-- ═══ TAB 2: CÂU THUỘC ĐOẠN VĂN/HỘI THOẠI ═══ -->
+      <div id="question-import-tab-passage" style="display:none;">
+
+      <p class="admin-hint-text">
+        File CSV cần các cột: <code>passage_title, passage_content, passage_audio_url, skill_code, question_text, choice_1, choice_2, choice_3, choice_4, correct_answer, explanation, difficulty</code>.
+        Mỗi dòng là 1 câu hỏi trắc nghiệm thuộc về 1 đoạn văn/hội thoại (nhóm theo <code>passage_title</code>) — các dòng cùng <code>passage_title</code>
+        phải có <code>passage_content</code> và <code>passage_audio_url</code> giống hệt nhau. Dòng đầu tiên phải là header.
+      </p>
+
+      <p style="margin:8px 0 12px;">
+        <a href="#" target="_blank" rel="noopener" class="btn btn-outline" style="display:inline-flex; align-items:center; gap:6px; text-decoration:none;">
+          <i class="ti ti-external-link"></i> Tải template: Câu thuộc đoạn văn
+        </a>
+      </p>
+
+      <div class="admin-form-group">
+        <label for="question-import-passage-file">Chọn file CSV</label>
+        <input type="file" id="question-import-passage-file" accept=".csv,text/csv" />
+        <p class="admin-hint-text" id="question-import-passage-status"></p>
+      </div>
+
+      <div id="question-import-passage-preview-wrap" style="display:none;">
+        <div class="admin-vocab-toolbar">
+          <div class="admin-filter-group">
+            <span id="question-import-passage-summary" style="font-size:13px; font-weight:600; color:var(--ink);"></span>
+          </div>
+        </div>
+
+        <!-- Danh sách nhóm theo passage_title, mỗi nhóm 1 card riêng để dễ nhìn -->
+        <div id="question-import-passage-groups"></div>
+      </div>
+
+      <div id="question-import-passage-error" class="admin-login-error"></div>
+
+      <!-- Thanh tiến trình — chỉ hiện trong lúc đang import tuần tự -->
+      <div id="question-import-passage-progress-wrap" style="display:none; margin-top:14px;">
+        <p class="admin-hint-text" id="question-import-passage-progress-text"></p>
+        <div style="width:100%; height:8px; border-radius:4px; background:var(--paper-alt, #eee); overflow:hidden;">
+          <div id="question-import-passage-progress-bar" style="height:100%; width:0%; background:var(--success, #2e7d32); transition:width 0.15s ease;"></div>
+        </div>
+      </div>
+
+      <!-- Báo cáo kết quả cuối cùng -->
+      <div id="question-import-passage-result-wrap" style="display:none; margin-top:14px;">
+        <p style="font-size:13px; font-weight:600;" id="question-import-passage-result-summary"></p>
+        <div class="admin-panel-card admin-table-card" id="question-import-passage-result-failed-wrap" style="display:none;">
+          <div class="admin-table-scroll" style="max-height:300px;">
+            <table class="admin-vocab-table">
+              <thead>
+                <tr>
+                  <th style="width:44px;">Dòng</th>
+                  <th style="width:130px;">Đoạn văn</th>
+                  <th>Nội dung</th>
+                  <th style="width:260px;">Lý do bị bỏ qua</th>
+                </tr>
+              </thead>
+              <tbody id="question-import-passage-result-failed-body">
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="admin-form-actions">
+        <button type="button" class="btn btn-outline" id="question-import-passage-cancel-btn">Hủy</button>
+        <button type="button" class="btn btn-primary" id="question-import-passage-confirm-btn" disabled>
+          Xác nhận nhập <span id="question-import-passage-confirm-count"></span> câu hỏi
+        </button>
+      </div>
+
+      </div>
+      <!-- ═══ HẾT TAB 2 ═══ -->
+
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════
        PANEL TRƯỢT: TẠO ĐOẠN VĂN/HỘI THOẠI (passages)
        Mở từ nút "+ Tạo đoạn mới" trong form câu hỏi. Lưu xong tự refresh
        dropdown "Thuộc đoạn văn/hội thoại" ở form câu hỏi và chọn sẵn đoạn
@@ -899,6 +1097,7 @@
   <!-- Logic (Supabase Auth, toggle nav, fetch số liệu...) -->
   <script src="/admin/admin.js"></script>
   <script src="/admin/questions.js"></script>
+  <script src="/admin/questions-import.js"></script>
   <script src="/admin/exams.js"></script>
   <script src="/admin/results.js"></script>
 </body>
