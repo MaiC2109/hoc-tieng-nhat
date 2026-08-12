@@ -379,6 +379,9 @@
                 <button type="button" class="btn btn-outline" id="question-bulk-apply-skill-btn">Áp dụng kỹ năng</button>
               </div>
               <div class="admin-toolbar-actions">
+                <button type="button" class="btn btn-outline" id="question-bulk-add-to-exam-btn">
+                  <i class="ti ti-clipboard-plus"></i> Thêm vào đề thi
+                </button>
                 <button type="button" class="btn btn-outline" id="question-bulk-delete-btn" style="color:var(--vermillion); border-color:var(--vermillion);">
                   <i class="ti ti-trash"></i> Xóa đã chọn
                 </button>
@@ -863,6 +866,46 @@
       </div>
       <!-- ═══ HẾT TAB 2 ═══ -->
 
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════
+       MODAL: THÊM HÀNG LOẠT CÂU HỎI ĐÃ CHỌN VÀO 1 ĐỀ THI (bulk actions)
+       Mở từ nút "Thêm vào đề thi" trong thanh bulk-bar. Các câu đã chọn có
+       thể thuộc nhiều Kỹ năng khác nhau -> sau khi chọn Đề, hiện 1 dòng
+       "Chọn dạng bài" RIÊNG cho MỖI Kỹ năng có mặt trong danh sách đã chọn.
+       Logic ở admin/questions.js.
+  ════════════════════════════════════════════════════════════ -->
+  <div id="question-bulk-exam-overlay" class="admin-overlay" style="display:none;"></div>
+
+  <div id="question-bulk-exam-panel" class="admin-slide-panel admin-modal-centered" style="display:none; width:560px;">
+    <div class="admin-slide-panel-header">
+      <h3>Thêm câu hỏi đã chọn vào đề thi</h3>
+      <button type="button" class="admin-slide-close-btn" id="question-bulk-exam-close-btn">
+        <i class="ti ti-x"></i>
+      </button>
+    </div>
+
+    <div class="admin-slide-panel-body">
+      <p class="admin-hint-text" id="question-bulk-exam-summary"></p>
+
+      <div class="admin-form-group">
+        <label for="question-bulk-exam-select">Chọn đề thi</label>
+        <select id="question-bulk-exam-select" class="admin-input">
+          <option value="">— Chọn đề thi —</option>
+        </select>
+      </div>
+
+      <!-- Mỗi Kỹ năng có mặt trong danh sách đã chọn -> 1 dòng "Chọn dạng bài"
+           riêng, được JS render động vào đây sau khi chọn Đề. -->
+      <div id="question-bulk-exam-skill-groups"></div>
+
+      <div id="question-bulk-exam-error" class="admin-login-error" style="margin-top:8px;"></div>
+
+      <div class="admin-form-actions">
+        <button type="button" class="btn btn-outline" id="question-bulk-exam-cancel-btn">Hủy</button>
+        <button type="button" class="btn btn-primary" id="question-bulk-exam-confirm-btn">Thêm vào đề</button>
+      </div>
     </div>
   </div>
 

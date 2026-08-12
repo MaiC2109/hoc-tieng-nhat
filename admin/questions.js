@@ -443,6 +443,249 @@ function initQuestionBulkControls() {
   document.getElementById('question-bulk-delete-btn')?.addEventListener('click', bulkDeleteSelectedQuestions);
   document.getElementById('question-bulk-apply-difficulty-btn')?.addEventListener('click', bulkApplyDifficulty);
   document.getElementById('question-bulk-apply-skill-btn')?.addEventListener('click', bulkApplySkill);
+  document.getElementById('question-bulk-add-to-exam-btn')?.addEventListener('click', openBulkExamModal);
+  document.getElementById('question-bulk-exam-select')?.addEventListener('change', onBulkExamSelectChange);
+  document.getElementById('question-bulk-exam-close-btn')?.addEventListener('click', closeBulkExamModal);
+  document.getElementById('question-bulk-exam-cancel-btn')?.addEventListener('click', closeBulkExamModal);
+  document.getElementById('question-bulk-exam-overlay')?.addEventListener('click', closeBulkExamModal);
+  document.getElementById('question-bulk-exam-confirm-btn')?.addEventListener('click', handleBulkExamConfirm);
+}
+
+// ============================================================
+//  BULK: THÊM TẤT CẢ CÂU ĐÃ CHỌN VÀO 1 ĐỀ THI
+//  Các câu đã chọn có thể thuộc nhiều Kỹ năng khác nhau (đã thống nhất với
+//  giáo viên) -> sau khi chọn Đề, hiện 1 khối "Chọn phần" + "Chọn dạng bài"
+//  RIÊNG cho MỖI Kỹ năng có mặt trong danh sách đã chọn. Dùng lại
+//  fetchExamsList/fetchExamSections/fetchExamSubsections đã có sẵn từ khối
+//  gắn-đề-thi-cho-1-câu ở form Tạo/Sửa câu hỏi, chỉ khác là lặp theo nhóm.
+//  Bắt buộc chọn đủ dạng bài cho MỌI kỹ năng có mặt mới cho xác nhận, vì
+//  mục đích của chức năng là gắn HẾT các câu đã chọn, tránh âm thầm bỏ sót.
+// ============================================================
+const bulkExamState = {
+  skillGroups: [] // [{ skillId, skillName, questionIds: [], sectionId, subsectionId }]
+};
+
+function openBulkExamModal() {
+  const ids = Array.from(questionsAdminState.selectedIds);
+  if (ids.length === 0) return;
+
+  // Gom câu đã chọn theo skill_id, dựa vào dữ liệu đã có sẵn ở currentRows
+  // (không cần gọi lại API để biết skill của từng câu).
+  const groupMap = new Map(); // skillId -> { skillId, skillName, questionIds }
+  ids.forEach(id => {
+    const row = questionsAdminState.currentRows.find(r => String(r.id) === String(id));
+    if (!row) return; // an toàn: id chọn từ dữ liệu cũ đã bị loadQuestionAdminList() làm mới
+    const skillId = String(row.skill_id);
+    if (!groupMap.has(skillId)) {
+      groupMap.set(skillId, { skillId, skillName: row.skills?.name || `Kỹ năng #${skillId}`, questionIds: [] });
+    }
+    groupMap.get(skillId).questionIds.push(row.id);
+  });
+
+  bulkExamState.skillGroups = Array.from(groupMap.values()).map(g => ({ ...g, sectionId: '', subsectionId: '' }));
+
+  const summaryEl = document.getElementById('question-bulk-exam-summary');
+  if (summaryEl) {
+    const skillsText = bulkExamState.skillGroups.map(g => `${g.skillName} (${g.questionIds.length})`).join(', ');
+    summaryEl.textContent = `Đang thêm ${ids.length} câu hỏi — gồm: ${skillsText}`;
+  }
+
+  const errorEl = document.getElementById('question-bulk-exam-error');
+  if (errorEl) errorEl.textContent = '';
+
+  const groupsWrap = document.getElementById('question-bulk-exam-skill-groups');
+  if (groupsWrap) groupsWrap.innerHTML = '';
+
+  const examSelect = document.getElementById('question-bulk-exam-select');
+  if (examSelect) examSelect.value = '';
+
+  populateBulkExamDropdown();
+
+  const overlay = document.getElementById('question-bulk-exam-overlay');
+  const panel = document.getElementById('question-bulk-exam-panel');
+  if (overlay) overlay.style.display = 'block';
+  if (panel) panel.style.display = 'flex';
+}
+
+function closeBulkExamModal() {
+  const overlay = document.getElementById('question-bulk-exam-overlay');
+  const panel = document.getElementById('question-bulk-exam-panel');
+  if (overlay) overlay.style.display = 'none';
+  if (panel) panel.style.display = 'none';
+}
+
+async function populateBulkExamDropdown() {
+  const select = document.getElementById('question-bulk-exam-select');
+  if (!select) return;
+  try {
+    const exams = await fetchExamsList();
+    select.innerHTML = '<option value="">— Chọn đề thi —</option>' +
+      exams.map(ex => `<option value="${ex.id}">${escHtml(ex.title)}${ex.is_published ? '' : ' (nháp)'}</option>`).join('');
+  } catch (err) {
+    console.error('Lỗi nạp dropdown đề thi (bulk):', err);
+  }
+}
+
+// Chọn Đề -> với MỖI kỹ năng có mặt trong danh sách đã chọn, render 1 khối
+// "Chọn phần" (filter theo skill_id của nhóm đó) + "Chọn dạng bài" riêng.
+async function onBulkExamSelectChange() {
+  const examId = document.getElementById('question-bulk-exam-select')?.value;
+  const groupsWrap = document.getElementById('question-bulk-exam-skill-groups');
+  if (!groupsWrap) return;
+
+  bulkExamState.skillGroups.forEach(g => { g.sectionId = ''; g.subsectionId = ''; });
+
+  if (!examId) {
+    groupsWrap.innerHTML = '';
+    return;
+  }
+
+  groupsWrap.innerHTML = bulkExamState.skillGroups.map(g => `
+    <div class="admin-form-group bulk-exam-skill-group" data-skill-id="${g.skillId}"
+         style="margin-top:12px; padding-top:12px; border-top:1px dashed var(--border-md, #ddd);">
+      <label>Phần dành cho ${escHtml(g.skillName)} (${g.questionIds.length} câu)</label>
+      <select class="admin-input bulk-exam-section-select" data-skill-id="${g.skillId}">
+        <option value="">— Chọn phần —</option>
+      </select>
+      <div class="admin-hint bulk-exam-section-empty-msg" data-skill-id="${g.skillId}" style="display:none; margin-top:4px;"></div>
+      <select class="admin-input bulk-exam-subsection-select" data-skill-id="${g.skillId}" style="display:none; margin-top:8px;">
+        <option value="">— Chọn dạng bài —</option>
+      </select>
+    </div>
+  `).join('');
+
+  groupsWrap.querySelectorAll('.bulk-exam-section-select').forEach(sel => {
+    sel.addEventListener('change', () => onBulkExamSectionChange(sel.getAttribute('data-skill-id'), sel.value));
+  });
+
+  // Nạp danh sách phần cho từng kỹ năng song song (mỗi kỹ năng độc lập nhau)
+  await Promise.all(bulkExamState.skillGroups.map(g => loadBulkExamSectionsForSkill(examId, g.skillId)));
+}
+
+async function loadBulkExamSectionsForSkill(examId, skillId) {
+  const sectionSelect = document.querySelector(`.bulk-exam-section-select[data-skill-id="${skillId}"]`);
+  const emptyMsg = document.querySelector(`.bulk-exam-section-empty-msg[data-skill-id="${skillId}"]`);
+  if (!sectionSelect) return;
+
+  try {
+    const sections = await fetchExamSections(examId);
+    const matched = sections.filter(s => String(s.skill_id) === String(skillId));
+
+    if (matched.length === 0) {
+      const group = bulkExamState.skillGroups.find(g => g.skillId === skillId);
+      sectionSelect.style.display = 'none';
+      if (emptyMsg) {
+        emptyMsg.textContent = `Đề này chưa có phần ${group?.skillName || 'kỹ năng này'}`;
+        emptyMsg.style.display = 'block';
+      }
+      return;
+    }
+
+    if (emptyMsg) emptyMsg.style.display = 'none';
+    sectionSelect.style.display = '';
+    sectionSelect.innerHTML = '<option value="">— Chọn phần —</option>' +
+      matched.map(s => `<option value="${s.id}">${escHtml(s.title || '(Chưa đặt tên phần)')}</option>`).join('');
+  } catch (err) {
+    console.error(`Lỗi nạp danh sách phần thi cho kỹ năng ${skillId} (bulk):`, err);
+    sectionSelect.style.display = 'none';
+    if (emptyMsg) {
+      emptyMsg.textContent = 'Có lỗi khi tải danh sách phần thi. Vui lòng thử lại.';
+      emptyMsg.style.display = 'block';
+    }
+  }
+}
+
+async function onBulkExamSectionChange(skillId, sectionId) {
+  const group = bulkExamState.skillGroups.find(g => g.skillId === skillId);
+  if (group) { group.sectionId = sectionId; group.subsectionId = ''; }
+
+  const subsectionSelect = document.querySelector(`.bulk-exam-subsection-select[data-skill-id="${skillId}"]`);
+  if (!subsectionSelect) return;
+
+  if (!sectionId) {
+    subsectionSelect.style.display = 'none';
+    subsectionSelect.innerHTML = '<option value="">— Chọn dạng bài —</option>';
+    return;
+  }
+
+  try {
+    const subsections = await fetchExamSubsections(sectionId);
+    subsectionSelect.style.display = '';
+    subsectionSelect.innerHTML = '<option value="">— Chọn dạng bài —</option>' +
+      subsections.map(sub =>
+        `<option value="${sub.id}">${escHtml(truncateText(stripHtml(sub.instruction_text), 60))}</option>`
+      ).join('');
+    subsectionSelect.onchange = () => {
+      if (group) group.subsectionId = subsectionSelect.value;
+    };
+  } catch (err) {
+    console.error(`Lỗi nạp danh sách dạng bài cho kỹ năng ${skillId} (bulk):`, err);
+  }
+}
+
+// Xác nhận: mỗi nhóm kỹ năng insert riêng 1 batch vào exam_questions, tự
+// tính order_index tiếp theo trong đúng dạng bài của nhóm đó.
+async function handleBulkExamConfirm() {
+  const examId = document.getElementById('question-bulk-exam-select')?.value;
+  const errorEl = document.getElementById('question-bulk-exam-error');
+  const confirmBtn = document.getElementById('question-bulk-exam-confirm-btn');
+
+  if (errorEl) errorEl.textContent = '';
+
+  if (!examId) {
+    if (errorEl) errorEl.textContent = 'Vui lòng chọn đề thi.';
+    return;
+  }
+
+  const missing = bulkExamState.skillGroups.filter(g => !g.subsectionId);
+  if (missing.length > 0) {
+    if (errorEl) errorEl.textContent = `Vui lòng chọn dạng bài cho: ${missing.map(g => g.skillName).join(', ')}.`;
+    return;
+  }
+
+  const originalText = confirmBtn.textContent;
+  confirmBtn.disabled = true;
+  confirmBtn.textContent = 'Đang thêm...';
+
+  try {
+    for (const group of bulkExamState.skillGroups) {
+      // Đếm số câu hiện có trong dạng bài này để tính order_index bắt đầu
+      const countRes = await fetch(
+        `${ADMIN_CONFIG.supabaseUrl}/rest/v1/exam_questions?exam_subsection_id=eq.${group.subsectionId}&select=id`,
+        { headers: await sbAuthedHeaders() }
+      );
+      if (!countRes.ok) throw new Error(`Lỗi đếm số câu hiện có (${group.skillName}): ${countRes.status}`);
+      const existingRows = await countRes.json();
+      let nextOrderIndex = existingRows.length + 1;
+
+      const payload = group.questionIds.map(qid => ({
+        exam_subsection_id: group.subsectionId,
+        question_id: qid,
+        order_index: nextOrderIndex++,
+        points: 1
+      }));
+
+      const insertRes = await fetch(`${ADMIN_CONFIG.supabaseUrl}/rest/v1/exam_questions`, {
+        method: 'POST',
+        headers: await sbAuthedHeaders({ 'Prefer': 'return=representation' }),
+        body: JSON.stringify(payload)
+      });
+      if (!insertRes.ok) {
+        const errBody = await insertRes.json().catch(() => null);
+        throw new Error(errBody?.message || `Lỗi thêm câu vào đề (${group.skillName}, HTTP ${insertRes.status})`);
+      }
+    }
+
+    closeBulkExamModal();
+    clearQuestionSelection();
+    alert('Đã thêm các câu hỏi đã chọn vào đề thi.');
+  } catch (err) {
+    console.error('Lỗi thêm hàng loạt câu hỏi vào đề thi:', err);
+    if (errorEl) errorEl.textContent = err?.message || 'Có lỗi khi thêm vào đề thi. Vui lòng thử lại.';
+  } finally {
+    confirmBtn.disabled = false;
+    confirmBtn.textContent = originalText;
+  }
 }
 
 
