@@ -654,18 +654,71 @@ async function onBulkExamSelectChange() {
         <option value="">— Chọn phần —</option>
       </select>
       <div class="admin-hint bulk-exam-section-empty-msg" data-skill-id="${g.skillId}" style="display:none; margin-top:4px;"></div>
+
+      <!-- Mini-form tạo phần (exam_sections) + dạng bài (exam_subsections) mới
+           ngay tại chỗ — hiện khi chọn option "+ Tạo phần mới…" ở trên. -->
+      <div class="bulk-exam-section-create-wrap" data-skill-id="${g.skillId}"
+           style="display:none; margin-top:8px; padding:10px; border:1px dashed var(--border-md, #ccc); border-radius:8px;">
+        <div class="admin-form-group" style="margin-bottom:6px;">
+          <label>Tên phần</label>
+          <input type="text" class="admin-input bulk-exam-section-create-title" data-skill-id="${g.skillId}"
+                 placeholder="Ví dụ: ${escHtml(g.skillName)}" />
+        </div>
+        <div class="admin-form-group" style="margin-bottom:6px;">
+          <label>Thời gian làm bài (phút)</label>
+          <input type="number" class="admin-input bulk-exam-section-create-time" data-skill-id="${g.skillId}" value="10" min="1" />
+        </div>
+        <div class="admin-form-group" style="margin-bottom:6px;">
+          <label>Hướng dẫn đề bài (dạng bài)</label>
+          <textarea class="admin-input bulk-exam-section-create-instruction" data-skill-id="${g.skillId}" rows="2"
+                     placeholder="Ví dụ: 問題1：（　）に なにを いれますか。A・B・C・D から いちばん いい ものを ひとつ えらんで ください。"></textarea>
+        </div>
+        <div class="admin-login-error bulk-exam-section-create-error" data-skill-id="${g.skillId}" style="margin-bottom:6px;"></div>
+        <div style="display:flex; gap:8px;">
+          <button type="button" class="btn btn-outline bulk-exam-section-create-cancel" data-skill-id="${g.skillId}">Hủy</button>
+          <button type="button" class="btn btn-primary bulk-exam-section-create-confirm" data-skill-id="${g.skillId}">Tạo phần</button>
+        </div>
+      </div>
+
       <select class="admin-input bulk-exam-subsection-select" data-skill-id="${g.skillId}" style="display:none; margin-top:8px;">
         <option value="">— Chọn dạng bài —</option>
       </select>
     </div>
   `).join('');
 
-  groupsWrap.querySelectorAll('.bulk-exam-section-select').forEach(sel => {
-    sel.addEventListener('change', () => onBulkExamSectionChange(sel.getAttribute('data-skill-id'), sel.value));
-  });
+  // Dùng event delegation trên groupsWrap (container tĩnh, không bị thay
+  // thế khi re-render) thay vì gắn listener riêng từng phần tử mỗi lần
+  // render — tránh phải gỡ listener cũ và dễ mở rộng thêm nút mới.
+  bindBulkExamGroupsDelegationOnce();
 
   // Nạp danh sách phần cho từng kỹ năng song song (mỗi kỹ năng độc lập nhau)
   await Promise.all(bulkExamState.skillGroups.map(g => loadBulkExamSectionsForSkill(examId, g.skillId)));
+}
+
+// Gắn 1 lần duy nhất — groupsWrap.innerHTML đổi liên tục nhưng bản thân
+// groupsWrap (element cha) không bị thay thế nên listener delegation vẫn
+// sống xuyên suốt các lần re-render.
+let bulkExamGroupsDelegationBound = false;
+function bindBulkExamGroupsDelegationOnce() {
+  if (bulkExamGroupsDelegationBound) return;
+  const groupsWrap = document.getElementById('question-bulk-exam-skill-groups');
+  if (!groupsWrap) return;
+
+  groupsWrap.addEventListener('change', (e) => {
+    if (e.target.matches('.bulk-exam-section-select')) {
+      onBulkExamSectionChange(e.target.dataset.skillId, e.target.value);
+    }
+  });
+
+  groupsWrap.addEventListener('click', (e) => {
+    const confirmBtn = e.target.closest('.bulk-exam-section-create-confirm');
+    if (confirmBtn) { handleBulkExamSectionCreateConfirm(confirmBtn.dataset.skillId); return; }
+
+    const cancelBtn = e.target.closest('.bulk-exam-section-create-cancel');
+    if (cancelBtn) { handleBulkExamSectionCreateCancel(cancelBtn.dataset.skillId); return; }
+  });
+
+  bulkExamGroupsDelegationBound = true;
 }
 
 // Tạo đề thi mới ngay trong modal bulk — cùng logic với handleExamCreateConfirm
@@ -763,20 +816,23 @@ async function loadBulkExamSectionsForSkill(examId, skillId) {
     const sections = await fetchExamSections(examId);
     const matched = sections.filter(s => String(s.skill_id) === String(skillId));
 
+    // Luôn có option "+ Tạo phần mới…" dù đề đã có phần khớp skill hay chưa
+    // — giáo viên có thể muốn tạo thêm 1 phần Kanji khác thay vì dùng phần
+    // có sẵn.
+    sectionSelect.innerHTML = '<option value="">— Chọn phần —</option>'
+      + '<option value="__create_new__">+ Tạo phần mới…</option>'
+      + matched.map(s => `<option value="${s.id}">${escHtml(s.title || '(Chưa đặt tên phần)')}</option>`).join('');
+    sectionSelect.style.display = '';
+
     if (matched.length === 0) {
       const group = bulkExamState.skillGroups.find(g => g.skillId === skillId);
-      sectionSelect.style.display = 'none';
       if (emptyMsg) {
-        emptyMsg.textContent = `Đề này chưa có phần ${group?.skillName || 'kỹ năng này'}`;
+        emptyMsg.textContent = `Đề này chưa có phần ${group?.skillName || 'kỹ năng này'} — chọn "+ Tạo phần mới…" để tạo ngay.`;
         emptyMsg.style.display = 'block';
       }
-      return;
+    } else if (emptyMsg) {
+      emptyMsg.style.display = 'none';
     }
-
-    if (emptyMsg) emptyMsg.style.display = 'none';
-    sectionSelect.style.display = '';
-    sectionSelect.innerHTML = '<option value="">— Chọn phần —</option>' +
-      matched.map(s => `<option value="${s.id}">${escHtml(s.title || '(Chưa đặt tên phần)')}</option>`).join('');
   } catch (err) {
     console.error(`Lỗi nạp danh sách phần thi cho kỹ năng ${skillId} (bulk):`, err);
     sectionSelect.style.display = 'none';
@@ -789,9 +845,22 @@ async function loadBulkExamSectionsForSkill(examId, skillId) {
 
 async function onBulkExamSectionChange(skillId, sectionId) {
   const group = bulkExamState.skillGroups.find(g => g.skillId === skillId);
-  if (group) { group.sectionId = sectionId; group.subsectionId = ''; }
-
+  const createWrap = document.querySelector(`.bulk-exam-section-create-wrap[data-skill-id="${skillId}"]`);
   const subsectionSelect = document.querySelector(`.bulk-exam-subsection-select[data-skill-id="${skillId}"]`);
+
+  if (sectionId === '__create_new__') {
+    if (group) { group.sectionId = ''; group.subsectionId = ''; }
+    if (createWrap) createWrap.style.display = 'block';
+    if (subsectionSelect) {
+      subsectionSelect.style.display = 'none';
+      subsectionSelect.innerHTML = '<option value="">— Chọn dạng bài —</option>';
+    }
+    document.querySelector(`.bulk-exam-section-create-title[data-skill-id="${skillId}"]`)?.focus();
+    return;
+  }
+
+  if (createWrap) createWrap.style.display = 'none';
+  if (group) { group.sectionId = sectionId; group.subsectionId = ''; }
   if (!subsectionSelect) return;
 
   if (!sectionId) {
@@ -813,6 +882,136 @@ async function onBulkExamSectionChange(skillId, sectionId) {
   } catch (err) {
     console.error(`Lỗi nạp danh sách dạng bài cho kỹ năng ${skillId} (bulk):`, err);
   }
+}
+
+// Tạo 1 exam_section (đúng skill_id của nhóm) + 1 exam_subsection cho nhóm
+// kỹ năng này ngay trong modal bulk, rồi tự chọn sẵn cả 2 — không phải rời
+// trang sang màn Quản lý đề thi.
+async function handleBulkExamSectionCreateConfirm(skillId) {
+  const examId = document.getElementById('question-bulk-exam-select')?.value;
+  const group = bulkExamState.skillGroups.find(g => g.skillId === skillId);
+
+  const titleInput = document.querySelector(`.bulk-exam-section-create-title[data-skill-id="${skillId}"]`);
+  const timeInput = document.querySelector(`.bulk-exam-section-create-time[data-skill-id="${skillId}"]`);
+  const instructionInput = document.querySelector(`.bulk-exam-section-create-instruction[data-skill-id="${skillId}"]`);
+  const errorEl = document.querySelector(`.bulk-exam-section-create-error[data-skill-id="${skillId}"]`);
+  const confirmBtn = document.querySelector(`.bulk-exam-section-create-confirm[data-skill-id="${skillId}"]`);
+
+  if (!examId || !group) return;
+
+  const title = titleInput?.value.trim();
+  const timeMinutes = Number(timeInput?.value);
+  const instructionText = instructionInput?.value.trim();
+
+  if (errorEl) errorEl.textContent = '';
+
+  if (!title) {
+    if (errorEl) errorEl.textContent = 'Vui lòng nhập tên phần.';
+    titleInput?.focus();
+    return;
+  }
+  if (!Number.isFinite(timeMinutes) || timeMinutes <= 0) {
+    if (errorEl) errorEl.textContent = 'Thời gian làm bài phải là số phút lớn hơn 0.';
+    timeInput?.focus();
+    return;
+  }
+  if (!instructionText) {
+    if (errorEl) errorEl.textContent = 'Vui lòng nhập hướng dẫn đề bài.';
+    instructionInput?.focus();
+    return;
+  }
+
+  const originalText = confirmBtn.textContent;
+  confirmBtn.disabled = true;
+  confirmBtn.textContent = 'Đang tạo...';
+
+  try {
+    // order_index của section mới = số section hiện có trong đề (không phân
+    // biệt skill, giống thứ tự hiển thị chung của cả đề).
+    const existingSections = await fetchExamSections(examId);
+
+    const sectionRes = await fetch(`${ADMIN_CONFIG.supabaseUrl}/rest/v1/exam_sections`, {
+      method: 'POST',
+      headers: await sbAuthedHeaders({ 'Prefer': 'return=representation' }),
+      body: JSON.stringify({
+        exam_id: examId,
+        skill_id: Number(skillId),
+        title,
+        time_limit_seconds: Math.round(timeMinutes * 60),
+        order_index: existingSections.length
+      })
+    });
+    if (!sectionRes.ok) {
+      const errBody = await sectionRes.json().catch(() => null);
+      throw new Error(errBody?.message || `Lỗi tạo phần mới (HTTP ${sectionRes.status})`);
+    }
+    const [newSection] = await sectionRes.json();
+
+    const subsectionRes = await fetch(`${ADMIN_CONFIG.supabaseUrl}/rest/v1/exam_subsections`, {
+      method: 'POST',
+      headers: await sbAuthedHeaders({ 'Prefer': 'return=representation' }),
+      body: JSON.stringify({
+        exam_section_id: newSection.id,
+        instruction_text: instructionText,
+        order_index: 0
+      })
+    });
+    if (!subsectionRes.ok) {
+      const errBody = await subsectionRes.json().catch(() => null);
+      throw new Error(errBody?.message || `Lỗi tạo dạng bài mới (HTTP ${subsectionRes.status})`);
+    }
+    const [newSubsection] = await subsectionRes.json();
+
+    // Chọn sẵn phần + dạng bài vừa tạo cho nhóm kỹ năng này
+    group.sectionId = newSection.id;
+    group.subsectionId = newSubsection.id;
+
+    const sectionSelect = document.querySelector(`.bulk-exam-section-select[data-skill-id="${skillId}"]`);
+    if (sectionSelect) {
+      const opt = document.createElement('option');
+      opt.value = newSection.id;
+      opt.textContent = newSection.title;
+      sectionSelect.appendChild(opt);
+      sectionSelect.value = newSection.id;
+    }
+
+    const subsectionSelect = document.querySelector(`.bulk-exam-subsection-select[data-skill-id="${skillId}"]`);
+    if (subsectionSelect) {
+      subsectionSelect.innerHTML = `<option value="${newSubsection.id}">${escHtml(truncateText(stripHtml(newSubsection.instruction_text), 60))}</option>`;
+      subsectionSelect.value = newSubsection.id;
+      subsectionSelect.style.display = '';
+      subsectionSelect.onchange = () => { group.subsectionId = subsectionSelect.value; };
+    }
+
+    const emptyMsg = document.querySelector(`.bulk-exam-section-empty-msg[data-skill-id="${skillId}"]`);
+    if (emptyMsg) emptyMsg.style.display = 'none';
+
+    const createWrap = document.querySelector(`.bulk-exam-section-create-wrap[data-skill-id="${skillId}"]`);
+    if (createWrap) createWrap.style.display = 'none';
+    if (titleInput) titleInput.value = '';
+    if (timeInput) timeInput.value = '10';
+    if (instructionInput) instructionInput.value = '';
+  } catch (err) {
+    console.error(`Lỗi tạo phần/dạng bài mới cho kỹ năng ${skillId} (bulk):`, err);
+    if (errorEl) errorEl.textContent = err?.message || 'Có lỗi khi tạo phần mới. Vui lòng thử lại.';
+  } finally {
+    confirmBtn.disabled = false;
+    confirmBtn.textContent = originalText;
+  }
+}
+
+function handleBulkExamSectionCreateCancel(skillId) {
+  const group = bulkExamState.skillGroups.find(g => g.skillId === skillId);
+  if (group) { group.sectionId = ''; group.subsectionId = ''; }
+
+  const sectionSelect = document.querySelector(`.bulk-exam-section-select[data-skill-id="${skillId}"]`);
+  if (sectionSelect) sectionSelect.value = '';
+
+  const createWrap = document.querySelector(`.bulk-exam-section-create-wrap[data-skill-id="${skillId}"]`);
+  if (createWrap) createWrap.style.display = 'none';
+
+  const errorEl = document.querySelector(`.bulk-exam-section-create-error[data-skill-id="${skillId}"]`);
+  if (errorEl) errorEl.textContent = '';
 }
 
 // Xác nhận: mỗi nhóm kỹ năng insert riêng 1 batch vào exam_questions, tự
