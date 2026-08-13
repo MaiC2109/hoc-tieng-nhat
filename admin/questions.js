@@ -106,6 +106,25 @@ async function populateQuestionSkillFilter() {
   }
 }
 
+// Dropdown "Tất cả đề thi" ở toolbar — dùng lại fetchExamsList() đã có sẵn
+// (cache chung với dropdown "Thêm vào đề thi" ở form câu hỏi/bulk).
+async function populateQuestionExamFilter() {
+  const select = document.getElementById('filter-question-exam');
+  if (!select) return;
+
+  try {
+    const exams = await fetchExamsList();
+    const currentValue = select.value;
+
+    select.innerHTML = '<option value="">Tất cả đề thi</option>' +
+      exams.map(ex => `<option value="${ex.id}">${escHtml(ex.title)}${ex.is_published ? '' : ' (nháp)'}</option>`).join('');
+
+    if (currentValue) select.value = currentValue;
+  } catch (err) {
+    console.error('Lỗi nạp dropdown lọc theo đề thi:', err);
+  }
+}
+
 // ============================================================
 //  PASSAGES — dùng cho dropdown "Thuộc đoạn văn/hội thoại" trong form câu hỏi
 // ============================================================
@@ -162,11 +181,16 @@ function toggleQuestionPassageField() {
 //  DANH SÁCH CÂU HỎI
 // ============================================================
 
-// Lọc theo kỹ năng thực hiện phía server (giống pattern filter Unit/Part
-// của vocab); tìm theo nội dung thực hiện phía client (không gọi lại API
-// mỗi lần gõ phím) — đúng yêu cầu "search-side client".
-function buildQuestionListUrl() {
+// Lọc theo kỹ năng + đề thi thực hiện phía server (giống pattern filter
+// Unit/Part của vocab); tìm theo nội dung thực hiện phía client (không gọi
+// lại API mỗi lần gõ phím) — đúng yêu cầu "search-side client".
+// `matchedIds` = danh sách id câu hỏi đã lọc sẵn theo Đề thi (null = không
+// lọc theo đề thi) — được tính trước ở loadQuestionAdminList() vì việc lọc
+// theo đề thi cần đi xuyên qua exam_sections/exam_subsections/exam_questions,
+// không nhét gọn vào 1 URL PostgREST đơn giản như filter kỹ năng được.
+function buildQuestionListUrl(matchedIds) {
   const skillFilter = document.getElementById('filter-question-skill')?.value || '';
+  const sortDir = document.getElementById('sort-question-created')?.value === 'asc' ? 'asc' : 'desc';
 
   // Lấy đủ field cần cho form Sửa/Nhân bản (choices, correct_answer, audio_url,
   // difficulty) — không chỉ mấy cột hiển thị ở bảng như trước, để click vào
@@ -174,10 +198,49 @@ function buildQuestionListUrl() {
   let url = `${ADMIN_CONFIG.supabaseUrl}/rest/v1/question_bank`
     + `?select=id,skill_id,question_type,question_text,choices,correct_answer,`
     + `audio_url,explanation,difficulty,passage_id,created_at,skills(name)`
-    + `&order=created_at.desc`;
+    + `&order=created_at.${sortDir}`;
 
   if (skillFilter) url += `&skill_id=eq.${encodeURIComponent(skillFilter)}`;
+  if (Array.isArray(matchedIds)) url += `&id=in.(${matchedIds.join(',')})`;
   return url;
+}
+
+// Lọc theo Đề thi: question_bank không có exam_id trực tiếp (chỉ liên kết
+// qua exam_questions -> exam_subsections -> exam_sections -> exam_id), nên
+// đi 3 bước tuần tự (mỗi bước dùng id của bước trước) thay vì embed lồng
+// nhau qua PostgREST cho dễ đọc/dễ sửa — số bảng trung gian ít (3 bảng),
+// không đáng lo hiệu năng ở quy mô 1 trường/trung tâm.
+async function fetchQuestionIdsForExam(examId) {
+  const headers = await sbAuthedHeaders();
+
+  const sectionsRes = await fetch(
+    `${ADMIN_CONFIG.supabaseUrl}/rest/v1/exam_sections?exam_id=eq.${encodeURIComponent(examId)}&select=id`,
+    { headers }
+  );
+  if (!sectionsRes.ok) throw new Error(`Lỗi lọc theo đề thi (bước 1): ${sectionsRes.status}`);
+  const sections = await sectionsRes.json();
+  if (sections.length === 0) return [];
+
+  const sectionIds = sections.map(s => s.id).join(',');
+  const subsectionsRes = await fetch(
+    `${ADMIN_CONFIG.supabaseUrl}/rest/v1/exam_subsections?exam_section_id=in.(${sectionIds})&select=id`,
+    { headers }
+  );
+  if (!subsectionsRes.ok) throw new Error(`Lỗi lọc theo đề thi (bước 2): ${subsectionsRes.status}`);
+  const subsections = await subsectionsRes.json();
+  if (subsections.length === 0) return [];
+
+  const subsectionIds = subsections.map(s => s.id).join(',');
+  const examQuestionsRes = await fetch(
+    `${ADMIN_CONFIG.supabaseUrl}/rest/v1/exam_questions?exam_subsection_id=in.(${subsectionIds})&select=question_id`,
+    { headers }
+  );
+  if (!examQuestionsRes.ok) throw new Error(`Lỗi lọc theo đề thi (bước 3): ${examQuestionsRes.status}`);
+  const examQuestions = await examQuestionsRes.json();
+
+  // Loại trùng vì 1 câu có thể xuất hiện ở nhiều dạng bài khác nhau trong
+  // cùng 1 đề (hiếm nhưng không cấm ở schema).
+  return Array.from(new Set(examQuestions.map(eq => eq.question_id)));
 }
 
 async function loadQuestionAdminList() {
@@ -187,11 +250,26 @@ async function loadQuestionAdminList() {
   }
 
   try {
-    const res = await fetch(buildQuestionListUrl(), { headers: await sbAuthedHeaders() });
+    const examFilter = document.getElementById('filter-question-exam')?.value || '';
+    let matchedIds = null;
+
+    if (examFilter) {
+      matchedIds = await fetchQuestionIdsForExam(examFilter);
+      if (matchedIds.length === 0) {
+        // Đề thi chưa có câu hỏi nào -> khỏi cần gọi question_bank nữa
+        questionsAdminState.currentRows = [];
+        questionsAdminState.currentPage = 1;
+        questionsAdminState.selectedIds.clear();
+        renderQuestionAdminTable();
+        return;
+      }
+    }
+
+    const res = await fetch(buildQuestionListUrl(matchedIds), { headers: await sbAuthedHeaders() });
     if (!res.ok) throw new Error(`Lỗi tải danh sách câu hỏi: ${res.status}`);
 
     questionsAdminState.currentRows = await res.json();
-    questionsAdminState.currentPage = 1; // reset về trang 1 mỗi khi tải lại (đổi filter kỹ năng...)
+    questionsAdminState.currentPage = 1; // reset về trang 1 mỗi khi tải lại (đổi filter/sort...)
     questionsAdminState.selectedIds.clear(); // dữ liệu mới -> bỏ chọn cũ cho an toàn
     renderQuestionAdminTable();
   } catch (err) {
@@ -449,6 +527,8 @@ function initQuestionBulkControls() {
   document.getElementById('question-bulk-exam-cancel-btn')?.addEventListener('click', closeBulkExamModal);
   document.getElementById('question-bulk-exam-overlay')?.addEventListener('click', closeBulkExamModal);
   document.getElementById('question-bulk-exam-confirm-btn')?.addEventListener('click', handleBulkExamConfirm);
+  document.getElementById('question-bulk-exam-create-confirm-btn')?.addEventListener('click', handleBulkExamCreateConfirm);
+  document.getElementById('question-bulk-exam-create-cancel-btn')?.addEventListener('click', handleBulkExamCreateCancel);
 }
 
 // ============================================================
@@ -499,6 +579,17 @@ function openBulkExamModal() {
   const examSelect = document.getElementById('question-bulk-exam-select');
   if (examSelect) examSelect.value = '';
 
+  const createWrap = document.getElementById('question-bulk-exam-create-wrap');
+  const createError = document.getElementById('question-bulk-exam-create-error');
+  const createTitle = document.getElementById('question-bulk-exam-create-title');
+  const createType = document.getElementById('question-bulk-exam-create-type');
+  const createThreshold = document.getElementById('question-bulk-exam-create-threshold');
+  if (createWrap) createWrap.style.display = 'none';
+  if (createError) createError.textContent = '';
+  if (createTitle) createTitle.value = '';
+  if (createType) createType.value = 'full';
+  if (createThreshold) createThreshold.value = '70';
+
   populateBulkExamDropdown();
 
   const overlay = document.getElementById('question-bulk-exam-overlay');
@@ -519,8 +610,11 @@ async function populateBulkExamDropdown() {
   if (!select) return;
   try {
     const exams = await fetchExamsList();
-    select.innerHTML = '<option value="">— Chọn đề thi —</option>' +
-      exams.map(ex => `<option value="${ex.id}">${escHtml(ex.title)}${ex.is_published ? '' : ' (nháp)'}</option>`).join('');
+    const keepValue = select.value;
+    select.innerHTML = '<option value="">— Chọn đề thi —</option>'
+      + '<option value="__create_new__">+ Tạo đề thi mới…</option>'
+      + exams.map(ex => `<option value="${ex.id}">${escHtml(ex.title)}${ex.is_published ? '' : ' (nháp)'}</option>`).join('');
+    if (keepValue) select.value = keepValue;
   } catch (err) {
     console.error('Lỗi nạp dropdown đề thi (bulk):', err);
   }
@@ -528,12 +622,24 @@ async function populateBulkExamDropdown() {
 
 // Chọn Đề -> với MỖI kỹ năng có mặt trong danh sách đã chọn, render 1 khối
 // "Chọn phần" (filter theo skill_id của nhóm đó) + "Chọn dạng bài" riêng.
+// Chọn "+ Tạo đề thi mới…" -> hiện mini-form tạo đề ngay trong modal, chưa
+// đụng tới khối theo-kỹ-năng cho tới khi có đề thật để chọn.
 async function onBulkExamSelectChange() {
   const examId = document.getElementById('question-bulk-exam-select')?.value;
   const groupsWrap = document.getElementById('question-bulk-exam-skill-groups');
+  const createWrap = document.getElementById('question-bulk-exam-create-wrap');
   if (!groupsWrap) return;
 
   bulkExamState.skillGroups.forEach(g => { g.sectionId = ''; g.subsectionId = ''; });
+
+  if (examId === '__create_new__') {
+    groupsWrap.innerHTML = '';
+    if (createWrap) createWrap.style.display = 'block';
+    document.getElementById('question-bulk-exam-create-title')?.focus();
+    return;
+  }
+
+  if (createWrap) createWrap.style.display = 'none';
 
   if (!examId) {
     groupsWrap.innerHTML = '';
@@ -560,6 +666,92 @@ async function onBulkExamSelectChange() {
 
   // Nạp danh sách phần cho từng kỹ năng song song (mỗi kỹ năng độc lập nhau)
   await Promise.all(bulkExamState.skillGroups.map(g => loadBulkExamSectionsForSkill(examId, g.skillId)));
+}
+
+// Tạo đề thi mới ngay trong modal bulk — cùng logic với handleExamCreateConfirm
+// ở form câu hỏi đơn lẻ, chỉ khác id phần tử và nơi trả kết quả về (dropdown
+// bulk thay vì dropdown trong form 1 câu).
+async function handleBulkExamCreateConfirm() {
+  const titleInput = document.getElementById('question-bulk-exam-create-title');
+  const typeSelect = document.getElementById('question-bulk-exam-create-type');
+  const thresholdInput = document.getElementById('question-bulk-exam-create-threshold');
+  const errorEl = document.getElementById('question-bulk-exam-create-error');
+  const confirmBtn = document.getElementById('question-bulk-exam-create-confirm-btn');
+
+  const title = titleInput?.value.trim();
+  const examType = typeSelect?.value;
+  const threshold = Number(thresholdInput?.value);
+
+  if (errorEl) errorEl.textContent = '';
+
+  if (!title) {
+    if (errorEl) errorEl.textContent = 'Vui lòng nhập tên đề thi.';
+    titleInput?.focus();
+    return;
+  }
+  if (!Number.isFinite(threshold) || threshold < 0 || threshold > 100) {
+    if (errorEl) errorEl.textContent = 'Ngưỡng đạt phải là số từ 0 đến 100.';
+    thresholdInput?.focus();
+    return;
+  }
+
+  const originalText = confirmBtn.textContent;
+  confirmBtn.disabled = true;
+  confirmBtn.textContent = 'Đang tạo...';
+
+  try {
+    const res = await fetch(`${ADMIN_CONFIG.supabaseUrl}/rest/v1/exams`, {
+      method: 'POST',
+      headers: await sbAuthedHeaders({ 'Prefer': 'return=representation' }),
+      body: JSON.stringify({
+        title,
+        exam_type: examType,
+        pass_threshold_pct: threshold,
+        is_published: false
+      })
+    });
+    if (!res.ok) {
+      const errBody = await res.json().catch(() => null);
+      throw new Error(errBody?.message || `Lỗi tạo đề thi mới (HTTP ${res.status})`);
+    }
+    const [newExam] = await res.json();
+
+    // Thêm vào cache local (không fetch lại toàn bộ) rồi chọn sẵn đề vừa tạo
+    examLinkState.exams.unshift(newExam);
+    await populateBulkExamDropdown();
+
+    const select = document.getElementById('question-bulk-exam-select');
+    if (select) select.value = newExam.id;
+
+    if (titleInput) titleInput.value = '';
+    if (thresholdInput) thresholdInput.value = '70';
+    if (typeSelect) typeSelect.value = 'full';
+
+    const createWrap = document.getElementById('question-bulk-exam-create-wrap');
+    if (createWrap) createWrap.style.display = 'none';
+
+    // Đề mới chưa có section nào -> khối theo-kỹ-năng sẽ tự hiện "Đề này
+    // chưa có phần [skill]" cho từng nhóm (đúng hành vi đã thống nhất).
+    await onBulkExamSelectChange();
+  } catch (err) {
+    console.error('Lỗi tạo đề thi mới (bulk):', err);
+    if (errorEl) errorEl.textContent = err?.message || 'Có lỗi khi tạo đề thi. Vui lòng thử lại.';
+  } finally {
+    confirmBtn.disabled = false;
+    confirmBtn.textContent = originalText;
+  }
+}
+
+function handleBulkExamCreateCancel() {
+  const select = document.getElementById('question-bulk-exam-select');
+  const createWrap = document.getElementById('question-bulk-exam-create-wrap');
+  const errorEl = document.getElementById('question-bulk-exam-create-error');
+
+  if (select) select.value = '';
+  if (createWrap) createWrap.style.display = 'none';
+  if (errorEl) errorEl.textContent = '';
+  const titleInput = document.getElementById('question-bulk-exam-create-title');
+  if (titleInput) titleInput.value = '';
 }
 
 async function loadBulkExamSectionsForSkill(examId, skillId) {
@@ -632,8 +824,8 @@ async function handleBulkExamConfirm() {
 
   if (errorEl) errorEl.textContent = '';
 
-  if (!examId) {
-    if (errorEl) errorEl.textContent = 'Vui lòng chọn đề thi.';
+  if (!examId || examId === '__create_new__') {
+    if (errorEl) errorEl.textContent = 'Vui lòng chọn đề thi (hoặc bấm "Tạo đề" để tạo đề mới trước).';
     return;
   }
 
@@ -740,10 +932,23 @@ function initQuestionSkillFilter() {
   select.addEventListener('change', () => loadQuestionAdminList());
 }
 
+function initQuestionExamFilter() {
+  const select = document.getElementById('filter-question-exam');
+  if (!select) return;
+  select.addEventListener('change', () => loadQuestionAdminList());
+}
+
+function initQuestionSortControl() {
+  const select = document.getElementById('sort-question-created');
+  if (!select) return;
+  select.addEventListener('change', () => loadQuestionAdminList());
+}
+
 // Gọi bởi switchAdminSection() (admin.js) khi vào tab "Câu hỏi" —
 // lazy-load giống pattern vocab/students, tránh gọi Supabase thừa.
 async function loadQuestionsSection() {
   await populateQuestionSkillFilter();
+  await populateQuestionExamFilter();
   await populateQuestionFormSkillDropdown();
   await populateQuestionFormPassageDropdown();
   await populateQuestionBulkSkillDropdown();
@@ -2455,6 +2660,8 @@ function switchQuestionsSubtab(tab) {
 document.addEventListener('DOMContentLoaded', () => {
   initQuestionSearch();
   initQuestionSkillFilter();
+  initQuestionExamFilter();
+  initQuestionSortControl();
   initQuestionFormControls();
   initQuestionPaginationControls();
   initPassagePaginationControls();
