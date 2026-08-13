@@ -116,8 +116,9 @@ async function populateQuestionExamFilter() {
     const exams = await fetchExamsList();
     const currentValue = select.value;
 
-    select.innerHTML = '<option value="">Tất cả đề thi</option>' +
-      exams.map(ex => `<option value="${ex.id}">${escHtml(ex.title)}${ex.is_published ? '' : ' (nháp)'}</option>`).join('');
+    select.innerHTML = '<option value="">Tất cả đề thi</option>'
+      + '<option value="__unassigned__">— Chưa gắn vào đề nào —</option>'
+      + exams.map(ex => `<option value="${ex.id}">${escHtml(ex.title)}${ex.is_published ? '' : ' (nháp)'}</option>`).join('');
 
     if (currentValue) select.value = currentValue;
   } catch (err) {
@@ -188,7 +189,7 @@ function toggleQuestionPassageField() {
 // lọc theo đề thi) — được tính trước ở loadQuestionAdminList() vì việc lọc
 // theo đề thi cần đi xuyên qua exam_sections/exam_subsections/exam_questions,
 // không nhét gọn vào 1 URL PostgREST đơn giản như filter kỹ năng được.
-function buildQuestionListUrl(matchedIds) {
+function buildQuestionListUrl(matchedIds, excludeIds) {
   const skillFilter = document.getElementById('filter-question-skill')?.value || '';
   const sortDir = document.getElementById('sort-question-created')?.value === 'asc' ? 'asc' : 'desc';
 
@@ -202,6 +203,10 @@ function buildQuestionListUrl(matchedIds) {
 
   if (skillFilter) url += `&skill_id=eq.${encodeURIComponent(skillFilter)}`;
   if (Array.isArray(matchedIds)) url += `&id=in.(${matchedIds.join(',')})`;
+  // excludeIds: dùng cho filter "Chưa gắn vào đề nào" — loại các câu ĐÃ có
+  // mặt trong exam_questions (bất kể đề nào). Rỗng nghĩa là chưa câu nào
+  // được gắn -> khỏi thêm điều kiện gì (giữ nguyên toàn bộ danh sách).
+  if (Array.isArray(excludeIds) && excludeIds.length > 0) url += `&id=not.in.(${excludeIds.join(',')})`;
   return url;
 }
 
@@ -243,6 +248,21 @@ async function fetchQuestionIdsForExam(examId) {
   return Array.from(new Set(examQuestions.map(eq => eq.question_id)));
 }
 
+// Lọc "Chưa gắn vào đề nào": lấy TOÀN BỘ question_id đã xuất hiện ở
+// exam_questions (không phân biệt đề nào), rồi loại trừ (not.in) khỏi
+// question_bank ở buildQuestionListUrl(). Đơn giản hơn đi 3 bước như
+// fetchQuestionIdsForExam() vì không cần biết câu đó thuộc đề nào, chỉ cần
+// biết "đã gắn hay chưa".
+async function fetchAllAssignedQuestionIds() {
+  const res = await fetch(
+    `${ADMIN_CONFIG.supabaseUrl}/rest/v1/exam_questions?select=question_id`,
+    { headers: await sbAuthedHeaders() }
+  );
+  if (!res.ok) throw new Error(`Lỗi tải danh sách câu đã gắn đề thi: ${res.status}`);
+  const rows = await res.json();
+  return Array.from(new Set(rows.map(r => r.question_id)));
+}
+
 async function loadQuestionAdminList() {
   const tbody = document.getElementById('question-table-body');
   if (tbody) {
@@ -252,8 +272,11 @@ async function loadQuestionAdminList() {
   try {
     const examFilter = document.getElementById('filter-question-exam')?.value || '';
     let matchedIds = null;
+    let excludeIds = null;
 
-    if (examFilter) {
+    if (examFilter === '__unassigned__') {
+      excludeIds = await fetchAllAssignedQuestionIds();
+    } else if (examFilter) {
       matchedIds = await fetchQuestionIdsForExam(examFilter);
       if (matchedIds.length === 0) {
         // Đề thi chưa có câu hỏi nào -> khỏi cần gọi question_bank nữa
@@ -265,7 +288,7 @@ async function loadQuestionAdminList() {
       }
     }
 
-    const res = await fetch(buildQuestionListUrl(matchedIds), { headers: await sbAuthedHeaders() });
+    const res = await fetch(buildQuestionListUrl(matchedIds, excludeIds), { headers: await sbAuthedHeaders() });
     if (!res.ok) throw new Error(`Lỗi tải danh sách câu hỏi: ${res.status}`);
 
     questionsAdminState.currentRows = await res.json();
@@ -394,8 +417,21 @@ function updateQuestionBulkBar() {
   if (countEl) countEl.textContent = `Đã chọn ${count} câu hỏi`;
 }
 
+// Xóa lựa chọn ở CẢ state lẫn DOM — trước đây chỉ clear() Set nội bộ nên
+// sau khi bulk-add vào đề thi xong, checkbox từng dòng (đã render sẵn
+// "checked" từ trước) vẫn hiện tick dù state đã trống, gây hiểu nhầm là
+// chưa thêm được. Không gọi lại loadQuestionAdminList()/render lại toàn
+// bảng vì tốn 1 lượt gọi API không cần thiết — chỉ cần bỏ tick DOM.
 function clearQuestionSelection() {
   questionsAdminState.selectedIds.clear();
+
+  document.querySelectorAll('#question-table-body .question-row-checkbox').forEach(cb => {
+    cb.checked = false;
+  });
+
+  const selectAllCb = document.getElementById('question-select-all');
+  if (selectAllCb) selectAllCb.checked = false;
+
   updateQuestionBulkBar();
 }
 
