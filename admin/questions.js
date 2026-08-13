@@ -71,6 +71,75 @@ function stripHtml(html) {
   return tmp.textContent || tmp.innerText || '';
 }
 
+// Rút gọn question_text để hiện trong bảng nhưng GIỮ LẠI định dạng Đậm/Gạch
+// chân (trước đây dùng stripHtml() nên bỏ sạch mọi thẻ, câu có in đậm/gạch
+// chân trong form lại hiện chữ thường trong bảng). Chỉ whitelist rất hẹp
+// (b/strong/u/em/i) — bỏ hết thẻ khác (ảnh, div, span lạ...) vì ô bảng quá
+// nhỏ để hiện ảnh thật, và tránh render thẻ ngoài whitelist cho an toàn dù
+// đây là dữ liệu do chính giáo viên nhập (không phải từ người dùng công khai).
+const QUESTION_TABLE_ALLOWED_TAGS = new Set(['B', 'STRONG', 'U', 'EM', 'I']);
+
+function formatQuestionTextForTable(html, maxLen = 50) {
+  if (!html) return '<span style="color:var(--ink-soft);">[Hình ảnh]</span>';
+
+  const container = document.createElement('div');
+  container.innerHTML = html;
+
+  let visibleLen = 0;
+  let truncated = false;
+
+  function walk(node) {
+    if (truncated) return null;
+
+    if (node.nodeType === Node.TEXT_NODE) {
+      let text = node.textContent;
+      if (visibleLen + text.length > maxLen) {
+        text = text.slice(0, Math.max(0, maxLen - visibleLen));
+        truncated = true;
+      }
+      visibleLen += text.length;
+      return text ? document.createTextNode(text) : null;
+    }
+
+    if (node.nodeType === Node.ELEMENT_NODE) {
+      if (node.tagName === 'IMG') {
+        if (visibleLen >= maxLen) { truncated = true; return null; }
+        visibleLen += 8; // độ dài ước lượng của "[Hình ảnh]" để không lấn hết chỗ chữ còn lại
+        const span = document.createElement('span');
+        span.style.color = 'var(--ink-soft)';
+        span.textContent = '[Hình ảnh]';
+        return span;
+      }
+      if (node.tagName === 'BR') {
+        return document.createTextNode(' ');
+      }
+
+      const isAllowed = QUESTION_TABLE_ALLOWED_TAGS.has(node.tagName);
+      const wrapper = isAllowed ? document.createElement(node.tagName) : document.createDocumentFragment();
+
+      for (const child of Array.from(node.childNodes)) {
+        const rendered = walk(child);
+        if (rendered) wrapper.appendChild(rendered);
+        if (truncated) break;
+      }
+      return wrapper;
+    }
+
+    return null;
+  }
+
+  const result = document.createElement('div');
+  for (const child of Array.from(container.childNodes)) {
+    const rendered = walk(child);
+    if (rendered) result.appendChild(rendered);
+    if (truncated) break;
+  }
+
+  const output = result.innerHTML.trim();
+  if (!output) return '<span style="color:var(--ink-soft);">[Hình ảnh]</span>';
+  return truncated ? output + '…' : output;
+}
+
 // ============================================================
 //  SKILLS — load 1 lần, dùng cho dropdown filter (và form ở bước sau)
 // ============================================================
@@ -346,7 +415,7 @@ function renderQuestionAdminTable() {
         <td style="text-align:center;">${stt}</td>
         <td>${escHtml(skillName)}</td>
         <td>${escHtml(typeLabel)}</td>
-        <td>${escHtml(truncateText(stripHtml(r.question_text), 50)) || '<span style="color:var(--ink-soft);">[Hình ảnh]</span>'}</td>
+        <td>${formatQuestionTextForTable(r.question_text, 50)}</td>
         <td style="text-align:center;">${hasFeedback ? '✓' : '—'}</td>
         <td>${escHtml(formatDateVN(r.created_at))}</td>
         <td onclick="event.stopPropagation();" style="text-align:center;">
@@ -1506,6 +1575,16 @@ function initChoiceDragDrop() {
   });
 }
 
+// Đặt text cho CẢ nút submit ở header lẫn nút submit thật ở cuối form —
+// 1 chỗ duy nhất để 2 nút luôn khớp nhau (tránh phải sửa 2 nơi mỗi khi đổi
+// nhãn theo mode tạo mới/sửa/nhân bản).
+function setQuestionFormSubmitText(text) {
+  const submitBtn = document.getElementById('question-form-submit-btn');
+  const submitBtnTop = document.getElementById('question-form-submit-btn-top');
+  if (submitBtn) submitBtn.textContent = text;
+  if (submitBtnTop) submitBtnTop.textContent = text;
+}
+
 // Reset toàn bộ form về trạng thái trống — dùng cả khi mở form tạo mới
 // lẫn sau khi sửa xong (đóng form)
 function resetQuestionForm() {
@@ -2076,7 +2155,7 @@ function openQuestionForm(row = null, mode = 'create') {
     questionFormState.mode = 'edit';
     questionFormState.editingId = row.id;
     if (title) title.textContent = 'Sửa câu hỏi';
-    if (submitBtn) submitBtn.textContent = 'Cập nhật câu hỏi';
+    setQuestionFormSubmitText('Cập nhật câu hỏi');
     if (saveContinueBtn) saveContinueBtn.style.display = 'none'; // chỉ có ở mode tạo mới
     populateQuestionFormFromRow(row, /* includeAudio */ true);
     loadAndRenderQuestionExamUsage(row.id); // hiển thị đề/phần/dạng bài đang chứa câu hỏi này (nếu có)
@@ -2084,14 +2163,14 @@ function openQuestionForm(row = null, mode = 'create') {
     questionFormState.mode = 'create';
     questionFormState.editingId = null;
     if (title) title.textContent = 'Thêm câu hỏi mới (nhân bản)';
-    if (submitBtn) submitBtn.textContent = 'Lưu câu hỏi';
+    setQuestionFormSubmitText('Lưu câu hỏi');
     if (saveContinueBtn) saveContinueBtn.style.display = 'inline-flex';
     populateQuestionFormFromRow(row, /* includeAudio */ false);
   } else {
     questionFormState.mode = 'create';
     questionFormState.editingId = null;
     if (title) title.textContent = 'Thêm câu hỏi mới';
-    if (submitBtn) submitBtn.textContent = 'Lưu câu hỏi';
+    setQuestionFormSubmitText('Lưu câu hỏi');
     if (saveContinueBtn) saveContinueBtn.style.display = 'inline-flex';
   }
 
@@ -2335,6 +2414,7 @@ async function submitQuestionForm(e) {
 
   const errorEl = document.getElementById('question-form-error');
   const submitBtn = document.getElementById('question-form-submit-btn');
+  const submitBtnTop = document.getElementById('question-form-submit-btn-top');
 
   const payload = validateAndBuildQuestionPayload();
   if (!payload) return;
@@ -2342,6 +2422,7 @@ async function submitQuestionForm(e) {
   submitBtn.disabled = true;
   const originalText = submitBtn.innerHTML;
   submitBtn.innerHTML = 'Đang lưu...';
+  if (submitBtnTop) { submitBtnTop.disabled = true; submitBtnTop.innerHTML = 'Đang lưu...'; }
 
   try {
     const { questionId } = await saveQuestionToSupabase(payload);
@@ -2354,6 +2435,7 @@ async function submitQuestionForm(e) {
   } finally {
     submitBtn.disabled = false;
     submitBtn.innerHTML = originalText;
+    if (submitBtnTop) { submitBtnTop.disabled = false; submitBtnTop.innerHTML = originalText; }
   }
 }
 
@@ -2523,6 +2605,12 @@ function initQuestionFormControls() {
   document.getElementById('question-form-cancel-btn')?.addEventListener('click', closeQuestionForm);
   document.getElementById('question-form-overlay')?.addEventListener('click', closeQuestionForm);
   document.getElementById('question-form')?.addEventListener('submit', submitQuestionForm);
+  // Nút ở header chỉ là "phím tắt" — click vào để kích hoạt đúng nút submit
+  // thật ở cuối form (type="submit"), tránh viết trùng 1 lần nữa logic
+  // validate/lưu/loading ở 2 chỗ khác nhau.
+  document.getElementById('question-form-submit-btn-top')?.addEventListener('click', () => {
+    document.getElementById('question-form-submit-btn')?.click();
+  });
   document.getElementById('question-form-save-continue-btn')?.addEventListener('click', handleSaveAndContinue);
   document.getElementById('question-type')?.addEventListener('change', toggleQuestionTypeFields);
   document.getElementById('question-skill')?.addEventListener('change', toggleQuestionPassageField);
