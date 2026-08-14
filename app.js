@@ -1791,6 +1791,7 @@ function openReviewToday() {
 
   stopAllAudio();
   switchMainSection('review'); // chuyển panel + active đúng nút nav nhờ data-section="review"
+  setActiveReviewTab('vocab'); // đảm bảo tab "Ôn tập từ vựng" active, kể cả khi gọi trực tiếp từ nav ngoài
 
   const dueWords = _shuffle(srGetDueWords());
 
@@ -1962,6 +1963,122 @@ function renderReviewReport() {
 
 /*
   ─────────────────────────────────────────────────────────────────
+  TAB "ĐỀ CẦN LÀM LẠI" trong menu Review — cạnh "Ôn tập từ vựng" (Phase 1).
+  Liệt kê exam_attempts của user hiện tại đã tới hạn làm lại
+  (status='needs_retry' AND next_retry_date <= hôm nay). Click vào 1 dòng
+  -> tái dùng THẲNG startExamAttempt(examId) đã có sẵn ở Tier 3 (định nghĩa
+  trong exam.js, nạp sau app.js — gọi được vì đây là lời gọi lúc runtime
+  khi user click, không phải lúc parse file). Hàm đó tự tính attempt_number
+  kế tiếp + insert attempt mới + giữ nguyên các attempt cũ, không đổi gì
+  ở đây, đúng yêu cầu "không viết hàm mới" cho phần tạo attempt.
+  ─────────────────────────────────────────────────────────────────
+*/
+
+// Đổi tab con trong Review — chỉ đổi UI (style active + ẩn/hiện khối
+// streak vốn chỉ áp dụng cho vocab); việc load dữ liệu do hàm gọi kèm
+// (openReviewToday / openExamRetryReview) tự lo.
+function setActiveReviewTab(tabKey) {
+  document.querySelectorAll('.review-tab-btn').forEach(btn => {
+    const isActive = btn.dataset.reviewTab === tabKey;
+    btn.style.background = isActive ? 'var(--ink)' : 'transparent';
+    btn.style.color = isActive ? '#fff' : 'var(--ink)';
+  });
+
+  const streakBlock = document.getElementById('review-vocab-streak-block');
+  if (streakBlock) streakBlock.style.display = (tabKey === 'vocab') ? 'block' : 'none';
+}
+
+// Mở tab "Đề cần làm lại" — gọi từ nút tab trong index.html
+async function openExamRetryReview() {
+  stopAllAudio();
+  switchMainSection('review');
+  setActiveReviewTab('examretry');
+
+  const zone = document.getElementById('review-zone');
+  if (!zone) {
+    console.error('Không tìm thấy #review-zone trong HTML. Cần thêm 1 container rỗng với id này.');
+    return;
+  }
+
+  if (!state.currentUser) {
+    zone.innerHTML = '<div class="empty-state">Bạn cần đăng nhập để xem đề cần làm lại.</div>';
+    return;
+  }
+
+  zone.innerHTML = '<div class="empty-state" style="padding:40px 20px;">Đang tải danh sách đề cần làm lại...</div>';
+
+  try {
+    const today = new Date().toISOString().slice(0, 10); // yyyy-mm-dd, so sánh đúng kiểu cột `date`
+
+    // Dùng supabaseClient.from() (không phải fetch()+sbAuthHeaders()) để
+    // nhất quán với cách exam.js đọc/ghi exam_attempts — bảng này thuộc
+    // phạm vi module Luyện đề, không phải vocab.
+    const { data: rows, error } = await supabaseClient
+      .from('exam_attempts')
+      .select('id, exam_id, attempt_number, total_score, total_possible, next_retry_date, exams ( id, title, pass_threshold_pct )')
+      .eq('user_id', state.currentUser.id)
+      .eq('status', 'needs_retry')
+      .lte('next_retry_date', today)
+      .order('next_retry_date', { ascending: true });
+
+    if (error) throw error;
+
+    renderExamRetryReviewList(rows || []);
+  } catch (err) {
+    console.error('Lỗi tải danh sách đề cần làm lại:', err);
+    zone.innerHTML = '<div class="empty-state">Có lỗi khi tải danh sách đề cần làm lại.</div>';
+  }
+}
+
+// Render danh sách — tái dùng đúng CSS class (.exam-card, .exam-status-badge...)
+// mà renderExamCard() trong exam.js đã dùng cho tab "Luyện đề", để đồng bộ
+// giao diện giữa 2 nơi cùng hiển thị "thẻ 1 đề thi".
+function renderExamRetryReviewList(rows) {
+  const zone = document.getElementById('review-zone');
+  if (!zone) return;
+
+  if (!rows.length) {
+    zone.innerHTML = `
+      <div class="empty-state" style="text-align:center; padding:40px 20px;">
+        <div style="font-size:40px; margin-bottom:10px;">🎉</div>
+        <div style="font-weight:600; color:var(--ink);">Không có đề nào cần làm lại hôm nay!</div>
+        <div style="color:var(--ink-mute); margin-top:6px; font-size:13px;">Những đề chưa đạt sẽ xuất hiện ở đây khi tới hạn làm lại.</div>
+      </div>
+    `;
+    return;
+  }
+
+  zone.innerHTML = rows.map(r => {
+    const exam = r.exams || {};
+    const scoreText = (r.total_score != null && r.total_possible != null)
+      ? `${r.total_score}/${r.total_possible}`
+      : '—';
+
+    return `
+      <div class="exam-card">
+        <div class="exam-card-info">
+          <div class="exam-card-title">${exam.title || 'Đề thi'}</div>
+          <div class="exam-card-meta">
+            <span>Điểm lần trước: ${scoreText}</span>
+            <span>·</span>
+            <span>Cần làm lại từ: ${r.next_retry_date || '—'}</span>
+          </div>
+          <div class="exam-card-status-row">
+            <span class="exam-status-badge exam-status-retry">Cần làm lại</span>
+          </div>
+        </div>
+        <div class="exam-card-actions">
+          <button class="btn btn-primary" onclick="startExamAttempt('${r.exam_id}')">
+            Làm lại
+          </button>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+/*
+  ─────────────────────────────────────────────────────────────────
   GHI CHÚ TÍCH HỢP HTML (đã áp dụng sẵn trong index.html mới):
 
   1) Mỗi nút trong .main-nav cần có thuộc tính data-section khớp với
@@ -1977,5 +2094,11 @@ function renderReviewReport() {
   3) Panel "Vocab" không còn gắn class "active" cứng trong HTML —
      startUI() gọi switchMainSection('vocab') ngay khi app load xong,
      đảm bảo đúng 1 nguồn sự thật duy nhất cho việc panel nào active.
+
+  4) Tab con trong Review ("Ôn tập từ vựng" / "Đề cần làm lại") dùng
+     class .review-tab-btn + data-review-tab, style active/inactive
+     set trực tiếp bằng JS (setActiveReviewTab) vì chưa có rule CSS
+     riêng cho class này trong style.css — nếu sau này thêm CSS thật
+     cho .review-tab-btn.active, có thể bỏ phần set inline style đó.
   ─────────────────────────────────────────────────────────────────
 */

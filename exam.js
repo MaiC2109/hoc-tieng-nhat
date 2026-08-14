@@ -1417,16 +1417,44 @@ async function submitExamAttempt(opts) {
 
     // TODO Tier 7: cập nhật question_mistake_tracker ở đây
 
-    // 4. Cập nhật exam_attempts — status='submitted', KHÔNG tính next_retry_date/retry_note ở bước này
+    // 4. Xác định status ('passed'/'needs_retry') theo pass_threshold_pct của đề,
+    // và tính next_retry_date bằng rule ở exam_retry_rules (hàm dùng chung
+    // computeRetryAfterDays() trong exam-retry-rules.js — ưu tiên rule riêng
+    // của đề, fallback rule mặc định exam_id IS NULL, trả về null nếu
+    // không có rule nào khớp).
+    const examInfo = (state.examState.examList || []).find(e => e.id === attempt.exam_id) || null;
+    const passThresholdPct = examInfo ? examInfo.pass_threshold_pct : null;
+    const scorePct = totalPossible > 0 ? Math.round((totalScore / totalPossible) * 100) : 0;
+
+    const attemptStatus = (passThresholdPct != null && scorePct >= passThresholdPct)
+      ? 'passed'
+      : 'needs_retry';
+
+    let nextRetryDate = null;
+    if (attemptStatus === 'needs_retry') {
+      const retryAfterDays = await computeRetryAfterDays({
+        totalScore,
+        totalPossible,
+        examId: attempt.exam_id
+      });
+      if (retryAfterDays != null) {
+        const retryDate = new Date();
+        retryDate.setDate(retryDate.getDate() + retryAfterDays);
+        nextRetryDate = retryDate.toISOString().slice(0, 10); // date only (yyyy-mm-dd), đúng kiểu cột `date`
+      }
+    }
+
+    // 5. Cập nhật exam_attempts — status theo pass_threshold_pct, kèm next_retry_date
+    // (retry_note để trống, admin override bằng ghi chú riêng ở Tier 4 nếu cần).
     const { data: updatedAttempt, error: submitError } = await supabaseClient
       .from('exam_attempts')
       .update({
-        status: 'submitted',
+        status: attemptStatus,
         submitted_at: new Date().toISOString(),
         total_score: totalScore,
         total_possible: totalPossible,
         section_scores: sectionScores,
-        next_retry_date: null,
+        next_retry_date: nextRetryDate,
         retry_note: null
       })
       .eq('id', attempt.id)
@@ -1442,7 +1470,7 @@ async function submitExamAttempt(opts) {
 
     console.log('[exam] Đã nộp bài, kết quả:', updatedAttempt);
 
-    // 5. Build danh sách review từng câu (đúng/sai/đáp án đúng/feedback) từ
+    // 6. Build danh sách review từng câu (đúng/sai/đáp án đúng/feedback) từ
     // dữ liệu đã có sẵn trong bộ nhớ (savedAnswers + gradedByBankId), không
     // cần query lại vì vừa mới chấm xong ngay phía trên.
     const answersByBankId = {};
@@ -1454,7 +1482,7 @@ async function submitExamAttempt(opts) {
     });
     const questionsReview = buildQuestionsReview(state.examState.flatQuestions, answersByBankId);
 
-    // 6. Hiển thị màn kết quả đầy đủ (điểm tổng + chi tiết từng câu)
+    // 7. Hiển thị màn kết quả đầy đủ (điểm tổng + chi tiết từng câu)
     renderExamResultScreen(updatedAttempt, questionsReview);
   } catch (err) {
     console.error('Lỗi khi nộp bài:', err);
