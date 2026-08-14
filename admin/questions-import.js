@@ -31,6 +31,24 @@ const questionImportState = {
   validCount: 0
 };
 
+// ============================================================
+//  GIỮ ĐÚNG THỨ TỰ CSV SAU KHI IMPORT
+//  runQuestionImportBatch()/runQuestionImportBatchWithPassage() insert TUẦN
+//  TỰ từng dòng (await từng cái một) nên created_at của các câu tăng dần
+//  đúng theo thứ tự dòng trong CSV. Nhưng bảng câu hỏi ở Tier 1 mặc định
+//  sort "Mới nhất trước" (created_at DESC) — nghĩa là dòng cuối file CSV
+//  (mới nhất) lại hiện lên ĐẦU bảng, dòng đầu file lại rơi xuống cuối ->
+//  nhìn như bị đảo ngược so với file gốc.
+//  Không có cột order_index riêng cho question_bank (không tự ý thêm cột
+//  mới vào schema), nên cách duy nhất để thứ tự hiển thị khớp CSV mà không
+//  phụ thuộc lựa chọn sort hiện tại của giáo viên là ép về "Cũ nhất trước"
+//  (asc) ngay sau khi import xong — đây là chiều duy nhất khớp đúng thứ tự
+//  chèn thực tế.
+function forceQuestionSortAscendingAfterImport() {
+  const sortSelect = document.getElementById('sort-question-created');
+  if (sortSelect && sortSelect.value !== 'asc') sortSelect.value = 'asc';
+}
+
 // Cột bắt buộc cho TAB 2 — câu hỏi thuộc đoạn văn/hội thoại. Khác tab đơn lẻ:
 // có thêm passage_title/passage_content/passage_audio_url, KHÔNG có cột
 // question_type (mặc định coi là 'multiple_choice' vì có sẵn choice_1..4 —
@@ -455,6 +473,11 @@ async function runQuestionImportBatch() {
   // chính (Tier 1) đằng sau panel để giáo viên thấy ngay dữ liệu mới, không
   // cần tự tay bấm F5 hay đóng/mở lại trang.
   if (successCount > 0 && typeof loadQuestionAdminList === 'function') {
+    // Ép sort "Cũ nhất trước" trước khi refresh — vì insert tuần tự nên
+    // created_at tăng dần đúng thứ tự CSV; sort mặc định "Mới nhất trước"
+    // sẽ đảo ngược thứ tự vừa nhập. Xem giải thích đầy đủ ở
+    // forceQuestionSortAscendingAfterImport().
+    forceQuestionSortAscendingAfterImport();
     loadQuestionAdminList();
   }
 
@@ -923,6 +946,7 @@ async function runQuestionImportPassageBatch() {
   }
 
   if (successCount > 0 && typeof loadQuestionAdminList === 'function') {
+    forceQuestionSortAscendingAfterImport();
     loadQuestionAdminList();
   }
   if ((createdPassageCount > 0) && typeof fetchPassagesList === 'function') {
