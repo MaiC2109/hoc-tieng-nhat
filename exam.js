@@ -1415,7 +1415,49 @@ async function submitExamAttempt(opts) {
       }
     });
 
-    // TODO Tier 7: cập nhật question_mistake_tracker ở đây
+    // Tier 7: cập nhật question_mistake_tracker cho từng câu sai trong attempt này.
+    // Dùng lại gradedByBankId đã chấm ở bước 2, không chấm lại/không đổi logic điểm.
+    // upsert theo (user_id, question_id) — đúng UNIQUE constraint của bảng:
+    //   - Chưa có row: insert wrong_count=1, due_date=hôm nay.
+    //   - Đã có row: wrong_count++, due_date=hôm nay.
+    // Supabase upsert() không hỗ trợ "increment tại chỗ" nên phải đọc wrong_count
+    // hiện có trước khi upsert — chấp nhận được vì số câu sai trong 1 lần nộp
+    // thường chỉ vài chục, cùng quy mô với vòng lặp update is_correct ở bước 2.
+    const wrongBankIds = Object.keys(gradedByBankId).filter(bankId => gradedByBankId[bankId] === false);
+
+    if (wrongBankIds.length > 0 && state.currentUser) {
+      const today = new Date().toISOString().slice(0, 10); // yyyy-mm-dd, khớp kiểu cột `date`
+
+      const { data: existingTrackers, error: trackerFetchError } = await supabaseClient
+        .from('question_mistake_tracker')
+        .select('question_id, wrong_count')
+        .eq('user_id', state.currentUser.id)
+        .in('question_id', wrongBankIds);
+
+      if (trackerFetchError) {
+        console.error('Lỗi tải question_mistake_tracker hiện có:', trackerFetchError);
+      }
+
+      const existingWrongCountByQuestionId = {};
+      (existingTrackers || []).forEach(t => {
+        existingWrongCountByQuestionId[t.question_id] = t.wrong_count;
+      });
+
+      const trackerUpsertPayload = wrongBankIds.map(questionId => ({
+        user_id: state.currentUser.id,
+        question_id: questionId,
+        wrong_count: (existingWrongCountByQuestionId[questionId] || 0) + 1,
+        due_date: today
+      }));
+
+      const { error: trackerUpsertError } = await supabaseClient
+        .from('question_mistake_tracker')
+        .upsert(trackerUpsertPayload, { onConflict: 'user_id,question_id' });
+
+      if (trackerUpsertError) {
+        console.error('Lỗi upsert question_mistake_tracker:', trackerUpsertError);
+      }
+    }
 
     // 4. Xác định status ('passed'/'needs_retry') theo pass_threshold_pct của đề.
     const examInfo = (state.examState.examList || []).find(e => e.id === attempt.exam_id) || null;
