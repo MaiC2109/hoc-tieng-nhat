@@ -16,7 +16,9 @@ const examAdminState = { rows: [] };
 
 // Rule mặc định toàn hệ thống trong exam_retry_rules (exam_id IS NULL) —
 // sửa được qua UI ở màn danh sách đề thi (không gắn với 1 đề cụ thể nào).
-const defaultRetryRulesState = { rows: [], formOpen: false };
+// Mặc định thu gọn (expanded=false) — bấm vào mới mở ra xem/sửa, để không
+// chiếm chỗ ngay trên đầu bảng danh sách đề thi.
+const defaultRetryRulesState = { rows: [], expanded: false, formOpen: false, editingId: null };
 
 // skills.code của kỹ năng Nghe hiểu — xác nhận từ DB thực tế, KHÔNG đoán.
 // Dùng để quyết định có hiện ô upload audio ở form "Thêm dạng bài" hay không.
@@ -126,12 +128,47 @@ async function loadDefaultRetryRules() {
   renderDefaultRetryRulesCard();
 }
 
+// Bấm vào tiêu đề card để mở/thu gọn — mặc định đóng, chỉ hiện 1 dòng tóm
+// tắt (số khoảng điểm đã cấu hình) cho tới khi admin chủ động bấm vào xem.
+function toggleDefaultRetryRulesExpanded() {
+  defaultRetryRulesState.expanded = !defaultRetryRulesState.expanded;
+  // Thu gọn lại thì đóng luôn form đang mở (nếu có), tránh trạng thái lửng lơ.
+  if (!defaultRetryRulesState.expanded) {
+    defaultRetryRulesState.formOpen = false;
+    defaultRetryRulesState.editingId = null;
+  }
+  renderDefaultRetryRulesCard();
+}
+
 function renderDefaultRetryRulesCard() {
   const card = document.getElementById('default-retry-rules-card');
   if (!card) return;
 
   const rules = defaultRetryRulesState.rows || [];
+  const expanded = defaultRetryRulesState.expanded;
 
+  const summaryText = rules.length
+    ? `${rules.length} khoảng điểm đã cấu hình`
+    : 'Chưa cấu hình — các đề chưa có rule riêng sẽ không có gợi ý ngày làm lại';
+
+  // ── Header luôn hiện, bấm vào để mở/thu gọn (giống 1 tab) ──
+  const headerHtml = `
+    <div style="display:flex; justify-content:space-between; align-items:center; cursor:pointer;"
+      onclick="toggleDefaultRetryRulesExpanded()">
+      <div style="font-weight:600;">
+        <i class="ti ti-chevron-${expanded ? 'down' : 'right'}" style="vertical-align:middle;"></i>
+        ⚙️ Rule nhắc làm lại mặc định
+        <span style="font-weight:400; color:var(--ink-soft); font-size:12px;">— ${summaryText}</span>
+      </div>
+    </div>
+  `;
+
+  if (!expanded) {
+    card.innerHTML = headerHtml;
+    return;
+  }
+
+  // ── Nội dung chỉ render khi đã mở ──
   const rowsHtml = rules.length
     ? rules.map(r => `
       <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 12px; border:1px solid var(--border-md); border-radius:8px; margin-bottom:6px;">
@@ -139,55 +176,83 @@ function renderDefaultRetryRulesCard() {
           <strong>${r.min_score_pct}% – ${r.max_score_pct}%</strong>
           <span style="color:var(--ink-soft);"> → chờ ${r.retry_after_days} ngày</span>
         </div>
-        <button type="button" class="admin-row-action-btn" title="Xóa khoảng điểm này"
-          onclick="deleteDefaultRetryRule('${escHtml(r.id)}')" style="color:var(--vermillion);">
-          <i class="ti ti-trash"></i>
-        </button>
+        <div style="display:flex; gap:4px;">
+          <button type="button" class="admin-row-action-btn" title="Sửa khoảng điểm này"
+            onclick="event.stopPropagation(); openDefaultRetryRuleForm('${escHtml(r.id)}')">
+            <i class="ti ti-pencil"></i>
+          </button>
+          <button type="button" class="admin-row-action-btn" title="Xóa khoảng điểm này"
+            onclick="event.stopPropagation(); deleteDefaultRetryRule('${escHtml(r.id)}')" style="color:var(--vermillion);">
+            <i class="ti ti-trash"></i>
+          </button>
+        </div>
       </div>
     `).join('')
     : `<div class="empty-state" style="padding:8px 0;">Chưa có rule mặc định nào — các đề chưa cấu hình riêng sẽ không có gợi ý ngày làm lại.</div>`;
 
-  const formHtml = defaultRetryRulesState.formOpen ? `
+  const formHtml = defaultRetryRulesState.formOpen ? renderDefaultRetryRuleFormHtml() : '';
+
+  card.innerHTML = `
+    ${headerHtml}
+    <div style="margin-top:10px;">
+      <div style="display:flex; justify-content:flex-end; margin-bottom:8px;">
+        <button type="button" class="btn btn-outline" style="padding:4px 10px; font-size:12px;"
+          onclick="event.stopPropagation(); openDefaultRetryRuleForm(null)">
+          <i class="ti ti-plus"></i> Thêm khoảng điểm
+        </button>
+      </div>
+      ${rowsHtml}
+      ${formHtml}
+    </div>
+  `;
+}
+
+// Sinh HTML form dùng chung cho "Thêm mới" và "Sửa" rule mặc định — đọc
+// defaultRetryRulesState.editingId để biết đang sửa dòng nào, tự điền
+// sẵn giá trị cũ nếu có (giống pattern renderExamRetryRuleFormHtml()
+// ở rule riêng theo đề).
+function renderDefaultRetryRuleFormHtml() {
+  const editingId = defaultRetryRulesState.editingId;
+  const editingRule = editingId ? (defaultRetryRulesState.rows || []).find(r => r.id === editingId) : null;
+  const isEdit = !!editingRule;
+
+  return `
     <form id="default-retry-rule-form" onsubmit="submitDefaultRetryRuleForm(event)"
-      style="margin-top:10px; padding:12px; border:1px dashed var(--border-md); border-radius:8px;">
+      style="margin-top:6px; padding:12px; border:1px dashed var(--border-md); border-radius:8px;"
+      onclick="event.stopPropagation();">
       <div id="default-retry-rule-form-error" style="color:var(--vermillion); font-size:12px; margin-bottom:8px;"></div>
       <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end;">
         <div>
           <label style="font-size:12px; color:var(--ink-soft); display:block; margin-bottom:4px;">Từ % điểm</label>
-          <input type="number" id="default-retry-rule-min" min="0" max="100" step="1" required style="width:80px;" />
+          <input type="number" id="default-retry-rule-min" min="0" max="100" step="1" required style="width:80px;"
+            value="${isEdit ? editingRule.min_score_pct : ''}" />
         </div>
         <div>
           <label style="font-size:12px; color:var(--ink-soft); display:block; margin-bottom:4px;">Đến % điểm</label>
-          <input type="number" id="default-retry-rule-max" min="0" max="100" step="1" required style="width:80px;" />
+          <input type="number" id="default-retry-rule-max" min="0" max="100" step="1" required style="width:80px;"
+            value="${isEdit ? editingRule.max_score_pct : ''}" />
         </div>
         <div>
           <label style="font-size:12px; color:var(--ink-soft); display:block; margin-bottom:4px;">Số ngày chờ</label>
-          <input type="number" id="default-retry-rule-days" min="1" step="1" required style="width:90px;" />
+          <input type="number" id="default-retry-rule-days" min="1" step="1" required style="width:90px;"
+            value="${isEdit ? editingRule.retry_after_days : ''}" />
         </div>
-        <button type="submit" class="btn btn-outline" id="default-retry-rule-submit-btn">Lưu</button>
-        <button type="button" class="btn btn-outline" onclick="toggleDefaultRetryRuleForm(false)">Hủy</button>
+        <button type="submit" class="btn btn-outline" id="default-retry-rule-submit-btn">${isEdit ? 'Cập nhật' : 'Lưu'}</button>
+        <button type="button" class="btn btn-outline" onclick="closeDefaultRetryRuleForm()">Hủy</button>
       </div>
     </form>
-  ` : '';
-
-  card.innerHTML = `
-    <div style="display:flex; justify-content:space-between; align-items:center;">
-      <div style="font-weight:600;">
-        ⚙️ Rule nhắc làm lại mặc định
-        <span style="font-weight:400; color:var(--ink-soft); font-size:12px;">(áp dụng cho mọi đề chưa cấu hình riêng)</span>
-      </div>
-      <button type="button" class="btn btn-outline" style="padding:4px 10px; font-size:12px;"
-        onclick="toggleDefaultRetryRuleForm(true)">
-        <i class="ti ti-plus"></i> Thêm khoảng điểm
-      </button>
-    </div>
-    <div style="margin-top:10px;">${rowsHtml}</div>
-    ${formHtml}
   `;
 }
 
-function toggleDefaultRetryRuleForm(open) {
-  defaultRetryRulesState.formOpen = open;
+function openDefaultRetryRuleForm(ruleId) {
+  defaultRetryRulesState.formOpen = true;
+  defaultRetryRulesState.editingId = ruleId; // null = thêm mới, có id = sửa dòng đó
+  renderDefaultRetryRulesCard();
+}
+
+function closeDefaultRetryRuleForm() {
+  defaultRetryRulesState.formOpen = false;
+  defaultRetryRulesState.editingId = null;
   renderDefaultRetryRulesCard();
 }
 
@@ -215,21 +280,28 @@ async function submitDefaultRetryRuleForm(e) {
     return;
   }
 
+  const isEdit = !!defaultRetryRulesState.editingId;
+
   submitBtn.disabled = true;
   const originalText = submitBtn.textContent;
-  submitBtn.textContent = 'Đang lưu...';
+  submitBtn.textContent = isEdit ? 'Đang cập nhật...' : 'Đang lưu...';
 
   try {
     const headers = await sbAuthedHeaders({ 'Prefer': 'return=representation' });
-    const res = await fetch(`${ADMIN_CONFIG.supabaseUrl}/rest/v1/exam_retry_rules`, {
-      method: 'POST', headers,
-      body: JSON.stringify({
-        exam_id: null, // rule mặc định toàn hệ thống
-        min_score_pct: min,
-        max_score_pct: max,
-        retry_after_days: days
-      })
-    });
+    const res = isEdit
+      ? await fetch(`${ADMIN_CONFIG.supabaseUrl}/rest/v1/exam_retry_rules?id=eq.${defaultRetryRulesState.editingId}`, {
+          method: 'PATCH', headers,
+          body: JSON.stringify({ min_score_pct: min, max_score_pct: max, retry_after_days: days })
+        })
+      : await fetch(`${ADMIN_CONFIG.supabaseUrl}/rest/v1/exam_retry_rules`, {
+          method: 'POST', headers,
+          body: JSON.stringify({
+            exam_id: null, // rule mặc định toàn hệ thống
+            min_score_pct: min,
+            max_score_pct: max,
+            retry_after_days: days
+          })
+        });
 
     if (!res.ok) {
       const errBody = await res.json().catch(() => null);
@@ -237,7 +309,10 @@ async function submitDefaultRetryRuleForm(e) {
     }
 
     defaultRetryRulesState.formOpen = false;
+    defaultRetryRulesState.editingId = null;
     await loadDefaultRetryRules();
+    defaultRetryRulesState.expanded = true; // giữ mở sau khi lưu để thấy kết quả ngay
+    renderDefaultRetryRulesCard();
   } catch (err) {
     console.error('Lỗi lưu rule mặc định exam_retry_rules:', err);
     errorEl.textContent = err?.message || 'Có lỗi khi lưu. Vui lòng thử lại.';
@@ -300,7 +375,8 @@ const examDetailState = {
   sections: [],
   subsectionsBySection: {}, // { [sectionId]: [{id, instruction_text, order_index, questionCount}] }
   retryRules: [],           // rule riêng của đề này trong exam_retry_rules (exam_id = examId)
-  retryRuleFormOpen: false  // trạng thái mở/đóng form "Thêm khoảng điểm" (chỉ ở phía client)
+  retryRuleFormOpen: false, // trạng thái mở/đóng form "Thêm khoảng điểm" (chỉ ở phía client)
+  retryRuleEditingId: null  // id rule đang sửa, null nếu đang ở chế độ "Thêm mới"
 };
 
 // Sinh chuỗi ghi chú "Đề này dùng rule mặc định: ..." từ dữ liệu THẬT trong
@@ -370,14 +446,17 @@ function renderExamDetailHeader() {
 
 function ensureExamRetryRulesContainer() {
   if (document.getElementById('exam-retry-rules-card')) return;
-  const anchor = document.getElementById('exam-sections-list');
+  // Neo vào #exam-detail-sub (dòng subtitle: loại đề/ngưỡng đạt/trạng thái) thay
+  // vì #exam-sections-list — để khu vực này nằm ở 1 section riêng, TRÊN "Các
+  // phần thi", không bị lồng vào trong block đó.
+  const anchor = document.getElementById('exam-detail-sub');
   if (!anchor) {
-    console.error('Không tìm thấy #exam-sections-list để chèn khu vực cấu hình nhắc làm lại');
+    console.error('Không tìm thấy #exam-detail-sub để chèn khu vực cấu hình nhắc làm lại');
     return;
   }
   anchor.insertAdjacentHTML(
-    'beforebegin',
-    '<div id="exam-retry-rules-card" class="admin-panel-card" style="margin-bottom:16px; padding:14px 18px;"></div>'
+    'afterend',
+    '<div id="exam-retry-rules-card" class="admin-panel-card" style="margin:16px 0; padding:14px 18px;"></div>'
   );
 }
 
@@ -412,36 +491,21 @@ function renderExamRetryRulesCard() {
           <strong>${r.min_score_pct}% – ${r.max_score_pct}%</strong>
           <span style="color:var(--ink-soft);"> → chờ ${r.retry_after_days} ngày</span>
         </div>
-        <button type="button" class="admin-row-action-btn" title="Xóa khoảng điểm này"
-          onclick="deleteExamRetryRule('${escHtml(r.id)}')" style="color:var(--vermillion);">
-          <i class="ti ti-trash"></i>
-        </button>
+        <div style="display:flex; gap:4px;">
+          <button type="button" class="admin-row-action-btn" title="Sửa khoảng điểm này"
+            onclick="openExamRetryRuleForm('${escHtml(r.id)}')">
+            <i class="ti ti-pencil"></i>
+          </button>
+          <button type="button" class="admin-row-action-btn" title="Xóa khoảng điểm này"
+            onclick="deleteExamRetryRule('${escHtml(r.id)}')" style="color:var(--vermillion);">
+            <i class="ti ti-trash"></i>
+          </button>
+        </div>
       </div>
     `).join('')
     : `<div class="empty-state" style="padding:8px 0;">Đề này dùng rule mặc định: ${defaultRetryRuleHintText()}.</div>`;
 
-  const formHtml = examDetailState.retryRuleFormOpen ? `
-    <form id="retry-rule-form" onsubmit="submitExamRetryRuleForm(event)"
-      style="margin-top:10px; padding:12px; border:1px dashed var(--border-md); border-radius:8px;">
-      <div id="retry-rule-form-error" style="color:var(--vermillion); font-size:12px; margin-bottom:8px;"></div>
-      <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end;">
-        <div>
-          <label style="font-size:12px; color:var(--ink-soft); display:block; margin-bottom:4px;">Từ % điểm</label>
-          <input type="number" id="retry-rule-min" min="0" max="100" step="1" required style="width:80px;" />
-        </div>
-        <div>
-          <label style="font-size:12px; color:var(--ink-soft); display:block; margin-bottom:4px;">Đến % điểm</label>
-          <input type="number" id="retry-rule-max" min="0" max="100" step="1" required style="width:80px;" />
-        </div>
-        <div>
-          <label style="font-size:12px; color:var(--ink-soft); display:block; margin-bottom:4px;">Số ngày chờ</label>
-          <input type="number" id="retry-rule-days" min="1" step="1" required style="width:90px;" />
-        </div>
-        <button type="submit" class="btn btn-outline" id="retry-rule-submit-btn">Lưu</button>
-        <button type="button" class="btn btn-outline" onclick="toggleExamRetryRuleForm(false)">Hủy</button>
-      </div>
-    </form>
-  ` : '';
+  const formHtml = examDetailState.retryRuleFormOpen ? renderExamRetryRuleFormHtml() : '';
 
   card.innerHTML = `
     <div style="display:flex; justify-content:space-between; align-items:center;">
@@ -450,7 +514,7 @@ function renderExamRetryRulesCard() {
         <span style="font-weight:400; color:var(--ink-soft); font-size:12px;">(tùy chọn)</span>
       </div>
       <button type="button" class="btn btn-outline" style="padding:4px 10px; font-size:12px;"
-        onclick="toggleExamRetryRuleForm(true)">
+        onclick="openExamRetryRuleForm(null)">
         <i class="ti ti-plus"></i> Thêm khoảng điểm
       </button>
     </div>
@@ -459,8 +523,50 @@ function renderExamRetryRulesCard() {
   `;
 }
 
-function toggleExamRetryRuleForm(open) {
-  examDetailState.retryRuleFormOpen = open;
+// Sinh HTML form (dùng chung cho cả "Thêm mới" và "Sửa") — đọc
+// examDetailState.retryRuleEditingId để biết đang sửa dòng nào, tự
+// điền sẵn giá trị cũ nếu có.
+function renderExamRetryRuleFormHtml() {
+  const editingId = examDetailState.retryRuleEditingId;
+  const editingRule = editingId ? (examDetailState.retryRules || []).find(r => r.id === editingId) : null;
+  const isEdit = !!editingRule;
+
+  return `
+    <form id="retry-rule-form" onsubmit="submitExamRetryRuleForm(event)"
+      style="margin-top:10px; padding:12px; border:1px dashed var(--border-md); border-radius:8px;">
+      <div id="retry-rule-form-error" style="color:var(--vermillion); font-size:12px; margin-bottom:8px;"></div>
+      <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end;">
+        <div>
+          <label style="font-size:12px; color:var(--ink-soft); display:block; margin-bottom:4px;">Từ % điểm</label>
+          <input type="number" id="retry-rule-min" min="0" max="100" step="1" required style="width:80px;"
+            value="${isEdit ? editingRule.min_score_pct : ''}" />
+        </div>
+        <div>
+          <label style="font-size:12px; color:var(--ink-soft); display:block; margin-bottom:4px;">Đến % điểm</label>
+          <input type="number" id="retry-rule-max" min="0" max="100" step="1" required style="width:80px;"
+            value="${isEdit ? editingRule.max_score_pct : ''}" />
+        </div>
+        <div>
+          <label style="font-size:12px; color:var(--ink-soft); display:block; margin-bottom:4px;">Số ngày chờ</label>
+          <input type="number" id="retry-rule-days" min="1" step="1" required style="width:90px;"
+            value="${isEdit ? editingRule.retry_after_days : ''}" />
+        </div>
+        <button type="submit" class="btn btn-outline" id="retry-rule-submit-btn">${isEdit ? 'Cập nhật' : 'Lưu'}</button>
+        <button type="button" class="btn btn-outline" onclick="closeExamRetryRuleForm()">Hủy</button>
+      </div>
+    </form>
+  `;
+}
+
+function openExamRetryRuleForm(ruleId) {
+  examDetailState.retryRuleFormOpen = true;
+  examDetailState.retryRuleEditingId = ruleId; // null = thêm mới, có id = sửa dòng đó
+  renderExamRetryRulesCard();
+}
+
+function closeExamRetryRuleForm() {
+  examDetailState.retryRuleFormOpen = false;
+  examDetailState.retryRuleEditingId = null;
   renderExamRetryRulesCard();
 }
 
@@ -488,21 +594,28 @@ async function submitExamRetryRuleForm(e) {
     return;
   }
 
+  const isEdit = !!examDetailState.retryRuleEditingId;
+
   submitBtn.disabled = true;
   const originalText = submitBtn.textContent;
-  submitBtn.textContent = 'Đang lưu...';
+  submitBtn.textContent = isEdit ? 'Đang cập nhật...' : 'Đang lưu...';
 
   try {
     const headers = await sbAuthedHeaders({ 'Prefer': 'return=representation' });
-    const res = await fetch(`${ADMIN_CONFIG.supabaseUrl}/rest/v1/exam_retry_rules`, {
-      method: 'POST', headers,
-      body: JSON.stringify({
-        exam_id: examDetailState.examId,
-        min_score_pct: min,
-        max_score_pct: max,
-        retry_after_days: days
-      })
-    });
+    const res = isEdit
+      ? await fetch(`${ADMIN_CONFIG.supabaseUrl}/rest/v1/exam_retry_rules?id=eq.${examDetailState.retryRuleEditingId}`, {
+          method: 'PATCH', headers,
+          body: JSON.stringify({ min_score_pct: min, max_score_pct: max, retry_after_days: days })
+        })
+      : await fetch(`${ADMIN_CONFIG.supabaseUrl}/rest/v1/exam_retry_rules`, {
+          method: 'POST', headers,
+          body: JSON.stringify({
+            exam_id: examDetailState.examId,
+            min_score_pct: min,
+            max_score_pct: max,
+            retry_after_days: days
+          })
+        });
 
     if (!res.ok) {
       const errBody = await res.json().catch(() => null);
@@ -510,6 +623,7 @@ async function submitExamRetryRuleForm(e) {
     }
 
     examDetailState.retryRuleFormOpen = false;
+    examDetailState.retryRuleEditingId = null;
     await loadExamRetryRules();
   } catch (err) {
     console.error('Lỗi lưu exam_retry_rules:', err);
