@@ -74,7 +74,7 @@ async function loadExamListWithAttempts() {
   try {
     const { data: exams, error: examsError } = await supabaseClient
       .from('exams')
-      .select('id, title, exam_type, pass_threshold_pct')
+      .select('id, title, exam_type, pass_threshold_pct, retry_disabled')
       .eq('is_published', true)
       .order('created_at', { ascending: false });
 
@@ -1417,11 +1417,7 @@ async function submitExamAttempt(opts) {
 
     // TODO Tier 7: cập nhật question_mistake_tracker ở đây
 
-    // 4. Xác định status ('passed'/'needs_retry') theo pass_threshold_pct của đề,
-    // và tính next_retry_date bằng rule ở exam_retry_rules (hàm dùng chung
-    // computeRetryAfterDays() trong exam-retry-rules.js — ưu tiên rule riêng
-    // của đề, fallback rule mặc định exam_id IS NULL, trả về null nếu
-    // không có rule nào khớp).
+    // 4. Xác định status ('passed'/'needs_retry') theo pass_threshold_pct của đề.
     const examInfo = (state.examState.examList || []).find(e => e.id === attempt.exam_id) || null;
     const passThresholdPct = examInfo ? examInfo.pass_threshold_pct : null;
     const scorePct = totalPossible > 0 ? Math.round((totalScore / totalPossible) * 100) : 0;
@@ -1430,8 +1426,21 @@ async function submitExamAttempt(opts) {
       ? 'passed'
       : 'needs_retry';
 
+    // 5. Tính next_retry_date bằng rule ở exam_retry_rules (hàm dùng chung
+    // computeRetryAfterDays() trong exam-retry-rules.js — ưu tiên rule riêng
+    // của đề, fallback rule mặc định exam_id IS NULL, trả về null nếu
+    // không có rule nào khớp). Tính CHO MỌI LẦN NỘP BÀI, không chỉ khi
+    // needs_retry — kể cả đã 'passed' vẫn có gợi ý ngày để làm lại nếu
+    // muốn cải thiện điểm (vd đạt 89% vẫn muốn thử lấy 100%). Việc có hiện
+    // đề đó trong mục "Đề cần làm lại" hay không là do query ở app.js lọc
+    // status='needs_retry' riêng, không liên quan tới việc field này có
+    // giá trị hay không.
+    //
+    // NGOẠI LỆ: nếu đề được đánh dấu retry_disabled=true (Tier 2, cột mới
+    // trong bảng exams) -> bỏ qua hoàn toàn, không gọi computeRetryAfterDays,
+    // next_retry_date luôn null bất kể exam_retry_rules nào khớp.
     let nextRetryDate = null;
-    if (attemptStatus === 'needs_retry') {
+    if (!examInfo || examInfo.retry_disabled !== true) {
       const retryAfterDays = await computeRetryAfterDays({
         totalScore,
         totalPossible,
@@ -1444,7 +1453,7 @@ async function submitExamAttempt(opts) {
       }
     }
 
-    // 5. Cập nhật exam_attempts — status theo pass_threshold_pct, kèm next_retry_date
+    // 6. Cập nhật exam_attempts — status theo pass_threshold_pct, kèm next_retry_date
     // (retry_note để trống, admin override bằng ghi chú riêng ở Tier 4 nếu cần).
     const { data: updatedAttempt, error: submitError } = await supabaseClient
       .from('exam_attempts')
@@ -1962,9 +1971,13 @@ function renderExamResultScreen(attempt, questionsReview) {
     }
   }
 
-  if (attempt.status === 'needs_retry' && attempt.next_retry_date) {
-    sidebarHtml += `<div class="exam-result-retry-note">Ngày có thể làm lại: ${attempt.next_retry_date}${attempt.retry_note ? ' — ' + attempt.retry_note : ''}</div>`;
-  }
+  // Không hiện next_retry_date/retry_note ngay ở màn kết quả nữa — dữ liệu
+  // vẫn được tính và lưu bình thường trong exam_attempts, chỉ là chưa lộ
+  // ra cho học viên tại đây. Học viên sẽ biết ngày làm lại qua tab "Đề cần
+  // làm lại" trong Review (đã lọc theo next_retry_date <= hôm nay, tức
+  // chỉ hiện khi TỚI HẠN, không lộ ngày trước hạn). Tier sau sẽ có thêm cơ
+  // chế admin tự chỉ định/khoá thời điểm công bố cụ thể, lúc đó có thể cần
+  // sửa lại đoạn này/tab Review cho khớp cơ chế mới.
 
   sidebarHtml += `
       <div class="exam-result-meta">
