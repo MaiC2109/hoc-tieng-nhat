@@ -376,7 +376,8 @@ const examDetailState = {
   subsectionsBySection: {}, // { [sectionId]: [{id, instruction_text, order_index, questionCount}] }
   retryRules: [],           // rule riêng của đề này trong exam_retry_rules (exam_id = examId)
   retryRuleFormOpen: false, // trạng thái mở/đóng form "Thêm khoảng điểm" (chỉ ở phía client)
-  retryRuleEditingId: null  // id rule đang sửa, null nếu đang ở chế độ "Thêm mới"
+  retryRuleEditingId: null, // id rule đang sửa, null nếu đang ở chế độ "Thêm mới"
+  retryRulesExpanded: false // thu gọn/mở rộng card "Cấu hình nhắc làm lại" — mặc định đóng
 };
 
 // Sinh chuỗi ghi chú "Đề này dùng rule mặc định: ..." từ dữ liệu THẬT trong
@@ -468,12 +469,48 @@ async function loadExamRetryRules() {
   renderExamRetryRulesCard();
 }
 
+// Bấm vào tiêu đề card để mở/thu gọn — mặc định đóng, chỉ hiện 1 dòng
+// tóm tắt cho tới khi admin chủ động bấm vào xem/sửa.
+function toggleExamRetryRulesExpanded() {
+  examDetailState.retryRulesExpanded = !examDetailState.retryRulesExpanded;
+  // Thu gọn lại thì đóng luôn form đang mở (nếu có), tránh trạng thái lửng lơ.
+  if (!examDetailState.retryRulesExpanded) {
+    examDetailState.retryRuleFormOpen = false;
+    examDetailState.retryRuleEditingId = null;
+  }
+  renderExamRetryRulesCard();
+}
+
 function renderExamRetryRulesCard() {
   const card = document.getElementById('exam-retry-rules-card');
   if (!card) return;
 
   const rules = examDetailState.retryRules || [];
+  const expanded = examDetailState.retryRulesExpanded;
 
+  const summaryText = rules.length
+    ? `${rules.length} khoảng điểm riêng đã cấu hình`
+    : `dùng rule mặc định: ${defaultRetryRuleHintText()}`;
+
+  // ── Header luôn hiện, bấm vào để mở/thu gọn (giống card rule mặc định) ──
+  const headerHtml = `
+    <div style="display:flex; justify-content:space-between; align-items:center; cursor:pointer;"
+      onclick="toggleExamRetryRulesExpanded()">
+      <div style="font-weight:600; font-size:14px;">
+        <i class="ti ti-chevron-${expanded ? 'down' : 'right'}" style="vertical-align:middle;"></i>
+        🔁 Cấu hình nhắc làm lại
+        <span style="font-weight:400; color:var(--ink-soft); font-size:12px;">(tùy chọn)</span>
+      </div>
+    </div>
+    <div style="font-size:12px; color:var(--ink-soft); margin-top:4px; padding-left:22px;">${summaryText}</div>
+  `;
+
+  if (!expanded) {
+    card.innerHTML = headerHtml;
+    return;
+  }
+
+  // ── Nội dung chỉ render khi đã mở ──
   const rowsHtml = rules.length
     ? rules.map(r => `
       <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 12px; border:1px solid var(--border-md); border-radius:8px; margin-bottom:6px;">
@@ -483,11 +520,11 @@ function renderExamRetryRulesCard() {
         </div>
         <div style="display:flex; gap:4px;">
           <button type="button" class="admin-row-action-btn" title="Sửa khoảng điểm này"
-            onclick="openExamRetryRuleForm('${escHtml(r.id)}')">
+            onclick="event.stopPropagation(); openExamRetryRuleForm('${escHtml(r.id)}')">
             <i class="ti ti-pencil"></i>
           </button>
           <button type="button" class="admin-row-action-btn" title="Xóa khoảng điểm này"
-            onclick="deleteExamRetryRule('${escHtml(r.id)}')" style="color:var(--vermillion);">
+            onclick="event.stopPropagation(); deleteExamRetryRule('${escHtml(r.id)}')" style="color:var(--vermillion);">
             <i class="ti ti-trash"></i>
           </button>
         </div>
@@ -498,18 +535,17 @@ function renderExamRetryRulesCard() {
   const formHtml = examDetailState.retryRuleFormOpen ? renderExamRetryRuleFormHtml() : '';
 
   card.innerHTML = `
-    <div style="display:flex; justify-content:space-between; align-items:center;">
-      <div style="font-weight:600;">
-        🔁 Cấu hình nhắc làm lại
-        <span style="font-weight:400; color:var(--ink-soft); font-size:12px;">(tùy chọn)</span>
+    ${headerHtml}
+    <div style="margin-top:10px;">
+      <div style="display:flex; justify-content:flex-end; margin-bottom:8px;">
+        <button type="button" class="btn btn-outline" style="padding:4px 10px; font-size:12px;"
+          onclick="event.stopPropagation(); openExamRetryRuleForm(null)">
+          <i class="ti ti-plus"></i> Thêm khoảng điểm
+        </button>
       </div>
-      <button type="button" class="btn btn-outline" style="padding:4px 10px; font-size:12px;"
-        onclick="openExamRetryRuleForm(null)">
-        <i class="ti ti-plus"></i> Thêm khoảng điểm
-      </button>
+      ${rowsHtml}
+      ${formHtml}
     </div>
-    <div style="margin-top:10px;">${rowsHtml}</div>
-    ${formHtml}
   `;
 }
 
