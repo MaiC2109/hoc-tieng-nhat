@@ -440,24 +440,14 @@ function renderExamDetailHeader() {
 }
 
 // ── Cấu hình nhắc làm lại (exam_retry_rules riêng theo đề, tùy chọn) ────
-// Khu vực này KHÔNG có sẵn markup trong admin/exams.html — tự chèn 1 lần
-// (idempotent) làm sibling ngay trước #exam-sections-list, để không phải
-// sửa file fragment HTML riêng.
+// Container #exam-retry-rules-card đã có sẵn trong admin/exams.html, đặt
+// cạnh phải card thông tin đề thi (trong #exam-detail-top-row) — không
+// cần tự tạo DOM ở đây nữa như bản trước, chỉ cần xác nhận tồn tại.
 
 function ensureExamRetryRulesContainer() {
-  if (document.getElementById('exam-retry-rules-card')) return;
-  // Neo vào #exam-detail-sub (dòng subtitle: loại đề/ngưỡng đạt/trạng thái) thay
-  // vì #exam-sections-list — để khu vực này nằm ở 1 section riêng, TRÊN "Các
-  // phần thi", không bị lồng vào trong block đó.
-  const anchor = document.getElementById('exam-detail-sub');
-  if (!anchor) {
-    console.error('Không tìm thấy #exam-detail-sub để chèn khu vực cấu hình nhắc làm lại');
-    return;
+  if (!document.getElementById('exam-retry-rules-card')) {
+    console.error('Không tìm thấy #exam-retry-rules-card trong admin/exams.html');
   }
-  anchor.insertAdjacentHTML(
-    'afterend',
-    '<div id="exam-retry-rules-card" class="admin-panel-card" style="margin:16px 0; padding:14px 18px;"></div>'
-  );
 }
 
 async function loadExamRetryRules() {

@@ -53,14 +53,21 @@
     <i class="ti ti-arrow-left"></i> Quay lại danh sách đề thi
   </button>
 
-  <div class="admin-panel-card" style="margin-bottom:16px; display:flex; justify-content:space-between; align-items:flex-start; gap:12px;">
-    <div>
-      <h3 id="exam-detail-title" style="margin:0 0 4px;">—</h3>
-      <p id="exam-detail-sub" style="margin:0; color:var(--ink-soft); font-size:13px;"></p>
+  <div id="exam-detail-top-row" style="display:flex; gap:16px; align-items:flex-start; margin-bottom:16px; flex-wrap:wrap;">
+    <div class="admin-panel-card" style="flex:2 1 360px; margin-bottom:0; display:flex; justify-content:space-between; align-items:flex-start; gap:12px;">
+      <div>
+        <h3 id="exam-detail-title" style="margin:0 0 4px;">—</h3>
+        <p id="exam-detail-sub" style="margin:0; color:var(--ink-soft); font-size:13px;"></p>
+      </div>
+      <button type="button" class="btn btn-outline" id="exam-detail-edit-btn">
+        <i class="ti ti-pencil"></i> Sửa đề thi
+      </button>
     </div>
-    <button type="button" class="btn btn-outline" id="exam-detail-edit-btn">
-      <i class="ti ti-pencil"></i> Sửa đề thi
-    </button>
+
+    <!-- Card "Cấu hình nhắc làm lại" (exam_retry_rules riêng theo đề) — nội
+         dung do renderExamRetryRulesCard() trong exams.js render vào đây,
+         đặt cạnh phải card thông tin đề thi ở trên. -->
+    <div class="admin-panel-card" id="exam-retry-rules-card" style="flex:1 1 280px; margin-bottom:0; padding:14px 18px;"></div>
   </div>
 
   <div class="admin-vocab-toolbar">
