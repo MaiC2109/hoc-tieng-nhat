@@ -174,7 +174,7 @@ function renderDefaultRetryRulesCard() {
       <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 12px; border:1px solid var(--border-md); border-radius:8px; margin-bottom:6px;">
         <div style="font-size:13px;">
           <strong>${r.min_score_pct}% – ${r.max_score_pct}%</strong>
-          <span style="color:var(--ink-soft);"> → chờ ${r.retry_after_days} ngày</span>
+          <span style="color:var(--ink-soft);"> → ${r.retry_after_days == null ? 'Không cần làm lại' : `chờ ${r.retry_after_days} ngày`}</span>
         </div>
         <div style="display:flex; gap:4px;">
           <button type="button" class="admin-row-action-btn" title="Sửa khoảng điểm này"
@@ -234,8 +234,9 @@ function renderDefaultRetryRuleFormHtml() {
         </div>
         <div>
           <label style="font-size:12px; color:var(--ink-soft); display:block; margin-bottom:4px;">Số ngày chờ</label>
-          <input type="number" id="default-retry-rule-days" min="1" step="1" required style="width:90px;"
-            value="${isEdit ? editingRule.retry_after_days : ''}" />
+          <input type="number" id="default-retry-rule-days" min="1" step="1" style="width:120px;"
+            placeholder="Để trống = ko cần"
+            value="${isEdit && editingRule.retry_after_days != null ? editingRule.retry_after_days : ''}" />
         </div>
         <button type="submit" class="btn btn-outline" id="default-retry-rule-submit-btn">${isEdit ? 'Cập nhật' : 'Lưu'}</button>
         <button type="button" class="btn btn-outline" onclick="closeDefaultRetryRuleForm()">Hủy</button>
@@ -265,18 +266,21 @@ async function submitDefaultRetryRuleForm(e) {
 
   const min = parseInt(document.getElementById('default-retry-rule-min').value, 10);
   const max = parseInt(document.getElementById('default-retry-rule-max').value, 10);
-  const days = parseInt(document.getElementById('default-retry-rule-days').value, 10);
+  const daysRaw = document.getElementById('default-retry-rule-days').value.trim();
+  // Để trống ô "Số ngày chờ" -> retry_after_days = null, nghĩa là band điểm
+  // này KHÔNG CẦN LÀM LẠI (khác với việc không có rule nào khớp).
+  const days = daysRaw === '' ? null : parseInt(daysRaw, 10);
 
-  if (!Number.isFinite(min) || !Number.isFinite(max) || !Number.isFinite(days)) {
-    errorEl.textContent = 'Vui lòng nhập đầy đủ các giá trị.';
+  if (!Number.isFinite(min) || !Number.isFinite(max)) {
+    errorEl.textContent = 'Vui lòng nhập đầy đủ khoảng % điểm.';
     return;
   }
   if (min < 0 || max > 100 || min > max) {
     errorEl.textContent = 'Khoảng % điểm không hợp lệ (0-100, "Từ" phải ≤ "Đến").';
     return;
   }
-  if (days <= 0) {
-    errorEl.textContent = 'Số ngày chờ phải lớn hơn 0.';
+  if (days !== null && (!Number.isFinite(days) || days <= 0)) {
+    errorEl.textContent = 'Số ngày chờ phải là số lớn hơn 0, hoặc để trống nếu không cần làm lại.';
     return;
   }
 
@@ -389,7 +393,7 @@ function defaultRetryRuleHintText() {
   return rows
     .slice()
     .sort((a, b) => a.min_score_pct - b.min_score_pct)
-    .map(r => `${r.min_score_pct}–${r.max_score_pct}% → ${r.retry_after_days} ngày`)
+    .map(r => `${r.min_score_pct}–${r.max_score_pct}% → ${r.retry_after_days == null ? 'Không cần làm lại' : r.retry_after_days + ' ngày'}`)
     .join(', ');
 }
 
@@ -520,7 +524,7 @@ function renderExamRetryRulesCard() {
       <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 12px; border:1px solid var(--border-md); border-radius:8px; margin-bottom:6px;">
         <div style="font-size:13px;">
           <strong>${r.min_score_pct}% – ${r.max_score_pct}%</strong>
-          <span style="color:var(--ink-soft);"> → chờ ${r.retry_after_days} ngày</span>
+          <span style="color:var(--ink-soft);"> → ${r.retry_after_days == null ? 'Không cần làm lại' : `chờ ${r.retry_after_days} ngày`}</span>
         </div>
         <div style="display:flex; gap:4px;">
           <button type="button" class="admin-row-action-btn" title="Sửa khoảng điểm này"
@@ -578,8 +582,9 @@ function renderExamRetryRuleFormHtml() {
         </div>
         <div>
           <label style="font-size:12px; color:var(--ink-soft); display:block; margin-bottom:4px;">Số ngày chờ</label>
-          <input type="number" id="retry-rule-days" min="1" step="1" required style="width:90px;"
-            value="${isEdit ? editingRule.retry_after_days : ''}" />
+          <input type="number" id="retry-rule-days" min="1" step="1" style="width:120px;"
+            placeholder="Để trống = ko cần"
+            value="${isEdit && editingRule.retry_after_days != null ? editingRule.retry_after_days : ''}" />
         </div>
         <button type="submit" class="btn btn-outline" id="retry-rule-submit-btn">${isEdit ? 'Cập nhật' : 'Lưu'}</button>
         <button type="button" class="btn btn-outline" onclick="closeExamRetryRuleForm()">Hủy</button>
@@ -609,18 +614,21 @@ async function submitExamRetryRuleForm(e) {
 
   const min = parseInt(document.getElementById('retry-rule-min').value, 10);
   const max = parseInt(document.getElementById('retry-rule-max').value, 10);
-  const days = parseInt(document.getElementById('retry-rule-days').value, 10);
+  const daysRaw = document.getElementById('retry-rule-days').value.trim();
+  // Để trống ô "Số ngày chờ" -> retry_after_days = null, nghĩa là band điểm
+  // này KHÔNG CẦN LÀM LẠI (khác với việc không có rule nào khớp).
+  const days = daysRaw === '' ? null : parseInt(daysRaw, 10);
 
-  if (!Number.isFinite(min) || !Number.isFinite(max) || !Number.isFinite(days)) {
-    errorEl.textContent = 'Vui lòng nhập đầy đủ các giá trị.';
+  if (!Number.isFinite(min) || !Number.isFinite(max)) {
+    errorEl.textContent = 'Vui lòng nhập đầy đủ khoảng % điểm.';
     return;
   }
   if (min < 0 || max > 100 || min > max) {
     errorEl.textContent = 'Khoảng % điểm không hợp lệ (0-100, "Từ" phải ≤ "Đến").';
     return;
   }
-  if (days <= 0) {
-    errorEl.textContent = 'Số ngày chờ phải lớn hơn 0.';
+  if (days !== null && (!Number.isFinite(days) || days <= 0)) {
+    errorEl.textContent = 'Số ngày chờ phải là số lớn hơn 0, hoặc để trống nếu không cần làm lại.';
     return;
   }
 
