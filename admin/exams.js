@@ -69,7 +69,7 @@ async function loadExamAdminList() {
     // để đếm "Số section" theo từng đề ở phía client (số lượng đề thi ở quy
     // mô 1 giáo viên quản lý là nhỏ, chưa cần RPC/aggregate riêng).
     const [examsRes, sectionsRes] = await Promise.all([
-      fetch(`${ADMIN_CONFIG.supabaseUrl}/rest/v1/exams?select=id,title,exam_type,pass_threshold_pct,is_published,created_at&order=created_at.desc`, { headers }),
+      fetch(`${ADMIN_CONFIG.supabaseUrl}/rest/v1/exams?select=id,title,exam_type,pass_threshold_pct,retry_disabled,is_published,created_at&order=created_at.desc`, { headers }),
       fetch(`${ADMIN_CONFIG.supabaseUrl}/rest/v1/exam_sections?select=exam_id`, { headers })
     ]);
 
@@ -435,6 +435,7 @@ function renderExamDetailHeader() {
       <span class="exam-status-badge ${exam.is_published ? 'is-published' : 'is-draft'}">
         ${exam.is_published ? 'Published' : 'Draft'}
       </span>
+      ${exam.retry_disabled ? '<span class="exam-status-badge" style="background:var(--ink-soft); color:#fff;">Không cần retry</span>' : ''}
     ` : '';
   }
   if (editBtn) editBtn.onclick = () => openExamForm(exam);
@@ -487,10 +488,13 @@ function renderExamRetryRulesCard() {
 
   const rules = examDetailState.retryRules || [];
   const expanded = examDetailState.retryRulesExpanded;
+  const retryDisabled = examDetailState.exam && examDetailState.exam.retry_disabled === true;
 
-  const summaryText = rules.length
-    ? `${rules.length} khoảng điểm riêng đã cấu hình`
-    : `dùng rule mặc định: ${defaultRetryRuleHintText()}`;
+  const summaryText = retryDisabled
+    ? 'Đề này đã tắt — không bao giờ tính ngày làm lại'
+    : rules.length
+      ? `${rules.length} khoảng điểm riêng đã cấu hình`
+      : `dùng rule mặc định: ${defaultRetryRuleHintText()}`;
 
   // ── Header luôn hiện, bấm vào để mở/thu gọn (giống card rule mặc định) ──
   const headerHtml = `
@@ -1247,12 +1251,14 @@ function resetExamForm() {
   if (form) form.reset();
   document.getElementById('exam-form-error').textContent = '';
   document.getElementById('exam-pass-threshold').value = 70;
+  document.getElementById('exam-retry-disabled').checked = false;
 }
 
 function populateExamFormFromRow(row) {
   document.getElementById('exam-title').value = row.title || '';
   document.getElementById('exam-type').value = row.exam_type || 'full';
   document.getElementById('exam-pass-threshold').value = row.pass_threshold_pct ?? 70;
+  document.getElementById('exam-retry-disabled').checked = row.retry_disabled === true;
 }
 
 // row = null -> mode TẠO MỚI. Truyền row (từ examAdminState.rows) -> mode SỬA.
@@ -1299,6 +1305,7 @@ async function submitExamForm(e) {
   const title = document.getElementById('exam-title').value.trim();
   const examType = document.getElementById('exam-type').value;
   const passThreshold = parseInt(document.getElementById('exam-pass-threshold').value, 10);
+  const retryDisabled = document.getElementById('exam-retry-disabled').checked;
 
   if (!title) {
     errorEl.textContent = 'Vui lòng nhập tên đề thi.';
@@ -1328,6 +1335,7 @@ async function submitExamForm(e) {
       title,
       exam_type: examType,
       pass_threshold_pct: passThreshold,
+      retry_disabled: retryDisabled,
       is_published: isPublished,
       updated_at: new Date().toISOString()
     };

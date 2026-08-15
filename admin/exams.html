@@ -122,6 +122,16 @@
         <input type="number" id="exam-pass-threshold" class="admin-select" min="0" max="100" step="1" value="70" />
       </div>
 
+      <div class="admin-form-group">
+        <label style="display:flex; align-items:center; gap:8px; font-weight:400; cursor:pointer;">
+          <input type="checkbox" id="exam-retry-disabled" />
+          Không cần làm lại (bỏ qua mọi cấu hình nhắc làm lại cho đề này)
+        </label>
+        <p class="admin-hint-text" style="margin-top:4px;">
+          Bật lên nếu đề này không bao giờ cần gợi ý ngày làm lại, bất kể học viên đạt hay không đạt.
+        </p>
+      </div>
+
       <div id="exam-form-error" class="admin-login-error"></div>
 
       <div class="admin-form-actions">
