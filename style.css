@@ -621,6 +621,7 @@ body {
 .btn {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
   padding: 8px 16px;
   border: none;
@@ -1003,4 +1004,756 @@ body {
 
 @media (max-width: 480px) {
   .login-box { padding: 26px 20px; }
+}
+
+/* ============================================================
+   EXAM MODULE — Luyện đề (danh sách đề thi)
+   ============================================================ */
+.exam-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  background: var(--paper-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-sm);
+  padding: 16px 20px;
+  margin-bottom: 12px;
+}
+
+.exam-card-info { flex: 1; min-width: 0; }
+
+.exam-card-title {
+  font-weight: 600;
+  color: var(--ink);
+  font-size: 15px;
+  margin-bottom: 4px;
+}
+
+.exam-card-meta {
+  display: flex;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--ink-mute);
+  margin-bottom: 8px;
+}
+
+.exam-card-status-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.exam-status-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 20px;
+}
+
+.exam-status-new       { background: var(--paper-warm); color: var(--ink-mute); }
+.exam-status-progress  { background: var(--gold-light);  color: var(--gold); }
+.exam-status-submitted { background: var(--paper-warm);  color: var(--ink-mute); }
+.exam-status-passed    { background: var(--sage-light);  color: var(--sage); }
+.exam-status-retry     { background: var(--verm-glow);   color: var(--vermillion); }
+
+.exam-score-text {
+  font-size: 13px;
+  color: var(--ink-soft);
+  font-weight: 500;
+}
+
+.exam-card-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+@media (max-width: 640px) {
+  .exam-card {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .exam-card-actions { width: 100%; }
+  .exam-card-actions .btn { flex: 1; }
+}
+
+/* ============================================================
+   EXAM MODULE — Màn làm bài (câu hỏi, đáp án, passage)
+   ============================================================ */
+/* .review-page-wrap là flex-column với align-items:center — mặc định KHÔNG
+   tự stretch full-width các phần tử con như block thường, mỗi khối sẽ co
+   theo nội dung riêng và bị lệch width. Ép stretch + box-sizing để toàn bộ
+   khối trong màn làm bài đồng nhất đúng 1 độ rộng. */
+#exam-taking-zone > * {
+  align-self: stretch;
+  box-sizing: border-box;
+  width: 100%;
+}
+
+.exam-instruction-box {
+  background: var(--paper-warm);
+  border-radius: var(--radius-sm);
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  box-sizing: border-box;
+}
+
+.exam-instruction-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--sage);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-bottom: 4px;
+}
+
+.exam-instruction-text {
+  font-size: 14px;
+  color: var(--ink-soft);
+  line-height: 1.6;
+}
+
+.exam-passage-box {
+  background: var(--paper-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-sm);
+  padding: 16px 20px;
+  margin-bottom: 16px;
+}
+
+.exam-passage-title {
+  font-weight: 600;
+  color: var(--ink);
+  margin-bottom: 10px;
+}
+
+.exam-passage-content {
+  font-size: 14px;
+  line-height: 1.8;
+  color: var(--ink-soft);
+  white-space: pre-wrap;
+}
+
+.exam-question-block {
+  background: var(--paper-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-sm);
+  padding: 20px;
+}
+
+.exam-question-content {
+  font-size: 15px;
+  line-height: 1.7;
+  color: var(--ink);
+  margin-bottom: 14px;
+}
+
+.exam-question-content img {
+  max-width: 100%;
+  max-height: 320px;
+  object-fit: contain;
+  display: block;
+  margin: 12px auto;
+  border-radius: var(--radius-sm);
+}
+
+.exam-audio-btn {
+  margin-bottom: 16px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.exam-choices-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+@media (max-width: 640px) {
+  .exam-choices-grid { grid-template-columns: 1fr; }
+}
+
+.exam-choice-btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 64px;
+  text-align: left;
+  padding: 12px 14px;
+  background: var(--paper-card);
+  border: 1px solid var(--border-md);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 14px;
+  color: var(--ink);
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.exam-choice-btn:hover { border-color: var(--sage); }
+
+.exam-choice-btn.selected {
+  border-color: var(--sage);
+  background: var(--sage-light);
+}
+
+.exam-choice-label {
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--paper-warm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 12px;
+  color: var(--ink-mute);
+}
+
+.exam-choice-btn.selected .exam-choice-label {
+  background: var(--sage);
+  color: #fff;
+}
+
+.exam-choice-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.exam-choice-content img {
+  max-width: 140px;
+  max-height: 100px;
+  object-fit: contain;
+  display: block;
+}
+
+.exam-fill-blank-wrap { margin-top: 4px; }
+
+.exam-fill-blank-input {
+  width: 100%;
+  padding: 10px 14px;
+  font-size: 14px;
+  border: 1px solid var(--border-md);
+  border-radius: var(--radius-sm);
+  font-family: inherit;
+  color: var(--ink);
+}
+
+.exam-fill-blank-input:focus {
+  outline: none;
+  border-color: var(--sage);
+}
+
+/* ============================================================
+   EXAM MODULE — Lưới điều hướng câu hỏi + flag + nút prev/next
+   ============================================================ */
+.exam-navnum-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+
+.exam-navnum {
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  border-radius: 6px;
+  border: 1px solid var(--border-md);
+  background: var(--paper-card);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-mute);
+  cursor: pointer;
+  font-family: inherit;
+  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+
+.exam-navnum:hover { border-color: var(--sage); }
+
+.exam-navnum-empty {
+  background: var(--paper-card);
+  color: var(--ink-mute);
+}
+
+.exam-navnum-done {
+  background: var(--sage-light);
+  border-color: var(--sage);
+  color: var(--sage);
+}
+
+.exam-navnum-flagged {
+  background: var(--gold-light);
+  border-color: var(--gold);
+  color: var(--gold);
+}
+
+.exam-navnum-active {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: #fff;
+}
+
+.exam-flag-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 16px;
+  font-size: 13px;
+  color: var(--ink-soft);
+  cursor: pointer;
+  user-select: none;
+}
+
+.exam-flag-checkbox input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+.exam-nav-buttons {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+/* ============================================================
+   EXAM MODULE — Chỉ báo autosave (Đang lưu / Đã lưu / Lỗi)
+   ============================================================ */
+.exam-save-status {
+  min-height: 18px;
+  font-size: 12px;
+  margin-top: 10px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.exam-save-status-saving {
+  color: var(--ink-mute);
+}
+
+.exam-save-status-saved {
+  color: var(--sage);
+}
+
+.exam-save-status-error {
+  color: var(--vermillion);
+  font-weight: 500;
+}
+
+/* ============================================================
+   EXAM MODULE — Timer đếm ngược theo section + banner khóa
+   ============================================================ */
+.exam-timer-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.exam-timer-section-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+
+.exam-timer-display {
+  font-variant-numeric: tabular-nums;
+  font-size: 15px;
+  font-weight: 700;
+  padding: 4px 14px;
+  border-radius: 20px;
+  background: var(--paper-warm);
+  color: var(--ink-soft);
+}
+
+.exam-timer-display.exam-timer-warning {
+  background: var(--gold-light);
+  color: var(--gold);
+}
+
+.exam-timer-display.exam-timer-danger {
+  background: var(--verm-glow);
+  color: var(--vermillion);
+}
+
+.exam-locked-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--verm-glow);
+  color: var(--vermillion);
+  font-size: 13px;
+  font-weight: 500;
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  margin-bottom: 16px;
+}
+
+.exam-choice-btn:disabled,
+.exam-fill-blank-input:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* ============================================================
+   EXAM MODULE — Màn kết quả đơn giản (Xem lại)
+   ============================================================ */
+.exam-result-box {
+  background: var(--paper-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-sm);
+  padding: 24px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.exam-result-status-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.exam-result-attempt-number {
+  font-size: 12px;
+  color: var(--ink-mute);
+}
+
+.exam-result-score-big {
+  font-size: 36px;
+  font-weight: 700;
+  color: var(--ink);
+  text-align: center;
+  margin: 12px 0;
+}
+
+.exam-result-score-pct {
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--ink-mute);
+  margin-left: 6px;
+}
+
+.exam-result-threshold {
+  text-align: center;
+  font-size: 13px;
+  color: var(--ink-mute);
+  margin-bottom: 16px;
+}
+
+.exam-result-sections {
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+  margin-top: 12px;
+}
+
+.exam-result-sections-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-bottom: 8px;
+}
+
+.exam-result-section-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  color: var(--ink-soft);
+  padding: 4px 0;
+}
+
+.exam-result-retry-note {
+  background: var(--verm-glow);
+  color: var(--vermillion);
+  font-size: 12px;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  margin-top: 12px;
+}
+
+.exam-result-meta {
+  font-size: 12px;
+  color: var(--ink-mute);
+  margin-top: 12px;
+}
+
+.exam-question-warning {
+  background: var(--verm-glow);
+  color: var(--vermillion);
+  font-size: 13px;
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+}
+
+.exam-question-number {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--sage);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-bottom: 8px;
+}
+
+/* ============================================================
+   EXAM MODULE — Màn tổng quan các phần (chọn thứ tự làm)
+   ============================================================ */
+.exam-section-overview-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.exam-section-overview-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  background: var(--paper-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-sm);
+  padding: 16px 20px;
+}
+
+.exam-section-overview-info { flex: 1; min-width: 0; }
+
+.exam-section-overview-title {
+  font-weight: 600;
+  color: var(--ink);
+  font-size: 15px;
+  margin-bottom: 4px;
+}
+
+.exam-section-overview-meta {
+  display: flex;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--ink-mute);
+  margin-bottom: 8px;
+}
+
+.exam-section-overview-actions {
+  flex-shrink: 0;
+}
+
+.exam-all-done-note {
+  margin-top: 12px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--sage);
+  font-weight: 500;
+}
+
+.exam-submit-whole-link-wrap {
+  text-align: center;
+  margin-top: 12px;
+}
+
+.exam-submit-whole-link {
+  background: none;
+  border: none;
+  font-size: 12px;
+  color: var(--ink-mute);
+  text-decoration: underline;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.exam-submit-whole-link:hover {
+  color: var(--vermillion);
+}
+
+@media (max-width: 640px) {
+  .exam-section-overview-card {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .exam-section-overview-actions { width: 100%; }
+  .exam-section-overview-actions .btn { width: 100%; }
+}
+
+/* ============================================================
+   EXAM MODULE — Chi tiết review sau khi nộp bài (đúng/sai + feedback)
+   ============================================================ */
+.exam-review-section-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--ink);
+  margin: 32px 0 12px;
+  text-align: center;
+}
+
+.exam-review-navnum-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: center;
+  margin-bottom: 24px;
+}
+
+.exam-review-navnum {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  border-radius: 6px;
+  border: none;
+  font-size: 12px;
+  font-weight: 700;
+  color: #fff;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.exam-review-navnum-correct { background: var(--sage); }
+.exam-review-navnum-wrong { background: var(--vermillion); }
+
+.exam-review-questions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.exam-review-question-block {
+  scroll-margin-top: 76px; /* 56px .app-header sticky + 20px đệm — tránh header đè lên .exam-question-number khi scrollIntoView */
+}
+
+.exam-review-question-block .exam-question-number {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.exam-review-choice {
+  cursor: default;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.exam-review-choice-correct {
+  border-color: var(--sage);
+  background: var(--sage-light);
+}
+
+.exam-review-choice-wrong {
+  border-color: var(--vermillion);
+  background: var(--verm-glow);
+}
+
+.exam-review-choice-correct-unselected {
+  border-color: var(--sage);
+  background: var(--sage-light);
+  border-style: dashed;
+}
+
+.exam-review-choice-badge {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink-mute);
+}
+
+.exam-review-fillblank {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 14px;
+}
+
+.exam-review-answer-correct { color: var(--sage); }
+.exam-review-answer-wrong { color: var(--vermillion); }
+
+.exam-review-feedback {
+  margin-top: 12px;
+  padding: 10px 14px;
+  background: var(--gold-light);
+  color: var(--ink-soft);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+/* ============================================================
+   EXAM MODULE — Layout 2 cột cho màn kết quả: sidebar sticky bên trái
+   (score box + lưới đúng/sai), chi tiết từng câu cuộn bên phải.
+   ============================================================ */
+#exam-result-zone > * {
+  align-self: stretch;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.exam-result-layout {
+  display: flex;
+  align-items: flex-start;
+  gap: 28px;
+}
+
+.exam-result-sidebar {
+  flex: 0 0 300px;
+  position: sticky;
+  top: 76px; /* 56px .app-header sticky + 20px đệm — tránh header đè lên phần trên của box */
+  align-self: flex-start;
+}
+
+.exam-result-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.exam-review-navnum-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-mute);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin: 20px 0 10px;
+}
+
+@media (max-width: 860px) {
+  .exam-result-layout {
+    flex-direction: column;
+  }
+  .exam-result-sidebar {
+    position: static;
+    flex-basis: auto;
+    width: 100%;
+  }
+}
+
+/* Nút "Nộp bài" trong overview bị stretch full-width do rule
+   #exam-taking-zone > * { width:100% } — .btn gốc chỉ có align-items:center
+   (căn dọc) mà thiếu justify-content:center (căn ngang), nên text/icon lệch
+   trái khi button bị kéo rộng. Bổ sung căn giữa, không ảnh hưởng các nút
+   .btn khác vì chúng vốn co theo nội dung (không bị stretch). */
+.btn {
+  justify-content: center;
+}
+
+/* Màn kết quả dùng layout 2 cột (sidebar sticky 300px + nội dung), nới rộng
+   hơn max-width mặc định 700px của .review-page-wrap để đủ chỗ, tránh chật. */
+#exam-result-zone {
+  max-width: 960px;
+}
+
+.exam-review-section-tag {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--ink-mute);
+  text-transform: none;
 }

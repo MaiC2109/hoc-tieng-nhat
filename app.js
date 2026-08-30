@@ -9,6 +9,7 @@ const state = {
   flashcardState: {},
   currentAudio: null,
   reviewFlashcardState: null, // trạng thái riêng cho phiên Ôn tập (Spaced Repetition)
+  mistakeQuizState: null, // trạng thái riêng cho phiên "Câu hỏi hay sai" (question_mistake_tracker)
   currentUser: null, // { id, access_token } của học viên đã đăng nhập, set bởi getCurrentSession()
   sessionStartTimes: {} // { [partKey|'review']: ISOString } — thời điểm bắt đầu phiên Flashcard/Quiz/Review
 };
@@ -256,7 +257,7 @@ function logDeviceVisit() {
 
 // 2. Cấu hình — tập trung toàn bộ thông tin kết nối tại đây
 const STUDENT_CONFIG = {
-  // Supabase (Test)
+  // Supabase (Production)
   supabaseUrl: "https://zlblylqosqwnhudeivpt.supabase.co",
   supabaseAnonKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpsYmx5bHFvc3F3bmh1ZGVpdnB0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI1Mzk0NjUsImV4cCI6MjA5ODExNTQ2NX0.Xa8FblRuypm_eHMGz8GrCpwloKnzjgjTu8z_1ivS8_4",
   vocabUrl: "https://zlblylqosqwnhudeivpt.supabase.co/rest/v1/vocabulary?order=id.asc",
@@ -304,23 +305,10 @@ async function initAuth() {
 
 // Lắng nghe thay đổi trạng thái đăng nhập (vd: token hết hạn, đăng xuất ở tab khác)
 // để đồng bộ lại giao diện mà không cần F5 thủ công.
-//
-// QUAN TRỌNG: supabaseClient tự động làm mới access_token ngầm khi hết hạn
-// (mặc định sau 1 giờ), nhưng việc đó chỉ cập nhật bên TRONG supabaseClient —
-// không tự động cập nhật state.currentUser.access_token mà sbAuthHeaders()
-// đang dùng cho các lệnh fetch() thủ công (quiz_attempts, vocab_review_log,
-// study_sessions). Nếu không lắng nghe TOKEN_REFRESHED ở đây, học viên giữ
-// tab mở quá 1 giờ sẽ bị mọi lệnh ghi đó trả về 401 (token cũ đã hết hạn),
-// dù supabaseClient.from(...) ở chỗ khác (vd vocab_srs_progress) vẫn hoạt
-// động bình thường vì nó tự quản lý token đúng cách.
 supabaseClient.auth.onAuthStateChange((event, session) => {
   if (event === 'SIGNED_OUT') {
     currentUser = null;
     showLoginScreen();
-  } else if (event === 'TOKEN_REFRESHED' || event === 'SIGNED_IN') {
-    if (session && session.user && state.currentUser) {
-      state.currentUser.access_token = session.access_token;
-    }
   }
 });
 
@@ -623,6 +611,7 @@ function startUI() {
 
     // Streak: chỉ tải khi đã đăng nhập, không chặn phần render UI phía trên
     if (state.currentUser) {
+      updateMistakeReviewBadge(); // hiện số câu hay sai cần ôn (question_mistake_tracker), chỉ khi đã đăng nhập — không push/email
       loadStreakData(state.currentUser.id);
       // Đẩy 1 lần dữ liệu SRS cũ (đã có sẵn trong localStorage từ trước khi
       // có tính năng sync) lên Supabase — best-effort, không chặn UI, tự
@@ -1792,6 +1781,43 @@ function updateReviewBadge() {
   }
 }
 
+// Cập nhật badge số câu hay sai cần ôn — tái dùng đúng cơ chế hiển thị của
+// updateReviewBadge() ở trên (cùng cách toggle textContent/display), chỉ khác
+// nguồn đếm: COUNT question_mistake_tracker của user hiện tại, due_date <= hôm nay,
+// đọc trực tiếp từ Supabase (không phải localStorage như SR từ vựng, vì bảng
+// này đã có sẵn due_date ở server). Chỉ hiện khi học viên tự mở app/tab Review,
+// không có push/email — gọi hàm này ở startUI() sau khi đăng nhập là đủ.
+async function updateMistakeReviewBadge() {
+  const badge = document.getElementById('review-mistake-badge');
+  if (!badge) return; // an toàn nếu HTML chưa có phần tử này
+  if (!state.currentUser) {
+    badge.style.display = 'none';
+    return;
+  }
+
+  try {
+    const today = new Date().toISOString().slice(0, 10); // yyyy-mm-dd, khớp kiểu cột `date`
+
+    const { count, error } = await supabaseClient
+      .from('question_mistake_tracker')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', state.currentUser.id)
+      .lte('due_date', today);
+
+    if (error) throw error;
+
+    if (count > 0) {
+      badge.textContent = count;
+      badge.style.display = 'inline-flex';
+    } else {
+      badge.style.display = 'none';
+    }
+  } catch (err) {
+    console.error('Lỗi đếm question_mistake_tracker cho badge:', err);
+    badge.style.display = 'none'; // an toàn: ẩn badge thay vì hiện số sai khi lỗi
+  }
+}
+
 // Mở phiên Ôn tập hôm nay — gọi từ nút nav "Ôn tập hôm nay" trong index.html
 function openReviewToday() {
   state.sessionStartTimes['review'] = new Date().toISOString();
@@ -1804,6 +1830,7 @@ function openReviewToday() {
 
   stopAllAudio();
   switchMainSection('review'); // chuyển panel + active đúng nút nav nhờ data-section="review"
+  setActiveReviewTab('vocab'); // đảm bảo tab "Ôn tập từ vựng" active, kể cả khi gọi trực tiếp từ nav ngoài
 
   const dueWords = _shuffle(srGetDueWords());
 
@@ -1975,6 +2002,379 @@ function renderReviewReport() {
 
 /*
   ─────────────────────────────────────────────────────────────────
+  TAB "ĐỀ CẦN LÀM LẠI" trong menu Review — cạnh "Ôn tập từ vựng" (Phase 1).
+  Liệt kê exam_attempts của user hiện tại đã tới hạn làm lại
+  (status='needs_retry' AND next_retry_date <= hôm nay). Click vào 1 dòng
+  -> tái dùng THẲNG startExamAttempt(examId) đã có sẵn ở Tier 3 (định nghĩa
+  trong exam.js, nạp sau app.js — gọi được vì đây là lời gọi lúc runtime
+  khi user click, không phải lúc parse file). Hàm đó tự tính attempt_number
+  kế tiếp + insert attempt mới + giữ nguyên các attempt cũ, không đổi gì
+  ở đây, đúng yêu cầu "không viết hàm mới" cho phần tạo attempt.
+  ─────────────────────────────────────────────────────────────────
+*/
+
+// Đổi tab con trong Review — chỉ đổi UI (style active + ẩn/hiện khối
+// streak vốn chỉ áp dụng cho vocab); việc load dữ liệu do hàm gọi kèm
+// (openReviewToday / openExamRetryReview) tự lo.
+function setActiveReviewTab(tabKey) {
+  document.querySelectorAll('.review-tab-btn').forEach(btn => {
+    const isActive = btn.dataset.reviewTab === tabKey;
+    btn.style.background = isActive ? 'var(--ink)' : 'transparent';
+    btn.style.color = isActive ? '#fff' : 'var(--ink)';
+  });
+
+  const streakBlock = document.getElementById('review-vocab-streak-block');
+  if (streakBlock) streakBlock.style.display = (tabKey === 'vocab') ? 'block' : 'none';
+}
+
+// ============================================================
+//  TAB "CÂU HỎI HAY SAI" (question_mistake_tracker)
+//  Quiz phẳng: không section/subsection/timer, không tạo exam_attempt,
+//  mỗi câu chỉ hỏi đúng 1 lần trong 1 lượt. Tái dùng UI/UX Quiz từ vựng
+//  Phase 1 (renderQuizQuestion/submitQuizAnswer/nextQuizQuestion) — cùng
+//  class CSS (.quiz-card, .quiz-choices, .choice-btn...), khác nguồn dữ
+//  liệu (question_bank qua join question_mistake_tracker thay vì vocab)
+//  và có thêm explanation nếu question_bank.explanation có giá trị.
+//  Yêu cầu HTML: nút tab data-review-tab="mistake" gọi openMistakeReview(),
+//  dùng chung #review-zone với các tab Review khác.
+// ============================================================
+
+// Mở tab "Câu hỏi hay sai" — gọi từ nút tab trong index.html
+async function openMistakeReview() {
+  stopAllAudio();
+  switchMainSection('review');
+  setActiveReviewTab('mistake');
+
+  const zone = document.getElementById('review-zone');
+  if (!zone) {
+    console.error('Không tìm thấy #review-zone trong HTML. Cần thêm 1 container rỗng với id này.');
+    return;
+  }
+
+  if (!state.currentUser) {
+    zone.innerHTML = '<div class="empty-state">Bạn cần đăng nhập để xem câu hỏi hay sai.</div>';
+    return;
+  }
+
+  zone.innerHTML = '<div class="empty-state" style="padding:40px 20px;">Đang tải danh sách câu hỏi hay sai...</div>';
+  state.sessionStartTimes['mistake'] = new Date().toISOString();
+
+  try {
+    const today = new Date().toISOString().slice(0, 10); // yyyy-mm-dd, khớp kiểu cột `date`
+
+    const { data: rows, error } = await supabaseClient
+      .from('question_mistake_tracker')
+      .select('id, question_id, wrong_count, due_date, question_bank ( id, question_type, question_text, audio_url, choices, correct_answer, explanation )')
+      .eq('user_id', state.currentUser.id)
+      .lte('due_date', today);
+
+    if (error) throw error;
+
+    // Bỏ những row phòng hờ join hỏng (question_bank bị xoá) — tránh crash UI.
+    const validQuestions = (rows || [])
+      .filter(r => r.question_bank)
+      .map(r => ({
+        trackerId: r.id,
+        questionId: r.question_id,
+        wrongCount: r.wrong_count,
+        qb: r.question_bank,
+        status: 'unanswered', // 'unanswered' | 'correct' | 'wrong' — 1 lần duy nhất/câu trong lượt này
+        selected: null
+      }));
+
+    state.mistakeQuizState = {
+      index: 0,
+      questions: _shuffle(validQuestions),
+      score: 0
+    };
+
+    renderMistakeQuizQuestion();
+  } catch (err) {
+    console.error('Lỗi tải câu hỏi hay sai:', err);
+    zone.innerHTML = '<div class="empty-state">Có lỗi khi tải danh sách câu hỏi hay sai.</div>';
+  }
+}
+
+function renderMistakeQuizQuestion() {
+  const zone = document.getElementById('review-zone');
+  const mq = state.mistakeQuizState;
+  if (!zone || !mq) return;
+
+  if (mq.questions.length === 0) {
+    zone.innerHTML = `
+      <div class="empty-state" style="text-align:center; padding:40px 20px;">
+        <div style="font-size:40px; margin-bottom:10px;">🎉</div>
+        <div style="font-weight:600; color:var(--ink);">Bạn chưa có câu nào cần luyện tập thêm!</div>
+        <div style="color:var(--ink-mute); margin-top:6px; font-size:13px;">Quay lại vào buổi học tiếp theo nhé.</div>
+      </div>
+    `;
+    return;
+  }
+
+  if (mq.index >= mq.questions.length) {
+    renderMistakeQuizSummary();
+    return;
+  }
+
+  const item = mq.questions[mq.index];
+  const qb = item.qb;
+  const progressPct = (mq.index / mq.questions.length) * 100;
+  const labels = ['A', 'B', 'C', 'D'];
+  const normalizedType = (qb.question_type || '').trim().toLowerCase();
+  const hasChoices = normalizedType === 'multiple_choice' && Array.isArray(qb.choices) && qb.choices.length > 0;
+
+  let answerZoneHtml = '';
+  if (hasChoices) {
+    answerZoneHtml = `
+      <div class="quiz-choices">
+        ${qb.choices.map((c, i) => {
+          let btnClass = '';
+          if (item.status !== 'unanswered') {
+            if (c === qb.correct_answer) btnClass = 'correct';
+            else if (c === item.selected) btnClass = 'wrong';
+          }
+          const isDisabled = item.status !== 'unanswered' ? 'disabled' : '';
+          return `
+            <button class="choice-btn ${btnClass}" ${isDisabled} onclick="submitMistakeQuizAnswer('${escAttr(c)}')">
+              <span class="choice-label">${labels[i]}</span> ${s(c)}
+            </button>
+          `;
+        }).join('')}
+      </div>
+    `;
+  } else {
+    // fill_blank hoặc question_type không nhận diện được: dùng ô nhập tự do,
+    // chấm bằng so chuỗi trực tiếp — đúng rule "exact match" đã dùng ở Tier 3.
+    const inputDisabled = item.status !== 'unanswered' ? 'disabled' : '';
+    const inputValue = item.selected != null ? escAttr(item.selected) : '';
+    answerZoneHtml = `
+      <div class="quiz-choices" style="display:flex; flex-direction:column; gap:10px;">
+        <input type="text" id="mistake-fillblank-input" class="quiz-fillblank-input"
+          value="${inputValue}" ${inputDisabled} placeholder="Nhập câu trả lời..."
+          style="padding:12px; border-radius:10px; border:1px solid var(--border, #ddd);" />
+        ${item.status === 'unanswered' ? `
+          <button class="btn btn-primary" onclick="submitMistakeQuizAnswer(document.getElementById('mistake-fillblank-input').value)">Kiểm tra</button>
+        ` : `
+          <div class="${item.status === 'correct' ? 'quiz-fillblank-correct' : 'quiz-fillblank-wrong'}"
+               style="color:${item.status === 'correct' ? 'var(--green, #2e7d32)' : 'var(--red, #c62828)'}; font-size:13px;">
+            ${item.status === 'correct' ? '✔ Chính xác' : `✘ Đáp án đúng: ${s(qb.correct_answer)}`}
+          </div>
+        `}
+      </div>
+    `;
+  }
+
+  const explanationHtml = (item.status !== 'unanswered' && qb.explanation)
+    ? `<div class="quiz-explanation" style="margin-top:14px; padding:12px; border-radius:10px; background:var(--panel-mute, #f6f6f6); font-size:13px; color:var(--ink-mute);">💡 ${s(qb.explanation)}</div>`
+    : '';
+
+  zone.innerHTML = `
+    <div class="quiz-header">
+      <div class="quiz-progress-track">
+        <div class="quiz-progress-fill" style="width: ${progressPct}%"></div>
+      </div>
+      <div class="quiz-score">Score: ${mq.score}/${mq.questions.length}</div>
+    </div>
+
+    <div class="quiz-card">
+      <div class="quiz-question-label">
+        <span class="quiz-q-number">Q${mq.index + 1}</span> Câu hỏi hay sai
+      </div>
+
+      <div class="quiz-word-display">
+        <div>
+          <div class="quiz-word-main">${s(qb.question_text)}</div>
+        </div>
+        ${qb.audio_url ? `<button class="quiz-listen-btn" onclick="playSingleAudio(null, '${escAttr(qb.audio_url)}', 'mistake')">🎵</button>` : ''}
+      </div>
+
+      ${answerZoneHtml}
+      ${explanationHtml}
+
+      ${item.status !== 'unanswered' ? `
+        <div style="margin-top:20px; display:flex; justify-content:flex-end;">
+          <button class="btn btn-primary" onclick="nextMistakeQuizQuestion()">
+            ${mq.index + 1 === mq.questions.length ? 'Finish Quiz' : 'Next Question ➜'}
+          </button>
+        </div>
+      ` : ''}
+    </div>
+  `;
+}
+
+function submitMistakeQuizAnswer(answerStr) {
+  const mq = state.mistakeQuizState;
+  if (!mq) return;
+  const item = mq.questions[mq.index];
+  if (!item || item.status !== 'unanswered') return;
+
+  const trimmedAnswer = (answerStr || '').trim();
+  item.selected = trimmedAnswer;
+
+  // Cùng rule chấm "so chuỗi trực tiếp" đã dùng cho attempt_answers ở Tier 3 —
+  // áp dụng chung cho cả multiple_choice và fill_blank.
+  const isCorrect = trimmedAnswer === item.qb.correct_answer;
+  if (isCorrect) {
+    item.status = 'correct';
+    mq.score++;
+  } else {
+    item.status = 'wrong';
+  }
+
+  renderMistakeQuizQuestion();
+
+  // Cập nhật question_mistake_tracker — nhánh riêng, không chặn UI đã render
+  // ở trên (best-effort, giống pattern ghi log ở evaluateQuizEnd của Quiz Phase 1).
+  if (isCorrect) {
+    // Trả lời đúng -> coi như đã "trả nợ" câu này, xoá hẳn khỏi tracker.
+    supabaseClient
+      .from('question_mistake_tracker')
+      .delete()
+      .eq('id', item.trackerId)
+      .then(({ error }) => {
+        if (error) console.error('Lỗi xoá question_mistake_tracker:', error);
+      });
+  } else {
+    // Vẫn sai -> tăng wrong_count, dời due_date sang hôm nay + 7 ngày.
+    const nextDue = new Date();
+    nextDue.setDate(nextDue.getDate() + 7);
+    const nextDueDateStr = nextDue.toISOString().slice(0, 10);
+
+    supabaseClient
+      .from('question_mistake_tracker')
+      .update({ due_date: nextDueDateStr, wrong_count: item.wrongCount + 1 })
+      .eq('id', item.trackerId)
+      .then(({ error }) => {
+        if (error) console.error('Lỗi cập nhật question_mistake_tracker:', error);
+      });
+  }
+}
+
+function nextMistakeQuizQuestion() {
+  const mq = state.mistakeQuizState;
+  if (!mq) return;
+  mq.index++;
+  renderMistakeQuizQuestion();
+}
+
+function renderMistakeQuizSummary() {
+  const zone = document.getElementById('review-zone');
+  const mq = state.mistakeQuizState;
+  if (!zone || !mq) return;
+
+  const total = mq.questions.length;
+  const score = mq.score;
+  const pct = total > 0 ? Math.round((score / total) * 100) : 0;
+
+  let emoji = '🎉'; let title = 'Excellent Work!';
+  if (pct < 50) { emoji = '🩹'; title = 'Keep Practicing!'; } else if (pct < 80) { emoji = '👍'; title = 'Good Effort!'; }
+
+  zone.innerHTML = `
+    <div class="review-emoji">${emoji}</div>
+    <div class="review-title">${title}</div>
+    <div class="review-sub">Bạn đã hoàn thành lượt luyện câu hay sai!</div>
+    <div class="review-stats">
+      <div class="review-stat"><span class="review-stat-val green">${score}</span><span class="review-stat-label">Correct</span></div>
+      <div class="review-stat"><span class="review-stat-val red">${total - score}</span><span class="review-stat-label">Wrong</span></div>
+      <div class="review-stat"><span class="review-stat-val" style="color:var(--ink)">${pct}%</span><span class="review-stat-label">Accuracy</span></div>
+    </div>
+    <button class="btn btn-outline" onclick="openMistakeReview()">🔄 Retry</button>
+  `;
+
+  // Hết danh sách -> refresh lại badge (Bước 3): số câu hay sai vừa luyện
+  // (xoá/dời due_date) cần phản ánh ngay trên badge, không đợi mở lại app.
+  updateMistakeReviewBadge();
+}
+
+// Mở tab "Đề cần làm lại" — gọi từ nút tab trong index.html
+async function openExamRetryReview() {
+  stopAllAudio();
+
+  const zone = document.getElementById('review-zone');
+  if (!zone) {
+    console.error('Không tìm thấy #review-zone trong HTML. Cần thêm 1 container rỗng với id này.');
+    return;
+  }
+
+  if (!state.currentUser) {
+    zone.innerHTML = '<div class="empty-state">Bạn cần đăng nhập để xem đề cần làm lại.</div>';
+    return;
+  }
+
+  zone.innerHTML = '<div class="empty-state" style="padding:40px 20px;">Đang tải danh sách đề cần làm lại...</div>';
+
+  try {
+    const today = new Date().toISOString().slice(0, 10); // yyyy-mm-dd, so sánh đúng kiểu cột `date`
+
+    // Dùng supabaseClient.from() (không phải fetch()+sbAuthHeaders()) để
+    // nhất quán với cách exam.js đọc/ghi exam_attempts — bảng này thuộc
+    // phạm vi module Luyện đề, không phải vocab.
+    const { data: rows, error } = await supabaseClient
+      .from('exam_attempts')
+      .select('id, exam_id, attempt_number, total_score, total_possible, next_retry_date, exams ( id, title, pass_threshold_pct )')
+      .eq('user_id', state.currentUser.id)
+      .eq('status', 'needs_retry')
+      .lte('next_retry_date', today)
+      .order('next_retry_date', { ascending: true });
+
+    if (error) throw error;
+
+    renderExamRetryReviewList(rows || []);
+  } catch (err) {
+    console.error('Lỗi tải danh sách đề cần làm lại:', err);
+    zone.innerHTML = '<div class="empty-state">Có lỗi khi tải danh sách đề cần làm lại.</div>';
+  }
+}
+
+// Render danh sách — tái dùng đúng CSS class (.exam-card, .exam-status-badge...)
+// mà renderExamCard() trong exam.js đã dùng cho tab "Luyện đề", để đồng bộ
+// giao diện giữa 2 nơi cùng hiển thị "thẻ 1 đề thi".
+function renderExamRetryReviewList(rows) {
+  const zone = document.getElementById('review-zone');
+  if (!zone) return;
+
+  if (!rows.length) {
+    zone.innerHTML = `
+      <div class="empty-state" style="text-align:center; padding:40px 20px;">
+        <div style="font-size:40px; margin-bottom:10px;">🎉</div>
+        <div style="font-weight:600; color:var(--ink);">Không có đề nào cần làm lại hôm nay!</div>
+        <div style="color:var(--ink-mute); margin-top:6px; font-size:13px;">Những đề chưa đạt sẽ xuất hiện ở đây khi tới hạn làm lại.</div>
+      </div>
+    `;
+    return;
+  }
+
+  zone.innerHTML = rows.map(r => {
+    const exam = r.exams || {};
+    const scoreText = (r.total_score != null && r.total_possible != null)
+      ? `${r.total_score}/${r.total_possible}`
+      : '—';
+
+    return `
+      <div class="exam-card">
+        <div class="exam-card-info">
+          <div class="exam-card-title">${exam.title || 'Đề thi'}</div>
+          <div class="exam-card-meta">
+            <span>Điểm lần trước: ${scoreText}</span>
+            <span>·</span>
+            <span>Cần làm lại từ: ${r.next_retry_date || '—'}</span>
+          </div>
+          <div class="exam-card-status-row">
+            <span class="exam-status-badge exam-status-retry">Cần làm lại</span>
+          </div>
+        </div>
+        <div class="exam-card-actions">
+          <button class="btn btn-primary" onclick="startExamAttempt('${r.exam_id}')">
+            Làm lại
+          </button>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+/*
+  ─────────────────────────────────────────────────────────────────
   GHI CHÚ TÍCH HỢP HTML (đã áp dụng sẵn trong index.html mới):
 
   1) Mỗi nút trong .main-nav cần có thuộc tính data-section khớp với
@@ -1990,5 +2390,11 @@ function renderReviewReport() {
   3) Panel "Vocab" không còn gắn class "active" cứng trong HTML —
      startUI() gọi switchMainSection('vocab') ngay khi app load xong,
      đảm bảo đúng 1 nguồn sự thật duy nhất cho việc panel nào active.
+
+  4) Tab con trong Review ("Ôn tập từ vựng" / "Đề cần làm lại") dùng
+     class .review-tab-btn + data-review-tab, style active/inactive
+     set trực tiếp bằng JS (setActiveReviewTab) vì chưa có rule CSS
+     riêng cho class này trong style.css — nếu sau này thêm CSS thật
+     cho .review-tab-btn.active, có thể bỏ phần set inline style đó.
   ─────────────────────────────────────────────────────────────────
 */
