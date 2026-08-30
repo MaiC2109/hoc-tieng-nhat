@@ -5,8 +5,8 @@
 //  Trỏ vào Supabase project Production (zlblylqosqwnhudeivpt).
 // ============================================================
 const ADMIN_CONFIG = {
-  supabaseUrl: "https://hzecdpnmegfwbximgqlv.supabase.co",
-  supabaseAnonKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh6ZWNkcG5tZWdmd2J4aW1ncWx2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMyMTEwNTEsImV4cCI6MjA5ODc4NzA1MX0.esdOJo7gvQXLJjG94PUQ_rghTfGCAAaYzdP3l-j3u-s",
+  supabaseUrl: "https://zlblylqosqwnhudeivpt.supabase.co",
+  supabaseAnonKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpsYmx5bHFvc3F3bmh1ZGVpdnB0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI1Mzk0NjUsImV4cCI6MjA5ODExNTQ2NX0.Xa8FblRuypm_eHMGz8GrCpwloKnzjgjTu8z_1ivS8_4",
   vocabTable: "vocabulary",
   profilesTable: "profiles",
   // Bảng lưu tiến độ SRS theo từng học viên: unique(user_id, vocab_id),
