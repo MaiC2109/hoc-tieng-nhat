@@ -5,8 +5,8 @@
 //  Trỏ vào Supabase project Production (zlblylqosqwnhudeivpt).
 // ============================================================
 const ADMIN_CONFIG = {
-  supabaseUrl: "https://zlblylqosqwnhudeivpt.supabase.co",
-  supabaseAnonKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpsYmx5bHFvc3F3bmh1ZGVpdnB0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI1Mzk0NjUsImV4cCI6MjA5ODExNTQ2NX0.Xa8FblRuypm_eHMGz8GrCpwloKnzjgjTu8z_1ivS8_4",
+  supabaseUrl: "https://hzecdpnmegfwbximgqlv.supabase.co",
+  supabaseAnonKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh6ZWNkcG5tZWdmd2J4aW1ncWx2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMyMTEwNTEsImV4cCI6MjA5ODc4NzA1MX0.esdOJo7gvQXLJjG94PUQ_rghTfGCAAaYzdP3l-j3u-s",
   vocabTable: "vocabulary",
   profilesTable: "profiles",
   // Bảng lưu tiến độ SRS theo từng học viên: unique(user_id, vocab_id),
@@ -193,7 +193,10 @@ function initLoginPasswordToggle() {
 const ADMIN_SECTION_META = {
   overview:  { title: 'Tổng quan', sub: 'Số liệu chung của toàn bộ hệ thống' },
   vocab:     { title: 'Vocab',     sub: 'Quản lý từ vựng' },
-  students:  { title: 'Học viên',  sub: 'Danh sách học viên đã đăng ký' }
+  students:  { title: 'Học viên',  sub: 'Danh sách học viên đã đăng ký' },
+  questions: { title: 'Ngân hàng câu hỏi', sub: 'Quản lý câu hỏi cho các đề thi JLPT' },
+  exams:     { title: 'Đề thi',            sub: 'Quản lý đề thi JLPT' },
+  results:   { title: 'Kết quả thi',       sub: 'Xem kết quả các lượt làm bài của học viên' }
 };
 
 function switchAdminSection(sectionKey) {
@@ -219,6 +222,16 @@ function switchAdminSection(sectionKey) {
     populateVocabFilterDropdowns().then(loadVocabAdminList);
   } else if (sectionKey === 'students') {
     loadStudentAdminList();
+  } else if (sectionKey === 'questions') {
+    // Hàm này định nghĩa trong admin/questions.js (nạp sau admin.js) —
+    // kiểm tra tồn tại trước để tránh vỡ nếu file chưa kịp load.
+    if (typeof loadQuestionsSection === 'function') loadQuestionsSection();
+  } else if (sectionKey === 'exams') {
+    // Hàm này định nghĩa trong admin/exams.js (nạp sau questions.js).
+    if (typeof loadExamsSection === 'function') loadExamsSection();
+  } else if (sectionKey === 'results') {
+    // Hàm này định nghĩa trong admin/results.js (nạp sau exams.js).
+    if (typeof loadResultsSection === 'function') loadResultsSection();
   }
 }
 

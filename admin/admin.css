@@ -424,6 +424,19 @@ body {
   font-size: 11.5px;
 }
 
+/* Dùng cho các dòng gợi ý/thông báo nhỏ chèn qua JS (khối "Câu hỏi này
+   đang thuộc:", "Đề này chưa có phần...") — trước đây thiếu định nghĩa nên
+   rơi về font mặc định to hơn các label khác trong form. */
+.admin-hint {
+  font-size: 12px;
+  color: var(--ink-mute);
+  line-height: 1.5;
+}
+
+.admin-hint ul {
+  font-size: 12px;
+}
+
 .admin-login-error {
   font-size: 12px;
   color: var(--vermillion);
@@ -678,7 +691,7 @@ body {
   top: 0;
   right: 0;
   bottom: 0;
-  width: 440px;
+  width: 520px;
   max-width: 100%;
   background: var(--paper-card);
   box-shadow: var(--shadow-lg);
@@ -729,6 +742,31 @@ body {
 
 .admin-slide-panel-body .admin-form-group {
   margin-bottom: 14px;
+}
+
+/* ── BIẾN THỂ: BOX GIỮA MÀN HÌNH (thay vì trượt từ cạnh phải) ──
+   Dùng cho form Tạo/Sửa câu hỏi và form Tạo đoạn văn/hội thoại — cộng thêm
+   class "admin-modal-centered" bên cạnh "admin-slide-panel" sẵn có (giữ
+   nguyên header/body/close-btn), chỉ đè vị trí + kích thước + bo góc.
+   Các panel khác (từ vựng, unit/part, học viên) vẫn dùng .admin-slide-panel
+   thuần nên không bị ảnh hưởng. */
+.admin-modal-centered {
+  top: 50%;
+  right: auto;
+  bottom: auto;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 680px;
+  max-width: 92vw;
+  max-height: 88vh;
+  border-radius: 14px;
+}
+
+@media (max-width: 720px) {
+  .admin-modal-centered {
+    width: 92vw;
+    max-height: 90vh;
+  }
 }
 
 
@@ -914,3 +952,208 @@ body {
     padding: 26px 20px;
   }
 }
+
+/* ── Toolbar định dạng chữ (bold/underline) cho nội dung câu hỏi ── */
+.admin-richtext-toolbar {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+
+.admin-richtext-btn {
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--border-md);
+  border-radius: var(--radius-sm);
+  background: var(--paper-card);
+  color: var(--ink);
+  font-size: 13px;
+  cursor: pointer;
+  transition: border-color var(--transition), background var(--transition);
+}
+
+.admin-richtext-btn:hover {
+  border-color: var(--vermillion);
+}
+
+.admin-richtext-btn.active {
+  background: var(--vermillion);
+  color: #fff;
+  border-color: var(--vermillion);
+}
+
+/* Style khung nhập (padding/border/font/màu/focus) TÁI DÙNG từ .admin-select
+   — element thực tế gắn thêm class="admin-select" trong HTML. Ở đây chỉ khai
+   báo phần khác biệt riêng của rich text editor: chiều cao tối thiểu,
+   placeholder khi rỗng, và style ảnh chèn bên trong. */
+.admin-richtext-editor {
+  min-height: 74px;
+}
+
+.admin-richtext-editor:empty::before {
+  content: attr(data-placeholder);
+  color: var(--ink-mute);
+}
+
+.admin-richtext-editor img {
+  max-width: 100%;
+  display: block;
+  margin: 8px 0;
+  border-radius: var(--radius-sm);
+}
+
+/* ── Hàng đáp án trắc nghiệm: tên đáp án | input | radio, xếp ngang ── */
+.admin-choice-row {
+  display: grid;
+  grid-template-columns: 20px 24px 1fr 30px 16px;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+  transition: background var(--transition), outline var(--transition);
+}
+
+.admin-choice-drag-handle {
+  cursor: grab;
+  color: var(--ink-mute);
+  text-align: center;
+  font-size: 14px;
+}
+
+.admin-choice-drag-handle:active {
+  cursor: grabbing;
+}
+
+.admin-choice-row.admin-choice-drag-over {
+  outline: 2px dashed var(--vermillion);
+  outline-offset: 2px;
+  background: rgba(var(--vermillion-rgb, 217, 83, 40), 0.06);
+  border-radius: var(--radius-sm);
+}
+
+.admin-choice-row.admin-choice-dragging {
+  opacity: 0.4;
+}
+
+.admin-choice-input-wrap {
+  position: relative;
+}
+
+.admin-choice-image-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border: 1px solid var(--border-md);
+  border-radius: var(--radius-sm);
+  background: var(--paper-card);
+}
+
+.admin-choice-image-wrap img {
+  height: 40px;
+  width: auto;
+  max-width: 90px;
+  object-fit: cover;
+  border-radius: 4px;
+}
+
+.admin-choice-image-remove-btn {
+  margin-left: auto;
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: 50%;
+  background: var(--paper-bg, #f2f2f2);
+  color: var(--ink-mute);
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.admin-choice-image-remove-btn:hover {
+  background: var(--vermillion);
+  color: #fff;
+}
+
+.admin-choice-image-btn {
+  flex-shrink: 0;
+}
+
+/* ── Sub-tab chuyển đổi giữa bảng Câu hỏi / Đoạn văn trong section Câu hỏi ── */
+.admin-subtabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.admin-subtab-btn {
+  padding: 8px 18px;
+  border: 1px solid var(--border-md);
+  border-radius: var(--radius-sm);
+  background: var(--paper-card);
+  color: var(--ink-mute);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color var(--transition), background var(--transition), color var(--transition);
+}
+
+.admin-subtab-btn:hover {
+  border-color: var(--vermillion);
+}
+
+.admin-subtab-btn.active {
+  background: var(--vermillion);
+  color: #fff;
+  border-color: var(--vermillion);
+}
+
+/* Style khung nhập TÁI DÙNG từ .admin-select (element gắn thêm
+   class="admin-select" trong HTML) — ở đây chỉ khai báo phần khác biệt:
+   input đáp án cần chiếm full chiều rộng ô lưới, không theo min-width mặc
+   định của .admin-select (vốn dùng cho <select> ngắn). */
+.admin-choice-row input[type="text"] {
+  width: 100%;
+}
+
+.admin-choice-row input[type="radio"] {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: var(--vermillion);
+  cursor: pointer;
+}
+
+.admin-choice-row label {
+  margin: 0;
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--ink-mute);
+}
+
+/* ── Module Đề thi (exams) ── */
+.exam-status-badge { font-size: 12px; padding: 2px 10px; border-radius: 999px; font-weight: 500; border: none; cursor: pointer; }
+.exam-status-badge.is-draft { background: var(--paper-warm); color: var(--ink-soft); }
+.exam-status-badge.is-published { background: #e1f5ee; color: #0f6e56; }
+
+.admin-clickable-row { cursor: pointer; }
+.admin-clickable-row:hover { background: var(--paper-warm); }
+
+/* Nút ▲▼/xóa trong khu vực section/subsection của module Đề thi — admin.css
+   gốc chỉ có sẵn style disabled scoped cho .admin-pagination-controls,
+   nên cần thêm riêng cho #exam-sections-list (không lặp lại y nguyên rule
+   gốc, chỉ mở rộng phạm vi áp dụng sang khu vực mới). */
+#exam-sections-list .admin-row-action-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.btn:disabled { opacity: 0.45; cursor: not-allowed; background: var(--paper-warm); color: var(--ink-soft); border-color: var(--border-md); }
+.btn:disabled:hover { background: var(--paper-warm); }
+
+.admin-slide-panel-wide { width: 640px; }
+
+.question-picker-row { display:flex; align-items:flex-start; gap:10px; padding:10px 4px; border-bottom:1px solid var(--border-md); }
+.question-picker-row:last-child { border-bottom:none; }
+.question-picker-row input[type="checkbox"] { margin-top:3px; width:auto; flex-shrink:0; }
+.question-picker-meta { display:flex; flex-wrap:wrap; gap:6px; margin-top:4px; }
+.question-picker-tag { font-size:11px; padding:2px 8px; border-radius:999px; background: var(--paper-warm); color: var(--ink-soft); }
+.question-picker-tag.has-feedback { background:#e1f5ee; color:#0f6e56; }
+.question-picker-tag.has-audio { background:#eaf1fb; color:#1f5aa8; }
+

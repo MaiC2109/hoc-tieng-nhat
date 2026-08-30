@@ -1,0 +1,46 @@
+<!-- admin/results.html — fragment, KHÔNG phải trang đứng riêng.
+     Được fetch và inject 1 lần vào #results-fragment-mount (đặt sẵn trong
+     admin/index.html, bên trong <section data-section="results">) bởi
+     ensureResultsFragmentLoaded() trong admin/results.js. -->
+
+<div id="result-list-view">
+  <div class="admin-vocab-toolbar">
+    <div class="admin-filter-group">
+      <select id="filter-result-exam" class="admin-select">
+        <option value="">Tất cả đề thi</option>
+      </select>
+      <select id="filter-result-student" class="admin-select">
+        <option value="">Tất cả học viên</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="admin-panel-card admin-table-card">
+    <div class="admin-table-scroll">
+      <table class="admin-vocab-table">
+        <thead>
+          <tr>
+            <th>Học viên</th>
+            <th>Đề thi</th>
+            <th style="width:70px; text-align:center;">Lần</th>
+            <th style="width:140px;">Trạng thái</th>
+            <th style="width:110px; text-align:center;">Điểm</th>
+            <th style="width:150px;">Ngày nộp</th>
+            <th style="width:130px;">Retry dự kiến</th>
+          </tr>
+        </thead>
+        <tbody id="result-table-body">
+          <tr>
+            <td colspan="7"><div class="empty-state">Đang tải dữ liệu...</div></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Màn chi tiết 1 attempt — mở khi click 1 dòng ở bảng trên. Ẩn mặc định,
+     toggle qua showResultListView()/showResultDetailView() trong results.js. -->
+<div id="result-detail-view" style="display:none;">
+  <div id="result-detail-zone"></div>
+</div>
