@@ -1,0 +1,282 @@
+<!--
+  admin/exams.html
+  Fragment HTML cho module Quản lý đề thi (exams).
+  KHÔNG tự đứng một mình — được fetch() và inject bởi
+  ensureExamsFragmentLoaded() trong admin/exams.js, vào đúng
+  <div id="exams-fragment-mount"></div> đặt sẵn trong index.html.
+
+  Bước hiện tại: CHỈ danh sách đề thi + form tạo/sửa thông tin exams
+  (title, exam_type, pass_threshold_pct, is_published).
+  Section/subsection/câu hỏi sẽ làm ở màn chi tiết đề (bước sau).
+-->
+
+<!-- ═══ VIEW 1: DANH SÁCH ĐỀ THI ═══ -->
+<div id="exam-list-view">
+
+  <div class="admin-vocab-toolbar">
+    <div class="admin-filter-group"></div>
+    <div class="admin-toolbar-actions">
+      <button type="button" class="btn btn-primary" id="btn-add-exam" onclick="openExamForm()">
+        <i class="ti ti-plus"></i> Tạo đề mới
+      </button>
+    </div>
+  </div>
+
+  <div class="admin-panel-card admin-table-card">
+    <div class="admin-table-scroll">
+      <table class="admin-vocab-table">
+        <thead>
+          <tr>
+            <th>Tên đề thi</th>
+            <th style="width:100px;">Loại</th>
+            <th style="width:130px;">Trạng thái</th>
+            <th style="width:100px; text-align:center;">Số section</th>
+            <th style="width:110px;">Ngày tạo</th>
+            <th style="width:60px;"></th>
+          </tr>
+        </thead>
+        <tbody id="exam-table-body">
+          <tr><td colspan="6"><div class="empty-state">Đang tải dữ liệu...</div></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<!-- ═══ VIEW 2: CHI TIẾT ĐỀ THI — quản lý section ═══
+     Ẩn mặc định — chỉ hiện khi openExamDetail() được gọi từ click 1 dòng
+     ở bảng trên. CHƯA có subsection / chọn câu hỏi (bước sau). -->
+<div id="exam-detail-view" style="display:none;">
+
+  <button type="button" class="btn btn-outline" id="exam-detail-back-btn" style="margin-bottom:14px;">
+    <i class="ti ti-arrow-left"></i> Quay lại danh sách đề thi
+  </button>
+
+  <div id="exam-detail-top-row" style="display:flex; gap:16px; align-items:flex-start; margin-bottom:16px; flex-wrap:wrap;">
+    <div class="admin-panel-card" style="flex:2 1 360px; margin-bottom:0; display:flex; justify-content:space-between; align-items:flex-start; gap:12px;">
+      <div>
+        <h3 id="exam-detail-title" style="margin:0 0 4px;">—</h3>
+        <p id="exam-detail-sub" style="margin:0; color:var(--ink-soft); font-size:13px;"></p>
+      </div>
+      <button type="button" class="btn btn-outline" id="exam-detail-edit-btn">
+        <i class="ti ti-pencil"></i> Sửa đề thi
+      </button>
+    </div>
+
+    <!-- Card "Cấu hình nhắc làm lại" (exam_retry_rules riêng theo đề) — nội
+         dung do renderExamRetryRulesCard() trong exams.js render vào đây,
+         đặt cạnh phải card thông tin đề thi ở trên. -->
+    <div class="admin-panel-card" id="exam-retry-rules-card" style="flex:1 1 280px; margin-bottom:0; padding:14px 18px;"></div>
+  </div>
+
+  <div class="admin-vocab-toolbar">
+    <div class="admin-filter-group">
+      <span style="font-weight:600;">Các phần thi (section)</span>
+    </div>
+    <div class="admin-toolbar-actions">
+      <button type="button" class="btn btn-primary" id="btn-add-section" onclick="openSectionForm()">
+        <i class="ti ti-plus"></i> Thêm phần
+      </button>
+    </div>
+  </div>
+  <p class="admin-hint-text" id="section-add-limit-hint" style="display:none;">
+    Đề loại "skill" chỉ được có 1 phần thi duy nhất.
+  </p>
+
+  <div id="exam-sections-list">
+    <div class="empty-state">Đang tải danh sách phần thi...</div>
+  </div>
+
+</div>
+
+<!-- ── PANEL TRƯỢT: TẠO / SỬA ĐỀ THI (bảng exams) ── -->
+<div id="exam-form-overlay" class="admin-overlay" style="display:none;"></div>
+
+<div id="exam-form-panel" class="admin-slide-panel" style="display:none;">
+  <div class="admin-slide-panel-header">
+    <h3 id="exam-form-title">Tạo đề thi</h3>
+    <button type="button" class="admin-slide-close-btn" id="exam-form-close-btn">
+      <i class="ti ti-x"></i>
+    </button>
+  </div>
+
+  <div class="admin-slide-panel-body">
+    <form id="exam-form">
+      <div class="admin-form-group">
+        <label for="exam-title">Tên đề thi</label>
+        <input type="text" id="exam-title" class="admin-select" placeholder="Ví dụ: JLPT N4 thử số 1" />
+      </div>
+
+      <div class="admin-form-group">
+        <label for="exam-type">Loại đề</label>
+        <select id="exam-type" class="admin-select">
+          <option value="full">full — đủ các kỹ năng</option>
+          <option value="skill">skill — 1 kỹ năng riêng</option>
+        </select>
+      </div>
+
+      <div class="admin-form-group">
+        <label for="exam-pass-threshold">Ngưỡng đạt (%)</label>
+        <p class="admin-hint-text" style="margin-top:-2px;">Phần trăm điểm tối thiểu để được coi là đạt đề thi này.</p>
+        <input type="number" id="exam-pass-threshold" class="admin-select" min="0" max="100" step="1" value="70" />
+      </div>
+
+      <div class="admin-form-group">
+        <label style="display:flex; align-items:center; gap:8px; font-weight:400; cursor:pointer;">
+          <input type="checkbox" id="exam-retry-disabled" />
+          Không cần làm lại (bỏ qua mọi cấu hình nhắc làm lại cho đề này)
+        </label>
+        <p class="admin-hint-text" style="margin-top:4px;">
+          Bật lên nếu đề này không bao giờ cần gợi ý ngày làm lại, bất kể học viên đạt hay không đạt.
+        </p>
+      </div>
+
+      <div id="exam-form-error" class="admin-login-error"></div>
+
+      <div class="admin-form-actions">
+        <button type="button" class="btn btn-outline" id="exam-form-cancel-btn">Hủy</button>
+        <button type="submit" class="btn btn-outline" id="exam-form-draft-btn">Draft</button>
+        <button type="submit" class="btn btn-primary" id="exam-form-publish-btn">Publish</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ── PANEL TRƯỢT: TẠO / SỬA PHẦN THI (bảng exam_sections) ── -->
+<div id="section-form-overlay" class="admin-overlay" style="display:none;"></div>
+
+<div id="section-form-panel" class="admin-slide-panel" style="display:none;">
+  <div class="admin-slide-panel-header">
+    <h3 id="section-form-title">Thêm phần thi</h3>
+    <button type="button" class="admin-slide-close-btn" id="section-form-close-btn">
+      <i class="ti ti-x"></i>
+    </button>
+  </div>
+
+  <div class="admin-slide-panel-body">
+    <form id="section-form">
+      <div class="admin-form-group">
+        <label for="section-skill">Kỹ năng</label>
+        <select id="section-skill" class="admin-select">
+          <option value="">— Chọn kỹ năng —</option>
+        </select>
+        <p class="admin-hint-text" id="section-skill-lock-hint" style="display:none;">
+          Không thể đổi kỹ năng của phần thi đã có sẵn dạng bài/câu hỏi — xóa phần này và tạo lại nếu cần đổi kỹ năng.
+        </p>
+      </div>
+
+      <div class="admin-form-group">
+        <label for="section-title">Tiêu đề phần thi</label>
+        <input type="text" id="section-title" class="admin-select" placeholder="Tự điền theo kỹ năng, có thể sửa lại" />
+      </div>
+
+      <div class="admin-form-group">
+        <label for="section-minutes">Thời gian làm bài (phút)</label>
+        <input type="number" id="section-minutes" class="admin-select" min="1" step="1" placeholder="Ví dụ: 15" />
+      </div>
+
+      <div id="section-form-error" class="admin-login-error"></div>
+
+      <div class="admin-form-actions">
+        <button type="button" class="btn btn-outline" id="section-form-cancel-btn">Hủy</button>
+        <button type="submit" class="btn btn-primary" id="section-form-submit-btn">Lưu phần thi</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ── PANEL TRƯỢT: TẠO DẠNG BÀI (bảng exam_subsections) ──
+     Chưa hỗ trợ sửa — chỉ tạo mới + xóa + đổi thứ tự, giống pattern section. -->
+<div id="subsection-form-overlay" class="admin-overlay" style="display:none;"></div>
+
+<div id="subsection-form-panel" class="admin-slide-panel" style="display:none;">
+  <div class="admin-slide-panel-header">
+    <h3 id="subsection-form-heading">Thêm dạng bài</h3>
+    <button type="button" class="admin-slide-close-btn" id="subsection-form-close-btn">
+      <i class="ti ti-x"></i>
+    </button>
+  </div>
+
+  <div class="admin-slide-panel-body">
+    <form id="subsection-form">
+      <div class="admin-form-group">
+        <label for="subsection-instruction">Hướng dẫn làm bài (instruction)</label>
+        <textarea id="subsection-instruction" class="admin-select" rows="4"
+          placeholder="Ví dụ: 問題1　＿＿＿の　ことばは　ひらがなで　どう　かきますか。１・２・３・４から　いちばん　いい　ものを　一つ　えらんで　ください。"></textarea>
+      </div>
+
+      <!-- Chỉ hiện khi section cha thuộc kỹ năng Nghe hiểu (skill code =
+           'listening') — JS toggle qua toggleSubsectionAudioVisibility(). -->
+      <div class="admin-form-group" id="subsection-audio-group" style="display:none;">
+        <label for="subsection-audio-file">File audio cho dạng bài này</label>
+        <input type="file" id="subsection-audio-file" accept="audio/*" />
+        <p class="admin-hint-text" id="subsection-audio-status"></p>
+        <input type="hidden" id="subsection-audio-url" value="" />
+        <audio id="subsection-audio-preview" controls style="display:none; margin-top:8px; width:100%;"></audio>
+        <p class="admin-hint-text">Nếu cả phần Nghe chỉ dùng 1 audio duy nhất, chỉ cần tạo 1 dạng bài và gom hết câu hỏi vào đây.</p>
+      </div>
+
+      <div id="subsection-form-error" class="admin-login-error"></div>
+
+      <div class="admin-form-actions">
+        <button type="button" class="btn btn-outline" id="subsection-form-cancel-btn">Hủy</button>
+        <button type="submit" class="btn btn-primary" id="subsection-form-submit-btn">Lưu dạng bài</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ── MODAL: CHỌN CÂU HỎI CHO 1 DẠNG BÀI (exam_questions) ──
+     Rộng hơn slide panel thường (dùng class admin-slide-panel-wide),
+     vì cần hiện đủ nội dung câu hỏi + các badge trạng thái. -->
+<div id="question-picker-overlay" class="admin-overlay" style="display:none;"></div>
+
+<div id="question-picker-panel" class="admin-slide-panel admin-slide-panel-wide" style="display:none;">
+  <div class="admin-slide-panel-header">
+    <h3>Chọn câu hỏi</h3>
+    <button type="button" class="admin-slide-close-btn" id="question-picker-close-btn">
+      <i class="ti ti-x"></i>
+    </button>
+  </div>
+
+  <div class="admin-slide-panel-body">
+    <div class="admin-form-group">
+      <input type="text" id="question-picker-search" class="admin-select" placeholder="Tìm theo nội dung câu hỏi..." />
+    </div>
+
+    <p id="question-picker-skill-hint" class="admin-hint-text"></p>
+
+    <div id="question-picker-list" style="max-height:52vh; overflow-y:auto; margin-top:8px;">
+      <div class="empty-state">Đang tải câu hỏi...</div>
+    </div>
+
+    <div id="question-picker-error" class="admin-login-error"></div>
+  </div>
+
+  <div class="admin-form-actions" style="padding:14px 22px; border-top:1px solid var(--border);">
+    <button type="button" class="btn btn-outline" id="question-picker-cancel-btn">Hủy</button>
+    <button type="button" class="btn btn-primary" id="question-picker-submit-btn">Thêm vào phần này</button>
+  </div>
+</div>
+
+<!-- ── PANEL: XEM DANH SÁCH CÂU HỎI ĐÃ CHỌN (chỉ xem, không tick) ──
+     Khác question-picker-panel ở chỗ: đây chỉ hiện danh sách theo đúng
+     order_index đã lưu + link "Sửa" nhảy sang bảng Câu hỏi (questions.js),
+     không có checkbox chọn/bỏ chọn. -->
+<div id="subsection-question-list-overlay" class="admin-overlay" style="display:none;"></div>
+
+<div id="subsection-question-list-panel" class="admin-slide-panel admin-slide-panel-wide" style="display:none;">
+  <div class="admin-slide-panel-header">
+    <h3>Câu hỏi trong dạng bài này</h3>
+    <button type="button" class="admin-slide-close-btn" id="subsection-question-list-close-btn">
+      <i class="ti ti-x"></i>
+    </button>
+  </div>
+
+  <div class="admin-slide-panel-body">
+    <div id="subsection-question-list-body" style="max-height:60vh; overflow-y:auto;">
+      <div class="empty-state">Đang tải...</div>
+    </div>
+  </div>
+</div>
