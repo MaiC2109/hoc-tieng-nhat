@@ -1874,7 +1874,7 @@ function renderResultQuestionDetail(q) {
   }
 
   const feedbackHtml = q.explanation ? `
-    <div class="exam-review-feedback">💡 Feedback: ${q.explanation}</div>
+    <div class="exam-review-feedback">💡 Feedback: ${renderFeedbackMarkdown(q.explanation)}</div>
   ` : '';
 
   return `
