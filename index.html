@@ -65,6 +65,9 @@
         Review
         <span id="review-due-badge" class="nav-badge" style="display:none;"></span>
       </button>
+      <button class="main-nav-btn" data-section="practice" onclick="openPracticeTest()">
+        Luyện đề
+      </button>
       <button class="main-nav-btn" data-section="grammar" disabled>
         Grammar
         <span class="badge-soon">Soon</span>
@@ -106,24 +109,44 @@
         <div class="review-page-header">
           <h2>🔁 Ôn tập hôm nay</h2>
           <p>Những từ đã đến hạn ôn lại, dựa trên tiến độ ghi nhớ của riêng bạn.</p>
-          <div id="streak-summary" class="streak-badge">—</div>
 
-          <div class="streak-stats-row">
-            <div class="streak-stat-card">
-              <div class="streak-stat-value" id="streak-current">—</div>
-              <div class="streak-stat-label">Streak hiện tại</div>
-            </div>
-            <div class="streak-stat-card">
-              <div class="streak-stat-value" id="streak-best">—</div>
-              <div class="streak-stat-label">Best streak</div>
-            </div>
-            <div class="streak-stat-card">
-              <div class="streak-stat-value" id="streak-week">—</div>
-              <div class="streak-stat-label">Tuần này</div>
-            </div>
+          <!-- Tab con trong menu Review: Ôn tập từ vựng (Phase 1, có sẵn) /
+               Đề cần làm lại (exam_attempts status='needs_retry'). setActiveReviewTab()
+               trong app.js chỉ đổi UI active + ẩn/hiện khối streak (chỉ áp dụng
+               cho vocab); việc load dữ liệu do openReviewToday()/openExamRetryReview()
+               tự lo, theo đúng pattern các nút nav khác (data-section/onclick). -->
+          <div class="review-tabs-bar" style="display:flex; gap:8px; margin:14px 0;">
+            <button type="button" class="review-tab-btn" data-review-tab="vocab" onclick="openReviewToday()"
+              style="padding:8px 16px; border-radius:20px; border:1px solid var(--border-md); background:var(--ink); color:#fff; cursor:pointer; font-size:13px; font-weight:600;">
+              📖 Ôn tập từ vựng
+            </button>
+            <button type="button" class="review-tab-btn" data-review-tab="examretry" onclick="openExamRetryReview()"
+              style="padding:8px 16px; border-radius:20px; border:1px solid var(--border-md); background:transparent; color:var(--ink); cursor:pointer; font-size:13px; font-weight:600;">
+              📝 Đề cần làm lại
+              <span id="exam-retry-due-badge" class="nav-badge" style="display:none;"></span>
+            </button>
           </div>
 
-          <div id="streak-grid" class="streak-grid"></div>
+          <div id="review-vocab-streak-block">
+            <div id="streak-summary" class="streak-badge">—</div>
+
+            <div class="streak-stats-row">
+              <div class="streak-stat-card">
+                <div class="streak-stat-value" id="streak-current">—</div>
+                <div class="streak-stat-label">Streak hiện tại</div>
+              </div>
+              <div class="streak-stat-card">
+                <div class="streak-stat-value" id="streak-best">—</div>
+                <div class="streak-stat-label">Best streak</div>
+              </div>
+              <div class="streak-stat-card">
+                <div class="streak-stat-value" id="streak-week">—</div>
+                <div class="streak-stat-label">Tuần này</div>
+              </div>
+            </div>
+
+            <div id="streak-grid" class="streak-grid"></div>
+          </div>
         </div>
         <div id="review-zone"></div>
       </div>
@@ -168,6 +191,26 @@
       </div>
     </div>
 
+    <div class="section-panel" id="section-practice">
+      <div class="review-page-wrap">
+        <div class="review-page-header">
+          <h2>📝 Luyện đề</h2>
+          <p>Chọn một đề thi để bắt đầu hoặc tiếp tục làm bài.</p>
+        </div>
+        <div id="practice-zone"></div>
+      </div>
+    </div>
+
+    <div class="section-panel" id="section-exam-taking">
+      <div class="review-page-wrap" id="exam-taking-zone">
+      </div>
+    </div>
+
+    <div class="section-panel" id="section-exam-result">
+      <div class="review-page-wrap" id="exam-result-zone">
+      </div>
+    </div>
+
     <div class="section-panel" id="section-grammar">
       <div class="placeholder-panel">
         <div class="placeholder-icon">✍️</div>
@@ -190,6 +233,8 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="streak-utils.js"></script>
 <script src="app.js"></script>
+<script src="exam-retry-rules.js"></script>
+<script src="exam.js"></script>
 <script>
   // Toggle dropdown "Account" ở góc phải header — logic UI thuần túy,
   // không liên quan Supabase nên để riêng ở đây thay vì app.js.
