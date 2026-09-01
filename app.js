@@ -898,6 +898,24 @@ function switchMainSection(sectionId) {
 
 function s(v) { return (v !== undefined && v !== null && v !== '') ? String(v) : '—'; }
 
+// Chuyển 1 chuỗi feedback/explanation thô (nhập từ admin, có thể chứa
+// markdown đơn giản **đậm**/*nghiêng*) thành HTML an toàn để gán vào
+// innerHTML. LUÔN escape HTML trước (chặn injection nếu sau này người
+// nhập liệu không chỉ có admin), rồi mới áp dụng bold/italic/xuống dòng
+// trên chuỗi đã escape — không bao giờ nội suy text thô chưa qua hàm này
+// vào innerHTML ở bất kỳ chỗ nào hiển thị explanation.
+function renderFeedbackMarkdown(text) {
+  if (text === undefined || text === null || text === '') return '';
+  const escaped = String(text)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+  return escaped
+    .replace(/\*\*([^*]+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*([^*]+?)\*/g, '<em>$1</em>')
+    .replace(/\n/g, '<br>');
+}
+
 // Từ chỉ có Kana (không có Kanji) sẽ có w.kanji là null/undefined/'' hoặc '—'
 // Dùng hàm này thay vì so sánh trực tiếp `w.kanji !== '—'` để tránh hiển thị "null".
 function hasKanji(w) {
@@ -2165,7 +2183,7 @@ function renderMistakeQuizQuestion() {
   }
 
   const explanationHtml = (item.status !== 'unanswered' && qb.explanation)
-    ? `<div class="quiz-explanation" style="margin-top:14px; padding:12px; border-radius:10px; background:var(--panel-mute, #f6f6f6); font-size:13px; color:var(--ink-mute);">💡 ${s(qb.explanation)}</div>`
+    ? `<div class="quiz-explanation" style="margin-top:14px; padding:12px; border-radius:10px; background:var(--panel-mute, #f6f6f6); font-size:13px; color:var(--ink-mute);">💡 ${renderFeedbackMarkdown(qb.explanation)}</div>`
     : '';
 
   zone.innerHTML = `
