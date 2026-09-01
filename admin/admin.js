@@ -49,6 +49,20 @@ function escHtml(v) {
     .replace(/"/g, '&quot;');
 }
 
+// Chuyển 1 chuỗi feedback/explanation thô (nhập từ form câu hỏi, có thể
+// chứa markdown đơn giản **đậm**/*nghiêng*) thành HTML an toàn để gán vào
+// innerHTML. Dùng lại escHtml() ở trên để escape trước, rồi mới áp dụng
+// bold/italic/xuống dòng trên chuỗi đã escape. Bản sao của hàm cùng tên
+// trong app.js (phía học viên) — admin/index.html không load app.js nên
+// cần định nghĩa riêng ở đây cho results.js/questions.js dùng chung.
+function renderFeedbackMarkdown(text) {
+  if (text === undefined || text === null || text === '') return '';
+  return escHtml(text)
+    .replace(/\*\*([^*]+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*([^*]+?)\*/g, '<em>$1</em>')
+    .replace(/\n/g, '<br>');
+}
+
 // ============================================================
 //  1. SUPABASE AUTH — đăng nhập / đăng xuất / kiểm tra session
 // ============================================================
