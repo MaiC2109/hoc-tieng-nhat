@@ -2544,6 +2544,39 @@ async function uploadAndInsertQuestionTextImage(file) {
   }
 }
 
+// ── Định dạng markdown đơn giản (bold/italic) cho textarea Feedback ──────
+// Khác với #question-text (contenteditable + execCommand), #question-explanation
+// là textarea thường -> lưu text thuần dạng markdown (**đậm**, *nghiêng*), phần
+// hiển thị cho học viên sẽ tự parse 2 ký hiệu này ở nơi render feedback.
+// Nếu đang bôi đen 1 đoạn: bọc đoạn đó bằng cặp ký hiệu.
+// Nếu không bôi đen gì: chèn cặp ký hiệu rỗng và đặt con trỏ vào giữa để gõ tiếp.
+function applyExplanationMarkdown(marker) {
+  const textarea = document.getElementById('question-explanation');
+  if (!textarea) return;
+
+  textarea.focus();
+
+  const start = textarea.selectionStart;
+  const end = textarea.selectionEnd;
+  const value = textarea.value;
+  const selectedText = value.slice(start, end);
+
+  const newValue = value.slice(0, start) + marker + selectedText + marker + value.slice(end);
+  textarea.value = newValue;
+
+  let cursorStart, cursorEnd;
+  if (selectedText.length > 0) {
+    // Giữ nguyên đoạn vừa bọc ở trạng thái được chọn, để gõ tiếp/bọc thêm lần nữa vẫn hiểu đúng.
+    cursorStart = start + marker.length;
+    cursorEnd = cursorStart + selectedText.length;
+  } else {
+    // Không có gì được chọn -> đặt con trỏ vào giữa cặp ký hiệu vừa chèn.
+    cursorStart = start + marker.length;
+    cursorEnd = cursorStart;
+  }
+  textarea.setSelectionRange(cursorStart, cursorEnd);
+}
+
 // ── Upload audio lên Supabase Storage (bucket exam-audio) ────────────────
 // Dùng thẳng supabaseClient.storage (client đã khởi tạo sẵn trong
 // admin.js) thay vì tự gọi fetch REST — đây là cách chuẩn của supabase-js
@@ -2619,6 +2652,9 @@ function initQuestionFormControls() {
   document.getElementById('question-text-underline-btn')?.addEventListener('click', () => applyQuestionTextFormat('underline'));
   document.getElementById('question-text')?.addEventListener('keyup', syncRichTextToolbarState);
   document.getElementById('question-text')?.addEventListener('mouseup', syncRichTextToolbarState);
+
+  document.getElementById('question-explanation-bold-btn')?.addEventListener('click', () => applyExplanationMarkdown('**'));
+  document.getElementById('question-explanation-italic-btn')?.addEventListener('click', () => applyExplanationMarkdown('*'));
 
   document.getElementById('question-text-image-btn')?.addEventListener('click', () => {
     document.getElementById('question-text-image-file')?.click();

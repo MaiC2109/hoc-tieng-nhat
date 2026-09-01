@@ -661,7 +661,14 @@
 
         <div class="admin-form-group">
           <label for="question-explanation">Feedback / giải thích (tùy chọn)</label>
+          <div class="admin-richtext-toolbar">
+            <button type="button" class="admin-richtext-btn" id="question-explanation-bold-btn" title="In đậm" style="font-weight:700;">B</button>
+            <button type="button" class="admin-richtext-btn" id="question-explanation-italic-btn" title="In nghiêng" style="font-style:italic;">I</button>
+          </div>
           <textarea id="question-explanation" rows="2"></textarea>
+          <p class="admin-hint-text">
+            Dùng <code>**chữ**</code> để in đậm, <code>*chữ*</code> để in nghiêng. Xuống dòng bằng Enter.
+          </p>
         </div>
 
         <div class="admin-form-group">
