@@ -69,7 +69,7 @@ async function loadExamAdminList() {
     // để đếm "Số section" theo từng đề ở phía client (số lượng đề thi ở quy
     // mô 1 giáo viên quản lý là nhỏ, chưa cần RPC/aggregate riêng).
     const [examsRes, sectionsRes] = await Promise.all([
-      fetch(`${ADMIN_CONFIG.supabaseUrl}/rest/v1/exams?select=id,title,exam_type,pass_threshold_pct,retry_disabled,is_published,created_at&order=created_at.desc`, { headers }),
+      fetch(`${ADMIN_CONFIG.supabaseUrl}/rest/v1/exams?select=id,title,exam_type,pass_threshold_pct,retry_disabled,is_published,available_from,created_at&order=created_at.desc`, { headers }),
       fetch(`${ADMIN_CONFIG.supabaseUrl}/rest/v1/exam_sections?select=exam_id`, { headers })
     ]);
 
@@ -1260,6 +1260,8 @@ function resetExamForm() {
   document.getElementById('exam-form-error').textContent = '';
   document.getElementById('exam-pass-threshold').value = 70;
   document.getElementById('exam-retry-disabled').checked = false;
+  const availableFromEl = document.getElementById('exam-available-from');
+  if (availableFromEl) availableFromEl.value = '';
 }
 
 function populateExamFormFromRow(row) {
@@ -1267,6 +1269,10 @@ function populateExamFormFromRow(row) {
   document.getElementById('exam-type').value = row.exam_type || 'full';
   document.getElementById('exam-pass-threshold').value = row.pass_threshold_pct ?? 70;
   document.getElementById('exam-retry-disabled').checked = row.retry_disabled === true;
+  // available_from là date (yyyy-mm-dd) từ Postgres -> khớp thẳng với input type="date",
+  // không cần format lại. null/undefined -> để trống (hiện ngay).
+  const availableFromEl = document.getElementById('exam-available-from');
+  if (availableFromEl) availableFromEl.value = row.available_from || '';
 }
 
 // row = null -> mode TẠO MỚI. Truyền row (từ examAdminState.rows) -> mode SỬA.
@@ -1314,6 +1320,10 @@ async function submitExamForm(e) {
   const examType = document.getElementById('exam-type').value;
   const passThreshold = parseInt(document.getElementById('exam-pass-threshold').value, 10);
   const retryDisabled = document.getElementById('exam-retry-disabled').checked;
+  // Input type="date" trả về '' khi để trống -> chuyển thành null để lưu
+  // "hiện ngay" (không giới hạn ngày mở khóa) đúng theo yêu cầu.
+  const availableFromRaw = document.getElementById('exam-available-from')?.value || '';
+  const availableFrom = availableFromRaw || null;
 
   if (!title) {
     errorEl.textContent = 'Vui lòng nhập tên đề thi.';
@@ -1345,6 +1355,7 @@ async function submitExamForm(e) {
       pass_threshold_pct: passThreshold,
       retry_disabled: retryDisabled,
       is_published: isPublished,
+      available_from: availableFrom,
       updated_at: new Date().toISOString()
     };
     // created_by chỉ set lúc tạo mới — không đụng vào khi sửa đề đã có.
