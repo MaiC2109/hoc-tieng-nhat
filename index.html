@@ -192,11 +192,26 @@
     </div>
 
     <div class="section-panel" id="section-practice">
-      <div class="review-page-wrap">
+      <div class="review-page-wrap practice-page-wrap">
         <div class="review-page-header">
           <h2>📝 Luyện đề</h2>
           <p>Chọn một đề thi để bắt đầu hoặc tiếp tục làm bài.</p>
         </div>
+
+        <!-- Khung sườn 2 tab "Hiện tại"/"History" — chỉ đổi UI active qua
+             switchPracticeTab() trong exam.js, CHƯA query khác nhau giữa
+             2 tab (cả 2 đang cùng gọi loadExamListWithAttempts() như nhau). -->
+        <div class="practice-tabs-bar" style="display:flex; gap:8px; margin:14px 0;">
+          <button type="button" class="practice-tab-btn active" data-practice-tab="current" onclick="switchPracticeTab('current')"
+            style="padding:8px 16px; border-radius:20px; border:1px solid var(--border-md); background:var(--ink); color:#fff; cursor:pointer; font-size:13px; font-weight:600;">
+            Hiện tại
+          </button>
+          <button type="button" class="practice-tab-btn" data-practice-tab="history" onclick="switchPracticeTab('history')"
+            style="padding:8px 16px; border-radius:20px; border:1px solid var(--border-md); background:transparent; color:var(--ink); cursor:pointer; font-size:13px; font-weight:600;">
+            History
+          </button>
+        </div>
+
         <div id="practice-zone"></div>
       </div>
     </div>

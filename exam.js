@@ -164,7 +164,26 @@ function renderPracticeTestList() {
     return;
   }
 
-  zone.innerHTML = list.map(exam => renderExamCard(exam)).join('');
+  zone.innerHTML = `<div class="exam-grid">${list.map(exam => renderExamCard(exam)).join('')}</div>`;
+}
+
+// ------------------------------------------------------------
+// Bước 3 — khung sườn 2 tab "Hiện tại" / "History" cho tab Luyện đề.
+// CHỈ đổi UI active (giống hệt pattern setActiveReviewTab() trong app.js),
+// CHƯA có logic query khác nhau giữa 2 tab — cả 2 vẫn dùng chung
+// state.examState.examList đã load từ loadExamListWithAttempts().
+// Khi cần thêm logic thật cho tab "History" (vd lọc theo exam_attempts
+// đã kết thúc), sửa lại hàm này để refetch/filter theo tabKey.
+// ------------------------------------------------------------
+function switchPracticeTab(tabKey) {
+  document.querySelectorAll('.practice-tab-btn').forEach(btn => {
+    const isActive = btn.dataset.practiceTab === tabKey;
+    btn.classList.toggle('active', isActive);
+    btn.style.background = isActive ? 'var(--ink)' : 'transparent';
+    btn.style.color = isActive ? '#fff' : 'var(--ink)';
+  });
+  // TODO: khi có logic thật, rẽ nhánh theo tabKey ở đây (vd gọi lại
+  // loadExamListWithAttempts() với filter riêng cho "history").
 }
 
 function renderExamCard(exam) {
@@ -1874,7 +1893,7 @@ function renderResultQuestionDetail(q) {
   }
 
   const feedbackHtml = q.explanation ? `
-    <div class="exam-review-feedback">💡 Feedback: ${q.explanation}</div>
+    <div class="exam-review-feedback">💡 Feedback: ${renderFeedbackMarkdown(q.explanation)}</div>
   ` : '';
 
   return `

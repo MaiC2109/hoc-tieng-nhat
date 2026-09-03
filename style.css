@@ -1022,6 +1022,26 @@ body {
   margin-bottom: 12px;
 }
 
+/* Bước 3 — Grid nhiều cột thay cho list 1 cột cũ. Style riêng từng
+   .exam-card giữ nguyên y hệt phía trên; chỉ bỏ margin-bottom cũ (vốn
+   dùng để xếp dọc) vì grid đã có "gap" lo khoảng cách. */
+.exam-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.exam-grid .exam-card {
+  margin-bottom: 0;
+}
+
+/* Khung chứa riêng cho trang Luyện đề — nới rộng hơn .review-page-wrap
+   mặc định (700px, dùng chung nhiều trang khác) để grid nhiều cột có
+   chỗ trải ra, KHÔNG đổi max-width của .review-page-wrap gốc. */
+.practice-page-wrap {
+  max-width: 1300px;
+}
+
 .exam-card-info { flex: 1; min-width: 0; }
 
 .exam-card-title {
