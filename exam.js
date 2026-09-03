@@ -26,6 +26,7 @@ const SKILL_CODE_LABELS = {
 state.examState = state.examState || {
   examList: [],       // danh sách đề đã join với attempt gần nhất của user
   isLoading: false,
+  activeTab: 'current', // 'current' | 'history' — tab đang chọn ở màn Luyện đề
   currentAttempt: null,          // exam_attempts row đang làm (sau khi bấm Bắt đầu/Tiếp tục)
   currentExamStructure: null,    // cây sections -> subsections -> questions của đề đang làm
   activeSectionIndex: 0,         // section đang active trong cây trên
@@ -72,10 +73,16 @@ async function loadExamListWithAttempts() {
   }
 
   try {
+    // Chỉ lấy đề đã publish VÀ (chưa đặt ngày mở khóa HOẶC ngày mở khóa
+    // đã tới) — dùng _srToday() (đã có sẵn trong app.js) cho nhất quán
+    // định dạng 'YYYY-MM-DD' với cột date của Postgres.
+    const todayStr = _srToday();
+
     const { data: exams, error: examsError } = await supabaseClient
       .from('exams')
-      .select('id, title, exam_type, pass_threshold_pct, retry_disabled')
+      .select('id, title, exam_type, pass_threshold_pct, retry_disabled, available_from')
       .eq('is_published', true)
+      .or(`available_from.is.null,available_from.lte.${todayStr}`)
       .order('created_at', { ascending: false });
 
     if (examsError) {
@@ -91,7 +98,7 @@ async function loadExamListWithAttempts() {
     if (examIds.length > 0) {
       const { data: attempts, error: attemptsError } = await supabaseClient
         .from('exam_attempts')
-        .select('id, exam_id, attempt_number, status, total_score, total_possible, submitted_at, started_at')
+        .select('id, exam_id, attempt_number, status, total_score, total_possible, submitted_at, started_at, next_retry_date')
         .eq('user_id', state.currentUser.id)
         .in('exam_id', examIds)
         .order('attempt_number', { ascending: false });
@@ -131,6 +138,32 @@ async function loadExamListWithAttempts() {
 }
 
 // ------------------------------------------------------------
+// Bước 4 — quyết định trạng thái hiển thị của 1 đề trên tab "Hiện tại",
+// dựa vào latestAttempt (đã join sẵn ở loadExamListWithAttempts()).
+// Trả về:
+//   { visible: false }                                -> ẩn khỏi tab "Hiện tại"
+//   { visible: true, key: 'new'|'in_progress'|'due_retry' }
+// key 'due_retry' KHÁC với status thô 'needs_retry' trong DB: nó đã tính
+// thêm điều kiện next_retry_date <= hôm nay, áp dụng cho cả 3 status đã
+// nộp (submitted/passed/needs_retry) — không chỉ riêng needs_retry.
+// ------------------------------------------------------------
+function getPracticeCardStatus(exam) {
+  const attempt = exam.latestAttempt;
+
+  if (!attempt) return { visible: true, key: 'new' };
+  if (attempt.status === 'in_progress') return { visible: true, key: 'in_progress' };
+
+  // submitted / passed / needs_retry -> chỉ hiện ở tab "Hiện tại" nếu đã
+  // đến hạn làm lại. Không có next_retry_date (null) hoặc còn ở tương lai
+  // -> coi như "đã xong việc" với đề này, ẩn khỏi tab "Hiện tại".
+  const todayStr = _srToday();
+  const nextRetry = attempt.next_retry_date;
+  if (nextRetry && nextRetry <= todayStr) return { visible: true, key: 'due_retry' };
+
+  return { visible: false };
+}
+
+// ------------------------------------------------------------
 // Render — trạng thái loading
 // ------------------------------------------------------------
 function renderPracticeTestLoading() {
@@ -151,7 +184,16 @@ function renderPracticeTestList() {
   const zone = document.getElementById('practice-zone');
   if (!zone) return;
 
-  const list = state.examState.examList;
+  const fullList = state.examState.examList || [];
+
+  // Tab "History" CHƯA có logic riêng (khung sườn từ Bước 3) -> tạm hiện
+  // nguyên danh sách chưa lọc. Tab "Hiện tại" áp dụng rule Bước 4 qua
+  // getPracticeCardStatus(), chỉ giữ lại các đề có visible=true.
+  const list = state.examState.activeTab === 'history'
+    ? fullList
+    : fullList
+        .map(exam => ({ exam, cardStatus: getPracticeCardStatus(exam) }))
+        .filter(({ cardStatus }) => cardStatus.visible);
 
   if (!list || list.length === 0) {
     zone.innerHTML = `
@@ -164,36 +206,43 @@ function renderPracticeTestList() {
     return;
   }
 
-  zone.innerHTML = `<div class="exam-grid">${list.map(exam => renderExamCard(exam)).join('')}</div>`;
+  zone.innerHTML = state.examState.activeTab === 'history'
+    ? `<div class="exam-grid">${list.map(exam => renderExamCard(exam)).join('')}</div>`
+    : `<div class="exam-grid">${list.map(({ exam, cardStatus }) => renderExamCard(exam, cardStatus)).join('')}</div>`;
 }
 
 // ------------------------------------------------------------
 // Bước 3 — khung sườn 2 tab "Hiện tại" / "History" cho tab Luyện đề.
-// CHỈ đổi UI active (giống hệt pattern setActiveReviewTab() trong app.js),
-// CHƯA có logic query khác nhau giữa 2 tab — cả 2 vẫn dùng chung
-// state.examState.examList đã load từ loadExamListWithAttempts().
-// Khi cần thêm logic thật cho tab "History" (vd lọc theo exam_attempts
-// đã kết thúc), sửa lại hàm này để refetch/filter theo tabKey.
+// Bước 4: tab "Hiện tại" đã có logic lọc thật qua getPracticeCardStatus();
+// tab "History" vẫn CHƯA có logic riêng, chỉ đổi UI + hiện nguyên danh
+// sách chưa lọc (xem renderPracticeTestList()).
 // ------------------------------------------------------------
 function switchPracticeTab(tabKey) {
+  state.examState.activeTab = tabKey;
+
   document.querySelectorAll('.practice-tab-btn').forEach(btn => {
     const isActive = btn.dataset.practiceTab === tabKey;
     btn.classList.toggle('active', isActive);
     btn.style.background = isActive ? 'var(--ink)' : 'transparent';
     btn.style.color = isActive ? '#fff' : 'var(--ink)';
   });
-  // TODO: khi có logic thật, rẽ nhánh theo tabKey ở đây (vd gọi lại
-  // loadExamListWithAttempts() với filter riêng cho "history").
+
+  renderPracticeTestList();
 }
 
-function renderExamCard(exam) {
+// cardStatus: kết quả từ getPracticeCardStatus(exam), chỉ truyền khi render
+// ở tab "Hiện tại" (Bước 4). Khi gọi từ tab "History" (chưa có logic riêng,
+// xem renderPracticeTestList()) hoặc từ nơi khác chưa cập nhật, cardStatus
+// undefined -> tự tính lại bằng getPracticeCardStatus() để không vỡ code cũ.
+function renderExamCard(exam, cardStatus) {
   const attempt = exam.latestAttempt;
   const examTypeLabel = exam.exam_type === 'full' ? 'Đề tổng hợp' : 'Đề theo kỹ năng';
+  const status = cardStatus || getPracticeCardStatus(exam);
 
   let statusHtml = '';
   let actionsHtml = '';
 
-  if (!attempt) {
+  if (status.key === 'new') {
     // Chưa có attempt nào -> "Chưa làm"
     statusHtml = `<span class="exam-status-badge exam-status-new">Chưa làm</span>`;
     actionsHtml = `
@@ -201,15 +250,36 @@ function renderExamCard(exam) {
         Bắt đầu
       </button>
     `;
-  } else if (attempt.status === 'in_progress') {
+  } else if (status.key === 'in_progress') {
     statusHtml = `<span class="exam-status-badge exam-status-progress">Đang làm dở</span>`;
     actionsHtml = `
       <button class="btn btn-primary" onclick="continueExamAttempt('${attempt.id}')">
         Tiếp tục làm bài
       </button>
     `;
+  } else if (status.key === 'due_retry') {
+    // Đã nộp (submitted/passed/needs_retry) VÀ next_retry_date <= hôm nay
+    // -> "Đến hạn làm lại" (badge xanh dương), bất kể status thô là gì.
+    const scoreText = (attempt.total_score != null && attempt.total_possible != null)
+      ? `${attempt.total_score}/${attempt.total_possible}`
+      : '—';
+
+    statusHtml = `
+      <span class="exam-status-badge exam-status-due-retry">Đến hạn làm lại</span>
+      <span class="exam-score-text">${scoreText} điểm</span>
+    `;
+    actionsHtml = `
+      <button class="btn btn-outline" onclick="viewExamAttemptResult('${attempt.id}')">
+        Xem lại
+      </button>
+      <button class="btn btn-primary" onclick="startExamAttempt('${exam.id}')">
+        Làm lại
+      </button>
+    `;
   } else {
-    // submitted / passed / needs_retry -> hiện điểm gần nhất
+    // Fallback — dùng khi render ở tab "History" (chưa lọc theo status.key ở
+    // trên) cho các attempt đã nộp nhưng chưa/không đến hạn làm lại. Giữ
+    // nguyên logic hiển thị cũ (label/màu theo đúng status thô trong DB).
     const scoreText = (attempt.total_score != null && attempt.total_possible != null)
       ? `${attempt.total_score}/${attempt.total_possible}`
       : '—';

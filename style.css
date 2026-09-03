@@ -17,6 +17,8 @@
   --sage-light: #e8f0ec;
   --gold:       #b8860b;
   --gold-light: #fdf3d7;
+  --sky:        #2563a8;
+  --sky-light:  #e2edf7;
   --border:      rgba(26, 31, 46, 0.1);
   --border-md:  rgba(26, 31, 46, 0.16);
   --shadow-sm:  0 1px 4px rgba(26,31,46,0.08);
@@ -1080,6 +1082,7 @@ body {
 .exam-status-submitted { background: var(--paper-warm);  color: var(--ink-mute); }
 .exam-status-passed    { background: var(--sage-light);  color: var(--sage); }
 .exam-status-retry     { background: var(--verm-glow);   color: var(--vermillion); }
+.exam-status-due-retry { background: var(--sky-light);    color: var(--sky); }
 
 .exam-score-text {
   font-size: 13px;
