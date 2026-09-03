@@ -212,6 +212,20 @@
           </button>
         </div>
 
+        <!-- Bước 5 — filter khoảng ngày theo submitted_at, chỉ áp dụng cho
+             tab History -> ẩn mặc định, switchPracticeTab() trong exam.js
+             toggle display khi đổi tab. onchange gọi applyHistoryDateFilter(). -->
+        <div class="practice-history-filters" id="practice-history-filters" style="display:none; gap:10px; align-items:center; margin-bottom:14px; flex-wrap:wrap;">
+          <label style="font-size:13px; color:var(--ink-mute); display:flex; align-items:center; gap:6px;">
+            Từ ngày
+            <input type="date" id="practice-history-date-from" class="admin-select" style="width:auto;" onchange="applyHistoryDateFilter()" />
+          </label>
+          <label style="font-size:13px; color:var(--ink-mute); display:flex; align-items:center; gap:6px;">
+            Đến ngày
+            <input type="date" id="practice-history-date-to" class="admin-select" style="width:auto;" onchange="applyHistoryDateFilter()" />
+          </label>
+        </div>
+
         <div id="practice-zone"></div>
       </div>
     </div>
