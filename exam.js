@@ -39,7 +39,8 @@ state.examState = state.examState || {
     rows: [],          // exam_attempts đã nộp (submitted/passed/needs_retry), join tên đề
     isLoading: false,
     dateFrom: '',       // filter theo submitted_at, 'YYYY-MM-DD' hoặc '' = không giới hạn
-    dateTo: ''
+    dateTo: '',
+    expandedExamId: null // examId đang xem chi tiết (list tất cả lần làm) — null = đang ở danh sách gộp theo đề
   },
   currentAttempt: null,          // exam_attempts row đang làm (sau khi bấm Bắt đầu/Tiếp tục)
   currentExamStructure: null,    // cây sections -> subsections -> questions của đề đang làm
@@ -350,6 +351,7 @@ async function applyHistoryDateFilter() {
   const toEl = document.getElementById('practice-history-date-to');
   state.examState.historyState.dateFrom = fromEl?.value || '';
   state.examState.historyState.dateTo = toEl?.value || '';
+  state.examState.historyState.expandedExamId = null; // quay về danh sách gộp sau khi đổi filter ngày
 
   renderPracticeTestLoading();
   await loadExamHistory();
@@ -373,20 +375,31 @@ function applyPracticeFilters() {
   }
 }
 
+// ------------------------------------------------------------
+// Tab "History" — mặc định hiện DANH SÁCH GỘP THEO ĐỀ (1 card/đề, kể cả
+// đề có nhiều lần làm), không liệt kê từng attempt ra ngay. Click vào 1
+// card -> xem chi tiết toàn bộ các lần làm của đúng đề đó (renderExamHistoryDetail).
+// ------------------------------------------------------------
 function renderExamHistoryList() {
   const zone = document.getElementById('practice-zone');
   if (!zone) return;
 
   const skillFilter = state.examState.filters.skill;
 
-  const rows = (state.examState.historyState.rows || [])
+  const filteredRows = (state.examState.historyState.rows || [])
     .filter(att => matchesSkillFilter(
       att.exams?.exam_type,
       state.examState.examSkillMap[att.exam_id] ?? null,
       skillFilter
     ));
 
-  if (rows.length === 0) {
+  // Đang xem chi tiết 1 đề cụ thể -> render list attempt của riêng đề đó.
+  if (state.examState.historyState.expandedExamId) {
+    renderExamHistoryDetail(state.examState.historyState.expandedExamId, filteredRows);
+    return;
+  }
+
+  if (filteredRows.length === 0) {
     zone.innerHTML = `
       <div class="empty-state" style="text-align:center; padding:40px 20px;">
         <div style="font-size:40px; margin-bottom:10px;">🗂️</div>
@@ -397,7 +410,96 @@ function renderExamHistoryList() {
     return;
   }
 
-  zone.innerHTML = `<div class="exam-grid">${rows.map(att => renderExamHistoryCard(att)).join('')}</div>`;
+  // Gộp theo exam_id — filteredRows đã order theo submitted_at desc từ
+  // loadExamHistory() nên phần tử đầu tiên gặp mỗi exam_id chính là lần
+  // làm gần nhất, không cần sort lại.
+  const groupsByExam = {};
+  filteredRows.forEach(att => {
+    if (!groupsByExam[att.exam_id]) {
+      groupsByExam[att.exam_id] = {
+        examId: att.exam_id,
+        examTitle: att.exams?.title || 'Đề thi',
+        attempts: []
+      };
+    }
+    groupsByExam[att.exam_id].attempts.push(att);
+  });
+  const groups = Object.values(groupsByExam);
+
+  zone.innerHTML = `<div class="exam-grid">${groups.map(g => renderExamHistoryGroupCard(g)).join('')}</div>`;
+}
+
+// Card đại diện 1 đề trong danh sách gộp — hiện thông tin lần làm gần
+// nhất + số lần đã làm, KHÔNG có nút Xem lại/Làm lại trực tiếp (vì có
+// thể có nhiều attempt, click vào card để chọn đúng lần làm cần thao tác).
+function renderExamHistoryGroupCard(group) {
+  const latest = group.attempts[0];
+  const scoreText = (latest.total_score != null && latest.total_possible != null)
+    ? `${latest.total_score}/${latest.total_possible}`
+    : '—';
+  const submittedText = latest.submitted_at
+    ? new Date(latest.submitted_at).toLocaleDateString('vi-VN')
+    : '—';
+  const isPassed = latest.status === 'passed';
+  const badgeCls = isPassed ? 'exam-status-passed' : 'exam-status-retry';
+  const badgeLabel = isPassed ? 'Đạt' : 'Chưa đạt';
+  const countText = group.attempts.length > 1
+    ? `Đã làm ${group.attempts.length} lần`
+    : 'Đã làm 1 lần';
+
+  return `
+    <div class="exam-card" style="cursor:pointer;" onclick="openExamHistoryDetail('${group.examId}')">
+      <div class="exam-card-info">
+        <div class="exam-card-title">${group.examTitle}</div>
+        <div class="exam-card-meta">
+          <span>${countText}</span>
+          <span>·</span>
+          <span>Gần nhất: ${submittedText}</span>
+        </div>
+        <div class="exam-card-status-row">
+          <span class="exam-status-badge ${badgeCls}">${badgeLabel} (lần gần nhất)</span>
+          <span class="exam-score-text">${scoreText} điểm</span>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function openExamHistoryDetail(examId) {
+  state.examState.historyState.expandedExamId = examId;
+  renderExamHistoryList();
+}
+
+function closeExamHistoryDetail() {
+  state.examState.historyState.expandedExamId = null;
+  renderExamHistoryList();
+}
+
+// Chi tiết 1 đề — liệt kê TOÀN BỘ attempt của đề đó (filteredRows đã lọc
+// sẵn theo dropdown "Dạng bài"), mỗi attempt vẫn dùng renderExamHistoryCard()
+// cũ (đủ nút Xem lại/Làm lại riêng từng lần) — không viết lại logic card.
+function renderExamHistoryDetail(examId, filteredRows) {
+  const zone = document.getElementById('practice-zone');
+  if (!zone) return;
+
+  const attempts = filteredRows.filter(att => att.exam_id === examId);
+  const examTitle = attempts[0]?.exams?.title || 'Đề thi';
+
+  if (attempts.length === 0) {
+    // Đề vừa xem đã bị lọc mất do đổi dropdown "Dạng bài" -> quay lại danh sách gộp.
+    closeExamHistoryDetail();
+    return;
+  }
+
+  zone.innerHTML = `
+    <div style="width:100%;">
+      <button type="button" class="btn btn-outline" onclick="closeExamHistoryDetail()" style="margin-bottom:16px;">
+        ← Quay lại danh sách
+      </button>
+      <h3 style="margin-bottom:14px; color:var(--ink); font-size:16px;">${examTitle} — ${attempts.length} lần làm</h3>
+      <div class="exam-grid">${attempts.map(att => renderExamHistoryCard(att)).join('')}</div>
+    </div>
+  `;
 }
 
 // Card riêng cho tab History — khác renderExamCard() (Bước 4) vì dữ liệu
@@ -468,6 +570,7 @@ async function switchPracticeTab(tabKey) {
   if (statusFilterLabel) statusFilterLabel.style.display = tabKey === 'current' ? 'flex' : 'none';
 
   if (tabKey === 'history') {
+    state.examState.historyState.expandedExamId = null; // luôn mở lại từ danh sách gộp, không giữ chi tiết đề lần trước
     renderPracticeTestLoading();
     await loadExamHistory();
     renderExamHistoryList();

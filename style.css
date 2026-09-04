@@ -1044,6 +1044,22 @@ body {
 
 .exam-grid .exam-card {
   margin-bottom: 0;
+  /* Card trong grid hẹp hơn nhiều so với list 1 cột cũ (700px) — nếu giữ
+     flex-direction:row như .exam-card gốc, 2 nút "Xem lại"/"Làm lại" chiếm
+     gần hết bề ngang, bóp phần tiêu đề chỉ còn ~70-90px khiến chữ vỡ dòng
+     từng từ. Xếp dọc: info block full-width phía trên, actions full-width
+     thành 1 hàng riêng phía dưới — áp dụng mọi kích thước màn hình khi ở
+     trong grid (khác media query cũ chỉ áp dụng <640px cho layout 1 cột). */
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.exam-grid .exam-card-actions {
+  width: 100%;
+}
+
+.exam-grid .exam-card-actions .btn {
+  flex: 1;
 }
 
 /* Khung chứa riêng cho trang Luyện đề — nới rộng hơn .review-page-wrap
