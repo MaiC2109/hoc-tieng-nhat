@@ -17,6 +17,8 @@
   --sage-light: #e8f0ec;
   --gold:       #b8860b;
   --gold-light: #fdf3d7;
+  --sky:        #2563a8;
+  --sky-light:  #e2edf7;
   --border:      rgba(26, 31, 46, 0.1);
   --border-md:  rgba(26, 31, 46, 0.16);
   --shadow-sm:  0 1px 4px rgba(26,31,46,0.08);
@@ -1022,6 +1024,51 @@ body {
   margin-bottom: 12px;
 }
 
+/* .review-page-wrap dùng align-items:center (không phải stretch) nên các
+   phần tử con KHÔNG tự giãn hết chiều rộng theo mặc định — phải khai báo
+   width:100% tường minh (giống #review-zone, #exam-result-zone đã làm).
+   Thiếu dòng này khiến #practice-zone co theo nội dung, làm .exam-grid bên
+   trong mất chỗ để chia nhiều cột dù grid-template-columns đã đúng. */
+#practice-zone {
+  width: 100%;
+}
+
+/* Bước 3 — Grid nhiều cột thay cho list 1 cột cũ. Style riêng từng
+   .exam-card giữ nguyên y hệt phía trên; chỉ bỏ margin-bottom cũ (vốn
+   dùng để xếp dọc) vì grid đã có "gap" lo khoảng cách. */
+.exam-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.exam-grid .exam-card {
+  margin-bottom: 0;
+  /* Card trong grid hẹp hơn nhiều so với list 1 cột cũ (700px) — nếu giữ
+     flex-direction:row như .exam-card gốc, 2 nút "Xem lại"/"Làm lại" chiếm
+     gần hết bề ngang, bóp phần tiêu đề chỉ còn ~70-90px khiến chữ vỡ dòng
+     từng từ. Xếp dọc: info block full-width phía trên, actions full-width
+     thành 1 hàng riêng phía dưới — áp dụng mọi kích thước màn hình khi ở
+     trong grid (khác media query cũ chỉ áp dụng <640px cho layout 1 cột). */
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.exam-grid .exam-card-actions {
+  width: 100%;
+}
+
+.exam-grid .exam-card-actions .btn {
+  flex: 1;
+}
+
+/* Khung chứa riêng cho trang Luyện đề — nới rộng hơn .review-page-wrap
+   mặc định (700px, dùng chung nhiều trang khác) để grid nhiều cột có
+   chỗ trải ra, KHÔNG đổi max-width của .review-page-wrap gốc. */
+.practice-page-wrap {
+  max-width: 1300px;
+}
+
 .exam-card-info { flex: 1; min-width: 0; }
 
 .exam-card-title {
@@ -1060,6 +1107,7 @@ body {
 .exam-status-submitted { background: var(--paper-warm);  color: var(--ink-mute); }
 .exam-status-passed    { background: var(--sage-light);  color: var(--sage); }
 .exam-status-retry     { background: var(--verm-glow);   color: var(--vermillion); }
+.exam-status-due-retry { background: var(--sky-light);    color: var(--sky); }
 
 .exam-score-text {
   font-size: 13px;

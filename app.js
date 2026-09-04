@@ -258,10 +258,10 @@ function logDeviceVisit() {
 // 2. Cấu hình — tập trung toàn bộ thông tin kết nối tại đây
 const STUDENT_CONFIG = {
   // Supabase (Production)
-  supabaseUrl: "https://zlblylqosqwnhudeivpt.supabase.co",
-  supabaseAnonKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpsYmx5bHFvc3F3bmh1ZGVpdnB0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI1Mzk0NjUsImV4cCI6MjA5ODExNTQ2NX0.Xa8FblRuypm_eHMGz8GrCpwloKnzjgjTu8z_1ivS8_4",
-  vocabUrl: "https://zlblylqosqwnhudeivpt.supabase.co/rest/v1/vocabulary?order=id.asc",
-  deviceLogUrl: "https://zlblylqosqwnhudeivpt.supabase.co/rest/v1/device_logs"
+  supabaseUrl: "https://hzecdpnmegfwbximgqlv.supabase.co",
+  supabaseAnonKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh6ZWNkcG5tZWdmd2J4aW1ncWx2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMyMTEwNTEsImV4cCI6MjA5ODc4NzA1MX0.esdOJo7gvQXLJjG94PUQ_rghTfGCAAaYzdP3l-j3u-s",
+  vocabUrl: "https://hzecdpnmegfwbximgqlv.supabase.co/rest/v1/vocabulary?order=id.asc",
+  deviceLogUrl: "https://hzecdpnmegfwbximgqlv.supabase.co/rest/v1/device_logs"
 };
 
 // ============================================================
@@ -897,6 +897,24 @@ function switchMainSection(sectionId) {
 }
 
 function s(v) { return (v !== undefined && v !== null && v !== '') ? String(v) : '—'; }
+
+// Chuyển 1 chuỗi feedback/explanation thô (nhập từ admin, có thể chứa
+// markdown đơn giản **đậm**/*nghiêng*) thành HTML an toàn để gán vào
+// innerHTML. LUÔN escape HTML trước (chặn injection nếu sau này người
+// nhập liệu không chỉ có admin), rồi mới áp dụng bold/italic/xuống dòng
+// trên chuỗi đã escape — không bao giờ nội suy text thô chưa qua hàm này
+// vào innerHTML ở bất kỳ chỗ nào hiển thị explanation.
+function renderFeedbackMarkdown(text) {
+  if (text === undefined || text === null || text === '') return '';
+  const escaped = String(text)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+  return escaped
+    .replace(/\*\*([^*]+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*([^*]+?)\*/g, '<em>$1</em>')
+    .replace(/\n/g, '<br>');
+}
 
 // Từ chỉ có Kana (không có Kanji) sẽ có w.kanji là null/undefined/'' hoặc '—'
 // Dùng hàm này thay vì so sánh trực tiếp `w.kanji !== '—'` để tránh hiển thị "null".
@@ -2165,7 +2183,7 @@ function renderMistakeQuizQuestion() {
   }
 
   const explanationHtml = (item.status !== 'unanswered' && qb.explanation)
-    ? `<div class="quiz-explanation" style="margin-top:14px; padding:12px; border-radius:10px; background:var(--panel-mute, #f6f6f6); font-size:13px; color:var(--ink-mute);">💡 ${s(qb.explanation)}</div>`
+    ? `<div class="quiz-explanation" style="margin-top:14px; padding:12px; border-radius:10px; background:var(--panel-mute, #f6f6f6); font-size:13px; color:var(--ink-mute);">💡 ${renderFeedbackMarkdown(qb.explanation)}</div>`
     : '';
 
   zone.innerHTML = `
