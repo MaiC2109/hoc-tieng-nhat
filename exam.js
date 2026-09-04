@@ -27,6 +27,14 @@ state.examState = state.examState || {
   examList: [],       // danh sách đề đã join với attempt gần nhất của user
   isLoading: false,
   activeTab: 'current', // 'current' | 'history' — tab đang chọn ở màn Luyện đề
+  filters: {
+    skill: 'all',   // 'all' | 'vocab' | 'kanji' | 'grammar' | 'reading' | 'listening' | 'full' — dùng chung 2 tab
+    status: 'all'   // 'all' | 'new' | 'in_progress' | 'due_retry' — chỉ áp dụng tab "Hiện tại"
+  },
+  // Cache examId -> skill code (khớp skills.code) cho đề exam_type='skill'.
+  // null = đề full hoặc chưa xác định được. Dùng chung cho cả 2 tab để
+  // không phải query lại exam_sections mỗi lần đổi filter/đổi tab.
+  examSkillMap: {},
   historyState: {
     rows: [],          // exam_attempts đã nộp (submitted/passed/needs_retry), join tên đề
     isLoading: false,
@@ -73,10 +81,62 @@ async function openPracticeTest() {
   });
   const filterBar = document.getElementById('practice-history-filters');
   if (filterBar) filterBar.style.display = 'none';
+  const statusFilterLabel = document.getElementById('practice-status-filter-label');
+  if (statusFilterLabel) statusFilterLabel.style.display = 'flex';
 
   renderPracticeTestLoading();
   await loadExamListWithAttempts();
   renderPracticeTestList();
+}
+
+// ------------------------------------------------------------
+// Bước 6 — dropdown "Dạng bài", dùng chung cho cả tab "Hiện tại" lẫn
+// "History". Rule lọc:
+// - 'all'  -> không lọc thêm
+// - 'full' -> chỉ exam_type='full' (KHÔNG xét skill_id bên trong)
+// - 1 skill code cụ thể -> CHỈ exam_type='skill' VÀ skill của section
+//   duy nhất bên trong khớp code đó. Đề full có chứa section cùng skill
+//   vẫn KHÔNG hiện (theo đúng yêu cầu).
+// ------------------------------------------------------------
+function matchesSkillFilter(examType, skillCode, filterValue) {
+  if (!filterValue || filterValue === 'all') return true;
+  if (filterValue === 'full') return examType === 'full';
+  return examType === 'skill' && skillCode === filterValue;
+}
+
+// Đảm bảo state.examState.examSkillMap có sẵn skill code cho từng examId
+// truyền vào (chỉ query các id CHƯA có trong cache — tránh query lại khi
+// đổi tab/đổi filter). Đề 'skill' theo đúng ràng buộc nghiệp vụ chỉ có
+// đúng 1 section, nên lấy skill của section đầu tiên tìm thấy là đủ.
+async function ensureSkillCodeMapForExamIds(examIds) {
+  const map = state.examState.examSkillMap;
+  const missingIds = [...new Set(examIds)].filter(id => !(id in map));
+  if (missingIds.length === 0) return;
+
+  // Set trước null cho toàn bộ id đang cần tra, để id không có section nào
+  // (vd đề full nhiều section thuộc nhiều skill, hoặc lỗi query) không bị
+  // coi là "chưa cache" và query lại vô ích ở lần sau.
+  missingIds.forEach(id => { map[id] = null; });
+
+  try {
+    const { data, error } = await supabaseClient
+      .from('exam_sections')
+      .select('exam_id, skills ( code )')
+      .in('exam_id', missingIds);
+
+    if (error) {
+      console.error('Lỗi tải skill của đề (dropdown Dạng bài):', error);
+      return;
+    }
+
+    (data || []).forEach(sec => {
+      if (map[sec.exam_id] == null && sec.skills?.code) {
+        map[sec.exam_id] = sec.skills.code;
+      }
+    });
+  } catch (err) {
+    console.error('Lỗi không xác định khi tải skill của đề:', err);
+  }
 }
 
 // ------------------------------------------------------------
@@ -144,8 +204,14 @@ async function loadExamListWithAttempts() {
       }
     }
 
+    // Lấy skill code (cho dropdown "Dạng bài") song song với việc build
+    // attemptsByExam ở trên — không phụ thuộc nhau nên không cần await nối tiếp,
+    // nhưng để code đơn giản/dễ đọc, gọi tuần tự sau khi có examIds.
+    await ensureSkillCodeMapForExamIds(examIds);
+
     state.examState.examList = (exams || []).map(exam => ({
       ...exam,
+      skillCode: state.examState.examSkillMap[exam.id] ?? null,
       latestAttempt: attemptsByExam[exam.id] || null
     }));
   } catch (err) {
@@ -203,12 +269,18 @@ function renderPracticeTestList() {
   const zone = document.getElementById('practice-zone');
   if (!zone) return;
 
+  const { skill: skillFilter, status: statusFilter } = state.examState.filters;
+
   // Chỉ dùng cho tab "Hiện tại" — tab "History" có renderExamHistoryList()
   // riêng (dữ liệu gốc khác nhau: đây là exams + latestAttempt, History là
-  // từng exam_attempts lẻ). Áp dụng rule Bước 4 qua getPracticeCardStatus().
+  // từng exam_attempts lẻ). Áp dụng rule Bước 4 qua getPracticeCardStatus(),
+  // rồi lọc thêm theo 2 dropdown Bước 6 (Dạng bài dùng chung, Trạng thái
+  // riêng tab này).
   const list = (state.examState.examList || [])
+    .filter(exam => matchesSkillFilter(exam.exam_type, exam.skillCode, skillFilter))
     .map(exam => ({ exam, cardStatus: getPracticeCardStatus(exam) }))
-    .filter(({ cardStatus }) => cardStatus.visible);
+    .filter(({ cardStatus }) => cardStatus.visible)
+    .filter(({ cardStatus }) => statusFilter === 'all' || cardStatus.key === statusFilter);
 
   if (!list || list.length === 0) {
     zone.innerHTML = `
@@ -242,7 +314,7 @@ async function loadExamHistory() {
   try {
     let query = supabaseClient
       .from('exam_attempts')
-      .select('id, exam_id, attempt_number, status, total_score, total_possible, submitted_at, exams ( title )')
+      .select('id, exam_id, attempt_number, status, total_score, total_possible, submitted_at, exams ( title, exam_type )')
       .eq('user_id', state.currentUser.id)
       .in('status', ['submitted', 'passed', 'needs_retry'])
       .order('submitted_at', { ascending: false });
@@ -259,6 +331,9 @@ async function loadExamHistory() {
       hState.rows = [];
     } else {
       hState.rows = data || [];
+      // Đảm bảo có skill code cho dropdown "Dạng bài" (Bước 6) — chỉ query
+      // các exam_id CHƯA có trong cache examSkillMap.
+      await ensureSkillCodeMapForExamIds(hState.rows.map(r => r.exam_id));
     }
   } catch (err) {
     console.error('Lỗi không xác định khi tải lịch sử làm bài:', err);
@@ -281,11 +356,35 @@ async function applyHistoryDateFilter() {
   renderExamHistoryList();
 }
 
+// Bước 6 — đọc dropdown "Dạng bài" (dùng chung 2 tab) + "Trạng thái"
+// (chỉ có ý nghĩa ở tab "Hiện tại", input vẫn đọc bình thường ở tab
+// History nhưng không được dùng tới). KHÔNG cần refetch — dữ liệu 2 tab
+// đã có sẵn exam_type/skillCode từ lúc load, chỉ lọc lại phía client.
+function applyPracticeFilters() {
+  const skillEl = document.getElementById('practice-skill-filter');
+  const statusEl = document.getElementById('practice-status-filter');
+  state.examState.filters.skill = skillEl?.value || 'all';
+  state.examState.filters.status = statusEl?.value || 'all';
+
+  if (state.examState.activeTab === 'history') {
+    renderExamHistoryList();
+  } else {
+    renderPracticeTestList();
+  }
+}
+
 function renderExamHistoryList() {
   const zone = document.getElementById('practice-zone');
   if (!zone) return;
 
-  const rows = state.examState.historyState.rows || [];
+  const skillFilter = state.examState.filters.skill;
+
+  const rows = (state.examState.historyState.rows || [])
+    .filter(att => matchesSkillFilter(
+      att.exams?.exam_type,
+      state.examState.examSkillMap[att.exam_id] ?? null,
+      skillFilter
+    ));
 
   if (rows.length === 0) {
     zone.innerHTML = `
@@ -363,6 +462,10 @@ async function switchPracticeTab(tabKey) {
   // 2 input filter ngày chỉ có ý nghĩa ở tab History -> ẩn/hiện theo tab.
   const filterBar = document.getElementById('practice-history-filters');
   if (filterBar) filterBar.style.display = tabKey === 'history' ? 'flex' : 'none';
+
+  // Dropdown "Trạng thái" chỉ áp dụng tab "Hiện tại" (Bước 6) -> ẩn ở History.
+  const statusFilterLabel = document.getElementById('practice-status-filter-label');
+  if (statusFilterLabel) statusFilterLabel.style.display = tabKey === 'current' ? 'flex' : 'none';
 
   if (tabKey === 'history') {
     renderPracticeTestLoading();
