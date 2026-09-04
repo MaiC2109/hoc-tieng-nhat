@@ -1024,6 +1024,15 @@ body {
   margin-bottom: 12px;
 }
 
+/* .review-page-wrap dùng align-items:center (không phải stretch) nên các
+   phần tử con KHÔNG tự giãn hết chiều rộng theo mặc định — phải khai báo
+   width:100% tường minh (giống #review-zone, #exam-result-zone đã làm).
+   Thiếu dòng này khiến #practice-zone co theo nội dung, làm .exam-grid bên
+   trong mất chỗ để chia nhiều cột dù grid-template-columns đã đúng. */
+#practice-zone {
+  width: 100%;
+}
+
 /* Bước 3 — Grid nhiều cột thay cho list 1 cột cũ. Style riêng từng
    .exam-card giữ nguyên y hệt phía trên; chỉ bỏ margin-bottom cũ (vốn
    dùng để xếp dọc) vì grid đã có "gap" lo khoảng cách. */
