@@ -1755,10 +1755,14 @@ async function submitExamAttempt(opts) {
   clearSectionTimer();
 
   try {
-    // 1. Lấy toàn bộ attempt_answers đã lưu của attempt này
+    // 1. Lấy toàn bộ attempt_answers đã lưu của attempt này. Lấy thêm
+    // answered_at để giữ nguyên giá trị cũ khi upsert ở bước 2 (nếu bỏ
+    // sót cột NOT NULL này, Postgres sẽ báo lỗi ngay cả ở nhánh UPDATE
+    // của ON CONFLICT, vì candidate row vẫn phải hợp lệ trước khi so
+    // conflict).
     const { data: savedAnswers, error: answersError } = await supabaseClient
       .from('attempt_answers')
-      .select('id, question_id, selected_answer')
+      .select('id, question_id, selected_answer, answered_at')
       .eq('attempt_id', attempt.id);
 
     if (answersError) throw answersError;
@@ -1776,24 +1780,37 @@ async function submitExamAttempt(opts) {
 
     // 2. Chấm từng attempt_answers: so chuỗi trực tiếp — multiple_choice và
     // fill_blank dùng chung 1 rule (exact match), đúng như đã chốt trước đó.
+    // Trước đây update từng row 1 (loop + await tuần tự) -> N round-trip
+    // network, đề ~20-30 câu mất ~5s. Giờ gộp thành 1 lệnh upsert() duy
+    // nhất với mảng payload đầy đủ cột (khớp đúng unique constraint
+    // attempt_id+question_id mà upsertAttemptAnswer() lúc làm bài đã dùng)
+    // -> chỉ còn 1 round-trip network cho toàn bộ bước chấm điểm.
     const gradedByBankId = {}; // { question_bank_id: true/false } — dùng để tính điểm ở bước 3
-    for (const ans of (savedAnswers || [])) {
+    const answerUpdatePayload = [];
+
+    (savedAnswers || []).forEach(ans => {
       const info = questionInfoByBankId[ans.question_id];
-      if (!info) continue; // câu không còn thuộc đề (phòng hờ)
+      if (!info) return; // câu không còn thuộc đề (phòng hờ)
 
       const isCorrect = ans.selected_answer != null && ans.selected_answer === info.correctAnswer;
       gradedByBankId[ans.question_id] = isCorrect;
 
-      // Update từng row — Supabase không hỗ trợ update nhiều giá trị is_correct
-      // khác nhau trong 1 câu lệnh duy nhất nên phải loop, chấp nhận được ở
-      // quy mô đề thi hiện tại (vài chục câu).
-      const { error: updateError } = await supabaseClient
-        .from('attempt_answers')
-        .update({ is_correct: isCorrect })
-        .eq('id', ans.id);
+      answerUpdatePayload.push({
+        attempt_id: attempt.id,
+        question_id: ans.question_id,
+        selected_answer: ans.selected_answer,
+        answered_at: ans.answered_at,
+        is_correct: isCorrect
+      });
+    });
 
-      if (updateError) {
-        console.error('Lỗi cập nhật is_correct cho câu trả lời:', ans.id, updateError);
+    if (answerUpdatePayload.length > 0) {
+      const { error: bulkUpdateError } = await supabaseClient
+        .from('attempt_answers')
+        .upsert(answerUpdatePayload, { onConflict: 'attempt_id,question_id' });
+
+      if (bulkUpdateError) {
+        console.error('Lỗi cập nhật is_correct hàng loạt:', bulkUpdateError);
       }
     }
 
