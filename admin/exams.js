@@ -60,7 +60,7 @@ async function loadExamsSection() {
 async function loadExamAdminList() {
   const tbody = document.getElementById('exam-table-body');
   if (!tbody) return;
-  tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state">Đang tải dữ liệu...</div></td></tr>';
+  tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state">Đang tải dữ liệu...</div></td></tr>';
 
   try {
     const headers = await sbAuthedHeaders();
@@ -69,7 +69,7 @@ async function loadExamAdminList() {
     // để đếm "Số section" theo từng đề ở phía client (số lượng đề thi ở quy
     // mô 1 giáo viên quản lý là nhỏ, chưa cần RPC/aggregate riêng).
     const [examsRes, sectionsRes] = await Promise.all([
-      fetch(`${ADMIN_CONFIG.supabaseUrl}/rest/v1/exams?select=id,title,exam_type,pass_threshold_pct,retry_disabled,is_published,created_at&order=created_at.desc`, { headers }),
+      fetch(`${ADMIN_CONFIG.supabaseUrl}/rest/v1/exams?select=id,title,exam_type,pass_threshold_pct,retry_disabled,is_published,available_from,created_at&order=created_at.desc`, { headers }),
       fetch(`${ADMIN_CONFIG.supabaseUrl}/rest/v1/exam_sections?select=exam_id`, { headers })
     ]);
 
@@ -88,7 +88,7 @@ async function loadExamAdminList() {
     renderExamAdminTable(exams, sectionCountByExam);
   } catch (err) {
     console.error('Lỗi tải danh sách đề thi:', err);
-    tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state">Có lỗi khi tải danh sách đề thi.</div></td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state">Có lỗi khi tải danh sách đề thi.</div></td></tr>';
   }
 }
 
@@ -346,7 +346,7 @@ function renderExamAdminTable(exams, sectionCountByExam) {
   if (!tbody) return;
 
   if (!exams.length) {
-    tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state">Chưa có đề thi nào. Bấm "Tạo đề mới" để bắt đầu.</div></td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state">Chưa có đề thi nào. Bấm "Tạo đề mới" để bắt đầu.</div></td></tr>';
     return;
   }
 
@@ -361,6 +361,7 @@ function renderExamAdminTable(exams, sectionCountByExam) {
       </td>
       <td style="text-align:center;">${sectionCountByExam[exam.id] || 0}</td>
       <td>${formatDateVN(exam.created_at)}</td>
+      <td>${exam.available_from ? formatDateVN(exam.available_from) : 'Ngay khi Publish'}</td>
       <td style="text-align:right;">
         <button type="button" class="admin-row-action-btn" title="Sửa đề thi"
           onclick="event.stopPropagation(); openExamForm(examAdminState.rows.find(r => r.id === '${escHtml(exam.id)}'))">
@@ -1260,6 +1261,8 @@ function resetExamForm() {
   document.getElementById('exam-form-error').textContent = '';
   document.getElementById('exam-pass-threshold').value = 70;
   document.getElementById('exam-retry-disabled').checked = false;
+  const availableFromEl = document.getElementById('exam-available-from');
+  if (availableFromEl) availableFromEl.value = '';
 }
 
 function populateExamFormFromRow(row) {
@@ -1267,6 +1270,10 @@ function populateExamFormFromRow(row) {
   document.getElementById('exam-type').value = row.exam_type || 'full';
   document.getElementById('exam-pass-threshold').value = row.pass_threshold_pct ?? 70;
   document.getElementById('exam-retry-disabled').checked = row.retry_disabled === true;
+  // available_from là date (yyyy-mm-dd) từ Postgres -> khớp thẳng với input type="date",
+  // không cần format lại. null/undefined -> để trống (hiện ngay).
+  const availableFromEl = document.getElementById('exam-available-from');
+  if (availableFromEl) availableFromEl.value = row.available_from || '';
 }
 
 // row = null -> mode TẠO MỚI. Truyền row (từ examAdminState.rows) -> mode SỬA.
@@ -1314,6 +1321,10 @@ async function submitExamForm(e) {
   const examType = document.getElementById('exam-type').value;
   const passThreshold = parseInt(document.getElementById('exam-pass-threshold').value, 10);
   const retryDisabled = document.getElementById('exam-retry-disabled').checked;
+  // Input type="date" trả về '' khi để trống -> chuyển thành null để lưu
+  // "hiện ngay" (không giới hạn ngày mở khóa) đúng theo yêu cầu.
+  const availableFromRaw = document.getElementById('exam-available-from')?.value || '';
+  const availableFrom = availableFromRaw || null;
 
   if (!title) {
     errorEl.textContent = 'Vui lòng nhập tên đề thi.';
@@ -1345,6 +1356,7 @@ async function submitExamForm(e) {
       pass_threshold_pct: passThreshold,
       retry_disabled: retryDisabled,
       is_published: isPublished,
+      available_from: availableFrom,
       updated_at: new Date().toISOString()
     };
     // created_by chỉ set lúc tạo mới — không đụng vào khi sửa đề đã có.

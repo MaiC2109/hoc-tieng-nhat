@@ -2577,6 +2577,22 @@ function applyExplanationMarkdown(marker) {
   textarea.setSelectionRange(cursorStart, cursorEnd);
 }
 
+// Textarea thường không tự có phím tắt Ctrl+B/Ctrl+I như contenteditable
+// (#question-text được trình duyệt hỗ trợ sẵn qua execCommand). Bắt sự
+// kiện keydown thủ công để #question-explanation có trải nghiệm tương tự.
+function handleExplanationKeydown(e) {
+  const isModifierPressed = e.ctrlKey || e.metaKey; // metaKey = Cmd trên Mac
+  if (!isModifierPressed) return;
+
+  if (e.key === 'b' || e.key === 'B') {
+    e.preventDefault();
+    applyExplanationMarkdown('**');
+  } else if (e.key === 'i' || e.key === 'I') {
+    e.preventDefault();
+    applyExplanationMarkdown('*');
+  }
+}
+
 // ── Upload audio lên Supabase Storage (bucket exam-audio) ────────────────
 // Dùng thẳng supabaseClient.storage (client đã khởi tạo sẵn trong
 // admin.js) thay vì tự gọi fetch REST — đây là cách chuẩn của supabase-js
@@ -2655,6 +2671,7 @@ function initQuestionFormControls() {
 
   document.getElementById('question-explanation-bold-btn')?.addEventListener('click', () => applyExplanationMarkdown('**'));
   document.getElementById('question-explanation-italic-btn')?.addEventListener('click', () => applyExplanationMarkdown('*'));
+  document.getElementById('question-explanation')?.addEventListener('keydown', handleExplanationKeydown);
 
   document.getElementById('question-text-image-btn')?.addEventListener('click', () => {
     document.getElementById('question-text-image-file')?.click();
