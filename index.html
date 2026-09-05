@@ -192,11 +192,69 @@
     </div>
 
     <div class="section-panel" id="section-practice">
-      <div class="review-page-wrap">
+      <div class="review-page-wrap practice-page-wrap">
         <div class="review-page-header">
           <h2>📝 Luyện đề</h2>
           <p>Chọn một đề thi để bắt đầu hoặc tiếp tục làm bài.</p>
         </div>
+
+        <!-- 2 tab "Hiện tại"/"History" — switchPracticeTab() trong exam.js.
+             Tab "Hiện tại": lọc theo getPracticeCardStatus() (Bước 4).
+             Tab "History": load riêng qua loadExamHistory() (Bước 5). -->
+        <div class="practice-tabs-bar" style="display:flex; gap:8px; margin:14px 0;">
+          <button type="button" class="practice-tab-btn active" data-practice-tab="current" onclick="switchPracticeTab('current')"
+            style="padding:8px 16px; border-radius:20px; border:1px solid var(--border-md); background:var(--ink); color:#fff; cursor:pointer; font-size:13px; font-weight:600;">
+            Hiện tại
+          </button>
+          <button type="button" class="practice-tab-btn" data-practice-tab="history" onclick="switchPracticeTab('history')"
+            style="padding:8px 16px; border-radius:20px; border:1px solid var(--border-md); background:transparent; color:var(--ink); cursor:pointer; font-size:13px; font-weight:600;">
+            History
+          </button>
+        </div>
+
+        <!-- Bước 6 — "Dạng bài" dùng chung cả 2 tab, "Trạng thái" chỉ tab
+             "Hiện tại" (ẩn/hiện qua switchPracticeTab()/openPracticeTest()
+             trong exam.js). onchange gọi applyPracticeFilters() — không
+             refetch, chỉ lọc lại phía client trên dữ liệu đã load. -->
+        <div class="practice-filters-bar" style="display:flex; gap:10px; align-items:center; margin-bottom:14px; flex-wrap:wrap;">
+          <label style="font-size:13px; color:var(--ink-mute); display:flex; align-items:center; gap:6px;">
+            Dạng bài
+            <select id="practice-skill-filter" class="admin-select" style="width:auto;" onchange="applyPracticeFilters()">
+              <option value="all">Tất cả</option>
+              <option value="vocab">Từ vựng</option>
+              <option value="kanji">Kanji</option>
+              <option value="grammar">Ngữ pháp</option>
+              <option value="reading">Đọc hiểu</option>
+              <option value="listening">Nghe hiểu</option>
+              <option value="full">Đề tổng hợp (Full)</option>
+            </select>
+          </label>
+
+          <label id="practice-status-filter-label" style="font-size:13px; color:var(--ink-mute); display:flex; align-items:center; gap:6px;">
+            Trạng thái
+            <select id="practice-status-filter" class="admin-select" style="width:auto;" onchange="applyPracticeFilters()">
+              <option value="all">Tất cả</option>
+              <option value="new">Chưa làm</option>
+              <option value="in_progress">Đang làm dở</option>
+              <option value="due_retry">Đến hạn làm lại</option>
+            </select>
+          </label>
+        </div>
+
+        <!-- Bước 5 — filter khoảng ngày theo submitted_at, chỉ áp dụng cho
+             tab History -> ẩn mặc định, switchPracticeTab() trong exam.js
+             toggle display khi đổi tab. onchange gọi applyHistoryDateFilter(). -->
+        <div class="practice-history-filters" id="practice-history-filters" style="display:none; gap:10px; align-items:center; margin-bottom:14px; flex-wrap:wrap;">
+          <label style="font-size:13px; color:var(--ink-mute); display:flex; align-items:center; gap:6px;">
+            Từ ngày
+            <input type="date" id="practice-history-date-from" class="admin-select" style="width:auto;" onchange="applyHistoryDateFilter()" />
+          </label>
+          <label style="font-size:13px; color:var(--ink-mute); display:flex; align-items:center; gap:6px;">
+            Đến ngày
+            <input type="date" id="practice-history-date-to" class="admin-select" style="width:auto;" onchange="applyHistoryDateFilter()" />
+          </label>
+        </div>
+
         <div id="practice-zone"></div>
       </div>
     </div>

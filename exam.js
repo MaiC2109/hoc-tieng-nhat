@@ -26,6 +26,22 @@ const SKILL_CODE_LABELS = {
 state.examState = state.examState || {
   examList: [],       // danh sách đề đã join với attempt gần nhất của user
   isLoading: false,
+  activeTab: 'current', // 'current' | 'history' — tab đang chọn ở màn Luyện đề
+  filters: {
+    skill: 'all',   // 'all' | 'vocab' | 'kanji' | 'grammar' | 'reading' | 'listening' | 'full' — dùng chung 2 tab
+    status: 'all'   // 'all' | 'new' | 'in_progress' | 'due_retry' — chỉ áp dụng tab "Hiện tại"
+  },
+  // Cache examId -> skill code (khớp skills.code) cho đề exam_type='skill'.
+  // null = đề full hoặc chưa xác định được. Dùng chung cho cả 2 tab để
+  // không phải query lại exam_sections mỗi lần đổi filter/đổi tab.
+  examSkillMap: {},
+  historyState: {
+    rows: [],          // exam_attempts đã nộp (submitted/passed/needs_retry), join tên đề
+    isLoading: false,
+    dateFrom: '',       // filter theo submitted_at, 'YYYY-MM-DD' hoặc '' = không giới hạn
+    dateTo: '',
+    expandedExamId: null // examId đang xem chi tiết (list tất cả lần làm) — null = đang ở danh sách gộp theo đề
+  },
   currentAttempt: null,          // exam_attempts row đang làm (sau khi bấm Bắt đầu/Tiếp tục)
   currentExamStructure: null,    // cây sections -> subsections -> questions của đề đang làm
   activeSectionIndex: 0,         // section đang active trong cây trên
@@ -54,9 +70,74 @@ async function openPracticeTest() {
     return;
   }
 
+  // Luôn quay về tab "Hiện tại" mỗi lần vào lại màn Luyện đề (kể cả khi
+  // lần trước đang ở tab History) — đồng bộ cả state lẫn UI 2 nút tab,
+  // tránh lệch giữa nội dung render (current) và nút đang bôi đen (history).
+  state.examState.activeTab = 'current';
+  document.querySelectorAll('.practice-tab-btn').forEach(btn => {
+    const isActive = btn.dataset.practiceTab === 'current';
+    btn.classList.toggle('active', isActive);
+    btn.style.background = isActive ? 'var(--ink)' : 'transparent';
+    btn.style.color = isActive ? '#fff' : 'var(--ink)';
+  });
+  const filterBar = document.getElementById('practice-history-filters');
+  if (filterBar) filterBar.style.display = 'none';
+  const statusFilterLabel = document.getElementById('practice-status-filter-label');
+  if (statusFilterLabel) statusFilterLabel.style.display = 'flex';
+
   renderPracticeTestLoading();
   await loadExamListWithAttempts();
   renderPracticeTestList();
+}
+
+// ------------------------------------------------------------
+// Bước 6 — dropdown "Dạng bài", dùng chung cho cả tab "Hiện tại" lẫn
+// "History". Rule lọc:
+// - 'all'  -> không lọc thêm
+// - 'full' -> chỉ exam_type='full' (KHÔNG xét skill_id bên trong)
+// - 1 skill code cụ thể -> CHỈ exam_type='skill' VÀ skill của section
+//   duy nhất bên trong khớp code đó. Đề full có chứa section cùng skill
+//   vẫn KHÔNG hiện (theo đúng yêu cầu).
+// ------------------------------------------------------------
+function matchesSkillFilter(examType, skillCode, filterValue) {
+  if (!filterValue || filterValue === 'all') return true;
+  if (filterValue === 'full') return examType === 'full';
+  return examType === 'skill' && skillCode === filterValue;
+}
+
+// Đảm bảo state.examState.examSkillMap có sẵn skill code cho từng examId
+// truyền vào (chỉ query các id CHƯA có trong cache — tránh query lại khi
+// đổi tab/đổi filter). Đề 'skill' theo đúng ràng buộc nghiệp vụ chỉ có
+// đúng 1 section, nên lấy skill của section đầu tiên tìm thấy là đủ.
+async function ensureSkillCodeMapForExamIds(examIds) {
+  const map = state.examState.examSkillMap;
+  const missingIds = [...new Set(examIds)].filter(id => !(id in map));
+  if (missingIds.length === 0) return;
+
+  // Set trước null cho toàn bộ id đang cần tra, để id không có section nào
+  // (vd đề full nhiều section thuộc nhiều skill, hoặc lỗi query) không bị
+  // coi là "chưa cache" và query lại vô ích ở lần sau.
+  missingIds.forEach(id => { map[id] = null; });
+
+  try {
+    const { data, error } = await supabaseClient
+      .from('exam_sections')
+      .select('exam_id, skills ( code )')
+      .in('exam_id', missingIds);
+
+    if (error) {
+      console.error('Lỗi tải skill của đề (dropdown Dạng bài):', error);
+      return;
+    }
+
+    (data || []).forEach(sec => {
+      if (map[sec.exam_id] == null && sec.skills?.code) {
+        map[sec.exam_id] = sec.skills.code;
+      }
+    });
+  } catch (err) {
+    console.error('Lỗi không xác định khi tải skill của đề:', err);
+  }
 }
 
 // ------------------------------------------------------------
@@ -72,10 +153,16 @@ async function loadExamListWithAttempts() {
   }
 
   try {
+    // Chỉ lấy đề đã publish VÀ (chưa đặt ngày mở khóa HOẶC ngày mở khóa
+    // đã tới) — dùng _srToday() (đã có sẵn trong app.js) cho nhất quán
+    // định dạng 'YYYY-MM-DD' với cột date của Postgres.
+    const todayStr = _srToday();
+
     const { data: exams, error: examsError } = await supabaseClient
       .from('exams')
-      .select('id, title, exam_type, pass_threshold_pct, retry_disabled')
+      .select('id, title, exam_type, pass_threshold_pct, retry_disabled, available_from')
       .eq('is_published', true)
+      .or(`available_from.is.null,available_from.lte.${todayStr}`)
       .order('created_at', { ascending: false });
 
     if (examsError) {
@@ -91,7 +178,7 @@ async function loadExamListWithAttempts() {
     if (examIds.length > 0) {
       const { data: attempts, error: attemptsError } = await supabaseClient
         .from('exam_attempts')
-        .select('id, exam_id, attempt_number, status, total_score, total_possible, submitted_at, started_at')
+        .select('id, exam_id, attempt_number, status, total_score, total_possible, submitted_at, started_at, next_retry_date')
         .eq('user_id', state.currentUser.id)
         .in('exam_id', examIds)
         .order('attempt_number', { ascending: false });
@@ -118,8 +205,14 @@ async function loadExamListWithAttempts() {
       }
     }
 
+    // Lấy skill code (cho dropdown "Dạng bài") song song với việc build
+    // attemptsByExam ở trên — không phụ thuộc nhau nên không cần await nối tiếp,
+    // nhưng để code đơn giản/dễ đọc, gọi tuần tự sau khi có examIds.
+    await ensureSkillCodeMapForExamIds(examIds);
+
     state.examState.examList = (exams || []).map(exam => ({
       ...exam,
+      skillCode: state.examState.examSkillMap[exam.id] ?? null,
       latestAttempt: attemptsByExam[exam.id] || null
     }));
   } catch (err) {
@@ -128,6 +221,32 @@ async function loadExamListWithAttempts() {
   }
 
   state.examState.isLoading = false;
+}
+
+// ------------------------------------------------------------
+// Bước 4 — quyết định trạng thái hiển thị của 1 đề trên tab "Hiện tại",
+// dựa vào latestAttempt (đã join sẵn ở loadExamListWithAttempts()).
+// Trả về:
+//   { visible: false }                                -> ẩn khỏi tab "Hiện tại"
+//   { visible: true, key: 'new'|'in_progress'|'due_retry' }
+// key 'due_retry' KHÁC với status thô 'needs_retry' trong DB: nó đã tính
+// thêm điều kiện next_retry_date <= hôm nay, áp dụng cho cả 3 status đã
+// nộp (submitted/passed/needs_retry) — không chỉ riêng needs_retry.
+// ------------------------------------------------------------
+function getPracticeCardStatus(exam) {
+  const attempt = exam.latestAttempt;
+
+  if (!attempt) return { visible: true, key: 'new' };
+  if (attempt.status === 'in_progress') return { visible: true, key: 'in_progress' };
+
+  // submitted / passed / needs_retry -> chỉ hiện ở tab "Hiện tại" nếu đã
+  // đến hạn làm lại. Không có next_retry_date (null) hoặc còn ở tương lai
+  // -> coi như "đã xong việc" với đề này, ẩn khỏi tab "Hiện tại".
+  const todayStr = _srToday();
+  const nextRetry = attempt.next_retry_date;
+  if (nextRetry && nextRetry <= todayStr) return { visible: true, key: 'due_retry' };
+
+  return { visible: false };
 }
 
 // ------------------------------------------------------------
@@ -151,7 +270,18 @@ function renderPracticeTestList() {
   const zone = document.getElementById('practice-zone');
   if (!zone) return;
 
-  const list = state.examState.examList;
+  const { skill: skillFilter, status: statusFilter } = state.examState.filters;
+
+  // Chỉ dùng cho tab "Hiện tại" — tab "History" có renderExamHistoryList()
+  // riêng (dữ liệu gốc khác nhau: đây là exams + latestAttempt, History là
+  // từng exam_attempts lẻ). Áp dụng rule Bước 4 qua getPracticeCardStatus(),
+  // rồi lọc thêm theo 2 dropdown Bước 6 (Dạng bài dùng chung, Trạng thái
+  // riêng tab này).
+  const list = (state.examState.examList || [])
+    .filter(exam => matchesSkillFilter(exam.exam_type, exam.skillCode, skillFilter))
+    .map(exam => ({ exam, cardStatus: getPracticeCardStatus(exam) }))
+    .filter(({ cardStatus }) => cardStatus.visible)
+    .filter(({ cardStatus }) => statusFilter === 'all' || cardStatus.key === statusFilter);
 
   if (!list || list.length === 0) {
     zone.innerHTML = `
@@ -164,17 +294,304 @@ function renderPracticeTestList() {
     return;
   }
 
-  zone.innerHTML = list.map(exam => renderExamCard(exam)).join('');
+  zone.innerHTML = `<div class="exam-grid">${list.map(({ exam, cardStatus }) => renderExamCard(exam, cardStatus)).join('')}</div>`;
 }
 
-function renderExamCard(exam) {
+// ------------------------------------------------------------
+// Bước 5 — Tab "History": TOÀN BỘ exam_attempts đã nộp của user hiện tại
+// (không chỉ attempt mới nhất mỗi đề như tab "Hiện tại"), lọc theo
+// khoảng ngày submitted_at nếu có chọn filter.
+// ------------------------------------------------------------
+async function loadExamHistory() {
+  const hState = state.examState.historyState;
+  hState.isLoading = true;
+
+  if (!state.currentUser) {
+    hState.rows = [];
+    hState.isLoading = false;
+    return;
+  }
+
+  try {
+    let query = supabaseClient
+      .from('exam_attempts')
+      .select('id, exam_id, attempt_number, status, total_score, total_possible, submitted_at, exams ( title, exam_type )')
+      .eq('user_id', state.currentUser.id)
+      .in('status', ['submitted', 'passed', 'needs_retry'])
+      .order('submitted_at', { ascending: false });
+
+    // Input type="date" trả về 'YYYY-MM-DD' -> ghép giờ đầu/cuối ngày để
+    // lọc trọn vẹn cả ngày đã chọn trên cột submitted_at (timestamptz).
+    if (hState.dateFrom) query = query.gte('submitted_at', `${hState.dateFrom}T00:00:00`);
+    if (hState.dateTo) query = query.lte('submitted_at', `${hState.dateTo}T23:59:59`);
+
+    const { data, error } = await query;
+
+    if (error) {
+      console.error('Lỗi tải lịch sử làm bài:', error);
+      hState.rows = [];
+    } else {
+      hState.rows = data || [];
+      // Đảm bảo có skill code cho dropdown "Dạng bài" (Bước 6) — chỉ query
+      // các exam_id CHƯA có trong cache examSkillMap.
+      await ensureSkillCodeMapForExamIds(hState.rows.map(r => r.exam_id));
+    }
+  } catch (err) {
+    console.error('Lỗi không xác định khi tải lịch sử làm bài:', err);
+    hState.rows = [];
+  }
+
+  hState.isLoading = false;
+}
+
+// Đọc giá trị 2 input date filter -> lưu vào state -> tải + render lại.
+// Gắn qua onchange trên input, xem index.html.
+async function applyHistoryDateFilter() {
+  const fromEl = document.getElementById('practice-history-date-from');
+  const toEl = document.getElementById('practice-history-date-to');
+  state.examState.historyState.dateFrom = fromEl?.value || '';
+  state.examState.historyState.dateTo = toEl?.value || '';
+  state.examState.historyState.expandedExamId = null; // quay về danh sách gộp sau khi đổi filter ngày
+
+  renderPracticeTestLoading();
+  await loadExamHistory();
+  renderExamHistoryList();
+}
+
+// Bước 6 — đọc dropdown "Dạng bài" (dùng chung 2 tab) + "Trạng thái"
+// (chỉ có ý nghĩa ở tab "Hiện tại", input vẫn đọc bình thường ở tab
+// History nhưng không được dùng tới). KHÔNG cần refetch — dữ liệu 2 tab
+// đã có sẵn exam_type/skillCode từ lúc load, chỉ lọc lại phía client.
+function applyPracticeFilters() {
+  const skillEl = document.getElementById('practice-skill-filter');
+  const statusEl = document.getElementById('practice-status-filter');
+  state.examState.filters.skill = skillEl?.value || 'all';
+  state.examState.filters.status = statusEl?.value || 'all';
+
+  if (state.examState.activeTab === 'history') {
+    renderExamHistoryList();
+  } else {
+    renderPracticeTestList();
+  }
+}
+
+// ------------------------------------------------------------
+// Tab "History" — mặc định hiện DANH SÁCH GỘP THEO ĐỀ (1 card/đề, kể cả
+// đề có nhiều lần làm), không liệt kê từng attempt ra ngay. Click vào 1
+// card -> xem chi tiết toàn bộ các lần làm của đúng đề đó (renderExamHistoryDetail).
+// ------------------------------------------------------------
+function renderExamHistoryList() {
+  const zone = document.getElementById('practice-zone');
+  if (!zone) return;
+
+  const skillFilter = state.examState.filters.skill;
+
+  const filteredRows = (state.examState.historyState.rows || [])
+    .filter(att => matchesSkillFilter(
+      att.exams?.exam_type,
+      state.examState.examSkillMap[att.exam_id] ?? null,
+      skillFilter
+    ));
+
+  // Đang xem chi tiết 1 đề cụ thể -> render list attempt của riêng đề đó.
+  if (state.examState.historyState.expandedExamId) {
+    renderExamHistoryDetail(state.examState.historyState.expandedExamId, filteredRows);
+    return;
+  }
+
+  if (filteredRows.length === 0) {
+    zone.innerHTML = `
+      <div class="empty-state" style="text-align:center; padding:40px 20px;">
+        <div style="font-size:40px; margin-bottom:10px;">🗂️</div>
+        <div style="font-weight:600; color:var(--ink);">Chưa có lịch sử làm bài</div>
+        <div style="color:var(--ink-mute); margin-top:6px; font-size:13px;">Các đề đã nộp sẽ xuất hiện ở đây.</div>
+      </div>
+    `;
+    return;
+  }
+
+  // Gộp theo exam_id — filteredRows đã order theo submitted_at desc từ
+  // loadExamHistory() nên phần tử đầu tiên gặp mỗi exam_id chính là lần
+  // làm gần nhất, không cần sort lại.
+  const groupsByExam = {};
+  filteredRows.forEach(att => {
+    if (!groupsByExam[att.exam_id]) {
+      groupsByExam[att.exam_id] = {
+        examId: att.exam_id,
+        examTitle: att.exams?.title || 'Đề thi',
+        attempts: []
+      };
+    }
+    groupsByExam[att.exam_id].attempts.push(att);
+  });
+  const groups = Object.values(groupsByExam);
+
+  zone.innerHTML = `<div class="exam-grid">${groups.map(g => renderExamHistoryGroupCard(g)).join('')}</div>`;
+}
+
+// Card đại diện 1 đề trong danh sách gộp — hiện thông tin lần làm gần
+// nhất + số lần đã làm, KHÔNG có nút Xem lại/Làm lại trực tiếp (vì có
+// thể có nhiều attempt, click vào card để chọn đúng lần làm cần thao tác).
+function renderExamHistoryGroupCard(group) {
+  const latest = group.attempts[0];
+  const scoreText = (latest.total_score != null && latest.total_possible != null)
+    ? `${latest.total_score}/${latest.total_possible}`
+    : '—';
+  const submittedText = latest.submitted_at
+    ? new Date(latest.submitted_at).toLocaleDateString('vi-VN')
+    : '—';
+  const isPassed = latest.status === 'passed';
+  const badgeCls = isPassed ? 'exam-status-passed' : 'exam-status-retry';
+  const badgeLabel = isPassed ? 'Đạt' : 'Chưa đạt';
+  const countText = group.attempts.length > 1
+    ? `Đã làm ${group.attempts.length} lần`
+    : 'Đã làm 1 lần';
+
+  return `
+    <div class="exam-card" style="cursor:pointer;" onclick="openExamHistoryDetail('${group.examId}')">
+      <div class="exam-card-info">
+        <div class="exam-card-title">${group.examTitle}</div>
+        <div class="exam-card-meta">
+          <span>${countText}</span>
+          <span>·</span>
+          <span>Gần nhất: ${submittedText}</span>
+        </div>
+        <div class="exam-card-status-row">
+          <span class="exam-status-badge ${badgeCls}">${badgeLabel} (lần gần nhất)</span>
+          <span class="exam-score-text">${scoreText} điểm</span>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function openExamHistoryDetail(examId) {
+  state.examState.historyState.expandedExamId = examId;
+  renderExamHistoryList();
+}
+
+function closeExamHistoryDetail() {
+  state.examState.historyState.expandedExamId = null;
+  renderExamHistoryList();
+}
+
+// Chi tiết 1 đề — liệt kê TOÀN BỘ attempt của đề đó (filteredRows đã lọc
+// sẵn theo dropdown "Dạng bài"), mỗi attempt vẫn dùng renderExamHistoryCard()
+// cũ (đủ nút Xem lại/Làm lại riêng từng lần) — không viết lại logic card.
+function renderExamHistoryDetail(examId, filteredRows) {
+  const zone = document.getElementById('practice-zone');
+  if (!zone) return;
+
+  const attempts = filteredRows.filter(att => att.exam_id === examId);
+  const examTitle = attempts[0]?.exams?.title || 'Đề thi';
+
+  if (attempts.length === 0) {
+    // Đề vừa xem đã bị lọc mất do đổi dropdown "Dạng bài" -> quay lại danh sách gộp.
+    closeExamHistoryDetail();
+    return;
+  }
+
+  zone.innerHTML = `
+    <div style="width:100%;">
+      <button type="button" class="btn btn-outline" onclick="closeExamHistoryDetail()" style="margin-bottom:16px;">
+        ← Quay lại danh sách
+      </button>
+      <h3 style="margin-bottom:14px; color:var(--ink); font-size:16px;">${examTitle} — ${attempts.length} lần làm</h3>
+      <div class="exam-grid">${attempts.map(att => renderExamHistoryCard(att)).join('')}</div>
+    </div>
+  `;
+}
+
+// Card riêng cho tab History — khác renderExamCard() (Bước 4) vì dữ liệu
+// gốc là 1 attempt cụ thể (không phải 1 đề + attempt mới nhất), và badge
+// chỉ có 2 trạng thái Đạt/Chưa đạt thay vì 3-4 trạng thái như tab "Hiện tại".
+function renderExamHistoryCard(attempt) {
+  const examTitle = attempt.exams?.title || 'Đề thi';
+  const scoreText = (attempt.total_score != null && attempt.total_possible != null)
+    ? `${attempt.total_score}/${attempt.total_possible}`
+    : '—';
+  const submittedText = attempt.submitted_at
+    ? new Date(attempt.submitted_at).toLocaleDateString('vi-VN')
+    : '—';
+
+  // status='passed' -> Đạt; submitted/needs_retry -> Chưa đạt (theo đúng
+  // yêu cầu Bước 5, không tính lại theo pass_threshold_pct).
+  const isPassed = attempt.status === 'passed';
+  const badgeCls = isPassed ? 'exam-status-passed' : 'exam-status-retry';
+  const badgeLabel = isPassed ? 'Đạt' : 'Chưa đạt';
+
+  return `
+    <div class="exam-card">
+      <div class="exam-card-info">
+        <div class="exam-card-title">${examTitle}</div>
+        <div class="exam-card-meta">
+          <span>Nộp ngày: ${submittedText}</span>
+        </div>
+        <div class="exam-card-status-row">
+          <span class="exam-status-badge ${badgeCls}">${badgeLabel}</span>
+          <span class="exam-score-text">${scoreText} điểm</span>
+        </div>
+      </div>
+      <div class="exam-card-actions">
+        <button class="btn btn-outline" onclick="viewExamAttemptResult('${attempt.id}')">
+          Xem lại
+        </button>
+        <button class="btn btn-primary" onclick="startExamAttempt('${attempt.exam_id}')">
+          Làm lại
+        </button>
+      </div>
+    </div>
+  `;
+}
+
+// ------------------------------------------------------------
+// Bước 3 — khung sườn 2 tab "Hiện tại" / "History" cho tab Luyện đề.
+// Bước 4: tab "Hiện tại" đã có logic lọc thật qua getPracticeCardStatus().
+// Bước 5: tab "History" đã có logic thật qua loadExamHistory() — tải lại
+// MỖI LẦN chuyển sang tab này (đảm bảo phản ánh đúng filter ngày hiện tại,
+// đơn giản hơn cache lại kết quả cũ).
+// ------------------------------------------------------------
+async function switchPracticeTab(tabKey) {
+  state.examState.activeTab = tabKey;
+
+  document.querySelectorAll('.practice-tab-btn').forEach(btn => {
+    const isActive = btn.dataset.practiceTab === tabKey;
+    btn.classList.toggle('active', isActive);
+    btn.style.background = isActive ? 'var(--ink)' : 'transparent';
+    btn.style.color = isActive ? '#fff' : 'var(--ink)';
+  });
+
+  // 2 input filter ngày chỉ có ý nghĩa ở tab History -> ẩn/hiện theo tab.
+  const filterBar = document.getElementById('practice-history-filters');
+  if (filterBar) filterBar.style.display = tabKey === 'history' ? 'flex' : 'none';
+
+  // Dropdown "Trạng thái" chỉ áp dụng tab "Hiện tại" (Bước 6) -> ẩn ở History.
+  const statusFilterLabel = document.getElementById('practice-status-filter-label');
+  if (statusFilterLabel) statusFilterLabel.style.display = tabKey === 'current' ? 'flex' : 'none';
+
+  if (tabKey === 'history') {
+    state.examState.historyState.expandedExamId = null; // luôn mở lại từ danh sách gộp, không giữ chi tiết đề lần trước
+    renderPracticeTestLoading();
+    await loadExamHistory();
+    renderExamHistoryList();
+  } else {
+    renderPracticeTestList();
+  }
+}
+
+// cardStatus: kết quả từ getPracticeCardStatus(exam), chỉ truyền khi render
+// ở tab "Hiện tại" (Bước 4). Khi gọi từ tab "History" (chưa có logic riêng,
+// xem renderPracticeTestList()) hoặc từ nơi khác chưa cập nhật, cardStatus
+// undefined -> tự tính lại bằng getPracticeCardStatus() để không vỡ code cũ.
+function renderExamCard(exam, cardStatus) {
   const attempt = exam.latestAttempt;
   const examTypeLabel = exam.exam_type === 'full' ? 'Đề tổng hợp' : 'Đề theo kỹ năng';
+  const status = cardStatus || getPracticeCardStatus(exam);
 
   let statusHtml = '';
   let actionsHtml = '';
 
-  if (!attempt) {
+  if (status.key === 'new') {
     // Chưa có attempt nào -> "Chưa làm"
     statusHtml = `<span class="exam-status-badge exam-status-new">Chưa làm</span>`;
     actionsHtml = `
@@ -182,15 +599,36 @@ function renderExamCard(exam) {
         Bắt đầu
       </button>
     `;
-  } else if (attempt.status === 'in_progress') {
+  } else if (status.key === 'in_progress') {
     statusHtml = `<span class="exam-status-badge exam-status-progress">Đang làm dở</span>`;
     actionsHtml = `
       <button class="btn btn-primary" onclick="continueExamAttempt('${attempt.id}')">
         Tiếp tục làm bài
       </button>
     `;
+  } else if (status.key === 'due_retry') {
+    // Đã nộp (submitted/passed/needs_retry) VÀ next_retry_date <= hôm nay
+    // -> "Đến hạn làm lại" (badge xanh dương), bất kể status thô là gì.
+    const scoreText = (attempt.total_score != null && attempt.total_possible != null)
+      ? `${attempt.total_score}/${attempt.total_possible}`
+      : '—';
+
+    statusHtml = `
+      <span class="exam-status-badge exam-status-due-retry">Đến hạn làm lại</span>
+      <span class="exam-score-text">${scoreText} điểm</span>
+    `;
+    actionsHtml = `
+      <button class="btn btn-outline" onclick="viewExamAttemptResult('${attempt.id}')">
+        Xem lại
+      </button>
+      <button class="btn btn-primary" onclick="startExamAttempt('${exam.id}')">
+        Làm lại
+      </button>
+    `;
   } else {
-    // submitted / passed / needs_retry -> hiện điểm gần nhất
+    // Fallback — dùng khi render ở tab "History" (chưa lọc theo status.key ở
+    // trên) cho các attempt đã nộp nhưng chưa/không đến hạn làm lại. Giữ
+    // nguyên logic hiển thị cũ (label/màu theo đúng status thô trong DB).
     const scoreText = (attempt.total_score != null && attempt.total_possible != null)
       ? `${attempt.total_score}/${attempt.total_possible}`
       : '—';
