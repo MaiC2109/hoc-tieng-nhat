@@ -1793,6 +1793,16 @@ body {
   justify-content: center;
 }
 
+/* Trạng thái "Đang nộp bài..." — .btn chưa có style disabled nào trước
+   đó (chỉ dựa vào thuộc tính HTML disabled, không có phản hồi thị giác).
+   Mờ đi + đổi con trỏ để học viên biết nút tạm khóa, tránh tưởng bị đứng
+   máy nên bấm lại nhiều lần. */
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
 /* Màn kết quả dùng layout 2 cột (sidebar sticky 300px + nội dung), nới rộng
    hơn max-width mặc định 700px của .review-page-wrap để đủ chỗ, tránh chật. */
 #exam-result-zone {
