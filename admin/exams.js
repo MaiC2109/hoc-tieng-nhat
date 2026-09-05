@@ -60,7 +60,7 @@ async function loadExamsSection() {
 async function loadExamAdminList() {
   const tbody = document.getElementById('exam-table-body');
   if (!tbody) return;
-  tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state">Đang tải dữ liệu...</div></td></tr>';
+  tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state">Đang tải dữ liệu...</div></td></tr>';
 
   try {
     const headers = await sbAuthedHeaders();
@@ -88,7 +88,7 @@ async function loadExamAdminList() {
     renderExamAdminTable(exams, sectionCountByExam);
   } catch (err) {
     console.error('Lỗi tải danh sách đề thi:', err);
-    tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state">Có lỗi khi tải danh sách đề thi.</div></td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state">Có lỗi khi tải danh sách đề thi.</div></td></tr>';
   }
 }
 
@@ -346,7 +346,7 @@ function renderExamAdminTable(exams, sectionCountByExam) {
   if (!tbody) return;
 
   if (!exams.length) {
-    tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state">Chưa có đề thi nào. Bấm "Tạo đề mới" để bắt đầu.</div></td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state">Chưa có đề thi nào. Bấm "Tạo đề mới" để bắt đầu.</div></td></tr>';
     return;
   }
 
@@ -361,6 +361,7 @@ function renderExamAdminTable(exams, sectionCountByExam) {
       </td>
       <td style="text-align:center;">${sectionCountByExam[exam.id] || 0}</td>
       <td>${formatDateVN(exam.created_at)}</td>
+      <td>${exam.available_from ? formatDateVN(exam.available_from) : 'Ngay khi Publish'}</td>
       <td style="text-align:right;">
         <button type="button" class="admin-row-action-btn" title="Sửa đề thi"
           onclick="event.stopPropagation(); openExamForm(examAdminState.rows.find(r => r.id === '${escHtml(exam.id)}'))">
