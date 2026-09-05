@@ -1013,20 +1013,23 @@ async function openSectionForm(row = null) {
     sectionTitleTouchedByUser = true; // đã có tiêu đề cũ -> không tự điền đè khi sửa
 
     skillSelect.value = String(row.skill_id);
+    skillSelect.disabled = false; // luôn cho sửa — xem lý do ở comment dưới
 
-    // Chỉ khóa đổi kỹ năng khi section ĐÃ CÓ ÍT NHẤT 1 CÂU HỎI thật sự bên
-    // trong (đếm qua subsectionsBySection đã cache sẵn từ loadExamSections()
-    // -> không cần fetch thêm) — vì đó mới là lúc đổi skill_id thực sự làm
-    // lệch dữ liệu (modal chọn câu hỏi đã lọc theo đúng skill cũ). Nếu
-    // section chỉ mới có subsection rỗng (chưa chọn câu hỏi nào) hoặc chưa
-    // có subsection nào cả, đổi kỹ năng là an toàn -> mở khóa dropdown.
+    // TRƯỚC ĐÂY: khóa cứng dropdown khi section đã có câu hỏi, với giả định
+    // "section + câu hỏi bên trong đang khớp skill, đừng đổi kẻo lệch".
+    // Giả định này chỉ đúng tại thời điểm CHỌN câu hỏi (modal lọc theo
+    // đúng skill_id của section). Nhưng sau đó admin vẫn có thể tự đổi
+    // question_bank.skill_id của từng câu ở tab Câu hỏi — lúc đó sai lệch
+    // đã xảy ra RỒI, không liên quan gì đến việc section có bị khóa hay
+    // không. Khóa cứng chỉ chặn nhầm chỗ: nó ngăn admin sửa LẠI cho khớp
+    // từ phía section, trong khi bất lực trước nguồn gây lệch thật sự.
+    // -> Đổi thành cảnh báo mềm (không chặn), để admin tự quyết định.
     const subsectionsOfSection = examDetailState.subsectionsBySection?.[row.id] || [];
     const totalQuestionsInSection = subsectionsOfSection.reduce((sum, sub) => sum + (sub.questionCount || 0), 0);
 
     if (totalQuestionsInSection > 0) {
-      skillSelect.disabled = true;
       if (lockHint) {
-        lockHint.textContent = `Phần thi này đã có ${totalQuestionsInSection} câu hỏi bên trong — không thể đổi kỹ năng vì câu hỏi đã được chọn theo đúng kỹ năng cũ. Xóa phần này và tạo lại nếu cần đổi kỹ năng.`;
+        lockHint.textContent = `⚠️ Phần thi này đang có ${totalQuestionsInSection} câu hỏi bên trong. Đổi kỹ năng ở đây KHÔNG tự động cập nhật kỹ năng của từng câu hỏi đã chọn (2 dữ liệu độc lập) — hãy vào tab Câu hỏi kiểm tra/sửa lại kỹ năng từng câu cho khớp sau khi đổi, nếu cần.`;
         lockHint.style.display = 'block';
       }
     } else {
