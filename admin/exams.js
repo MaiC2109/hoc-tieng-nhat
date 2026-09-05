@@ -363,14 +363,16 @@ function renderExamAdminTable(exams, sectionCountByExam) {
       <td>${formatDateVN(exam.created_at)}</td>
       <td>${exam.available_from ? formatDateVN(exam.available_from) : 'Ngay khi Publish'}</td>
       <td style="text-align:right;">
-        <button type="button" class="admin-row-action-btn" title="Sửa đề thi"
-          onclick="event.stopPropagation(); openExamForm(examAdminState.rows.find(r => r.id === '${escHtml(exam.id)}'))">
-          <i class="ti ti-pencil"></i>
-        </button>
-        <button type="button" class="admin-row-action-btn danger" title="Xóa đề thi" style="margin-left:6px;"
-          onclick="event.stopPropagation(); deleteExam('${escHtml(exam.id)}', '${escHtml(exam.title).replace(/'/g, "\\'")}')">
-          <i class="ti ti-trash"></i>
-        </button>
+        <div style="display:flex; gap:6px; justify-content:flex-end;">
+          <button type="button" class="admin-row-action-btn" title="Sửa đề thi"
+            onclick="event.stopPropagation(); openExamForm(examAdminState.rows.find(r => r.id === '${escHtml(exam.id)}'))">
+            <i class="ti ti-pencil"></i>
+          </button>
+          <button type="button" class="admin-row-action-btn danger" title="Xóa đề thi"
+            onclick="event.stopPropagation(); deleteExam('${escHtml(exam.id)}', '${escHtml(exam.title).replace(/'/g, "\\'")}')">
+            <i class="ti ti-trash"></i>
+          </button>
+        </div>
       </td>
     </tr>
   `).join('');
@@ -1011,11 +1013,26 @@ async function openSectionForm(row = null) {
     sectionTitleTouchedByUser = true; // đã có tiêu đề cũ -> không tự điền đè khi sửa
 
     skillSelect.value = String(row.skill_id);
-    // Khóa đổi kỹ năng khi sửa — đổi skill_id của 1 section đã có
-    // subsection/câu hỏi bên trong sẽ làm sai lệch dữ liệu đã chọn theo
-    // đúng kỹ năng cũ (modal chọn câu hỏi lọc theo skill_id của section).
-    skillSelect.disabled = true;
-    if (lockHint) lockHint.style.display = 'block';
+
+    // Chỉ khóa đổi kỹ năng khi section ĐÃ CÓ ÍT NHẤT 1 CÂU HỎI thật sự bên
+    // trong (đếm qua subsectionsBySection đã cache sẵn từ loadExamSections()
+    // -> không cần fetch thêm) — vì đó mới là lúc đổi skill_id thực sự làm
+    // lệch dữ liệu (modal chọn câu hỏi đã lọc theo đúng skill cũ). Nếu
+    // section chỉ mới có subsection rỗng (chưa chọn câu hỏi nào) hoặc chưa
+    // có subsection nào cả, đổi kỹ năng là an toàn -> mở khóa dropdown.
+    const subsectionsOfSection = examDetailState.subsectionsBySection?.[row.id] || [];
+    const totalQuestionsInSection = subsectionsOfSection.reduce((sum, sub) => sum + (sub.questionCount || 0), 0);
+
+    if (totalQuestionsInSection > 0) {
+      skillSelect.disabled = true;
+      if (lockHint) {
+        lockHint.textContent = `Phần thi này đã có ${totalQuestionsInSection} câu hỏi bên trong — không thể đổi kỹ năng vì câu hỏi đã được chọn theo đúng kỹ năng cũ. Xóa phần này và tạo lại nếu cần đổi kỹ năng.`;
+        lockHint.style.display = 'block';
+      }
+    } else {
+      skillSelect.disabled = false;
+      if (lockHint) lockHint.style.display = 'none';
+    }
 
     document.getElementById('section-title').value = row.title || '';
     document.getElementById('section-minutes').value = Math.round(row.time_limit_seconds / 60);
