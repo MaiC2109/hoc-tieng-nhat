@@ -1083,7 +1083,7 @@ function renderExamTaking() {
   // phần (đúng yêu cầu "Nộp bài" luôn hiển thị, cho nộp sớm từ trước).
   html += `
     <div class="exam-submit-whole-link-wrap">
-      <button class="exam-submit-whole-link" onclick="submitExamAttempt()">
+      <button class="exam-submit-whole-link exam-submit-trigger-btn" onclick="submitExamAttempt()">
         Hoặc nộp toàn bộ bài thi ngay bây giờ
       </button>
     </div>
@@ -1713,7 +1713,7 @@ function renderSectionOverview() {
       ${cardsHtml}
     </div>
 
-    <button class="btn btn-primary" style="margin-top:20px;" onclick="submitExamAttempt()">
+    <button class="btn btn-primary exam-submit-trigger-btn" style="margin-top:20px;" onclick="submitExamAttempt()">
       Nộp bài
     </button>
     ${allDone ? '<div class="exam-all-done-note">✓ Bạn đã hoàn thành tất cả các phần. Hãy bấm "Nộp bài" để kết thúc.</div>' : ''}
@@ -1728,6 +1728,11 @@ function renderSectionOverview() {
 async function submitExamAttempt(opts) {
   opts = opts || {};
   const skipConfirm = !!opts.skipConfirm;
+
+  // Chặn gọi lại khi đang xử lý dở — vừa để tránh spam-click nút "Nộp
+  // bài" tạo nhiều lần chấm điểm/upsert chồng lấn, vừa đề phòng trường
+  // hợp hiếm auto-submit (hết giờ) trùng thời điểm học viên tự bấm tay.
+  if (state.examState.isSubmitting) return;
 
   const attempt = state.examState.currentAttempt;
   if (!attempt) {
@@ -1752,6 +1757,8 @@ async function submitExamAttempt(opts) {
     if (!confirm(confirmMsg)) return;
   }
 
+  state.examState.isSubmitting = true;
+  setExamSubmitButtonsLoading(true);
   clearSectionTimer();
 
   try {
@@ -1993,7 +2000,32 @@ async function submitExamAttempt(opts) {
   } catch (err) {
     console.error('Lỗi khi nộp bài:', err);
     alert('Đã có lỗi xảy ra khi nộp bài, vui lòng thử lại. Chi tiết: ' + (err.message || err));
+  } finally {
+    // Luôn chạy dù thành công hay lỗi. Nếu thành công, renderExamResultScreen()
+    // đã thay toàn bộ nội dung #exam-taking-zone nên querySelectorAll dưới
+    // đây không tìm thấy nút nào nữa (không lỗi, chỉ đơn giản no-op) — chỉ
+    // thực sự có tác dụng khôi phục nút khi nộp bài thất bại, để học viên
+    // bấm "Nộp bài" lại được.
+    state.examState.isSubmitting = false;
+    setExamSubmitButtonsLoading(false);
   }
+}
+
+// Bật/tắt trạng thái "Đang nộp bài..." trên mọi nút kích hoạt nộp bài
+// (nút chính + link phụ "nộp toàn bộ bài thi ngay") — vừa disable để
+// chặn spam click, vừa đổi label để học viên biết hệ thống đang xử lý,
+// không tưởng bị đứng máy.
+function setExamSubmitButtonsLoading(isLoading) {
+  document.querySelectorAll('.exam-submit-trigger-btn').forEach(btn => {
+    if (isLoading) {
+      btn.dataset.originalLabel = btn.dataset.originalLabel || btn.textContent.trim();
+      btn.disabled = true;
+      btn.textContent = 'Đang nộp bài...';
+    } else {
+      btn.disabled = false;
+      if (btn.dataset.originalLabel) btn.textContent = btn.dataset.originalLabel;
+    }
+  });
 }
 
 
