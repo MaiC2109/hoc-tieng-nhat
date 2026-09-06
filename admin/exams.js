@@ -1095,9 +1095,10 @@ async function submitSectionForm(e) {
     const res = isEdit
       ? await fetch(`${ADMIN_CONFIG.supabaseUrl}/rest/v1/exam_sections?id=eq.${sectionFormState.editingId}`, {
           method: 'PATCH', headers,
-          // Sửa chỉ đổi title/thời gian, KHÔNG đổi skill_id (đã khóa ở UI)
-          // và KHÔNG đổi order_index (giữ nguyên vị trí hiện tại).
-          body: JSON.stringify({ title: title || null, time_limit_seconds: minutes * 60 })
+          // skill_id giờ CÓ THỂ đổi khi sửa (đã bỏ khóa cứng UI — xem
+          // openSectionForm()), chỉ còn KHÔNG đổi order_index (giữ nguyên
+          // vị trí hiện tại trong danh sách section).
+          body: JSON.stringify({ skill_id: parseInt(skillId, 10), title: title || null, time_limit_seconds: minutes * 60 })
         })
       : await fetch(`${ADMIN_CONFIG.supabaseUrl}/rest/v1/exam_sections`, {
           method: 'POST', headers,
