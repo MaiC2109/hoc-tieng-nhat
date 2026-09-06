@@ -363,10 +363,16 @@ function renderExamAdminTable(exams, sectionCountByExam) {
       <td>${formatDateVN(exam.created_at)}</td>
       <td>${exam.available_from ? formatDateVN(exam.available_from) : 'Ngay khi Publish'}</td>
       <td style="text-align:right;">
-        <button type="button" class="admin-row-action-btn" title="Sửa đề thi"
-          onclick="event.stopPropagation(); openExamForm(examAdminState.rows.find(r => r.id === '${escHtml(exam.id)}'))">
-          <i class="ti ti-pencil"></i>
-        </button>
+        <div style="display:flex; gap:6px; justify-content:flex-end;">
+          <button type="button" class="admin-row-action-btn" title="Sửa đề thi"
+            onclick="event.stopPropagation(); openExamForm(examAdminState.rows.find(r => r.id === '${escHtml(exam.id)}'))">
+            <i class="ti ti-pencil"></i>
+          </button>
+          <button type="button" class="admin-row-action-btn danger" title="Xóa đề thi"
+            onclick="event.stopPropagation(); deleteExam('${escHtml(exam.id)}', '${escHtml(exam.title).replace(/'/g, "\\'")}')">
+            <i class="ti ti-trash"></i>
+          </button>
+        </div>
       </td>
     </tr>
   `).join('');
@@ -408,6 +414,51 @@ function showExamDetailView() {
   document.getElementById('exam-detail-view').style.display = 'block';
 }
 
+// Xóa đề thi — dùng chung cho icon xóa ở bảng danh sách và nút xóa ở màn
+// chi tiết. exam_sections/exam_attempts đều FK tới exams(id) không có
+// CASCADE (theo schema đã cho) -> nếu đề đã có section hoặc học viên đã
+// làm bài, Postgres trả lỗi 23503 (foreign_key_violation); bắt riêng mã
+// lỗi này để báo rõ nguyên nhân thay vì hiện lỗi kỹ thuật khó hiểu.
+async function deleteExam(examId, examTitle) {
+  const confirmed = confirm(`Xóa đề thi "${examTitle}"? Hành động này không thể hoàn tác.`);
+  if (!confirmed) return;
+
+  try {
+    const headers = await sbAuthedHeaders();
+    const res = await fetch(`${ADMIN_CONFIG.supabaseUrl}/rest/v1/exams?id=eq.${examId}`, {
+      method: 'DELETE',
+      headers
+    });
+
+    if (!res.ok) {
+      const errBody = await res.json().catch(() => null);
+      if (errBody?.code === '23503') {
+        alert('Không thể xóa đề này vì đã có phần thi hoặc lượt làm bài của học viên liên quan. Hãy xóa hết các phần thi (section) trong đề trước, hoặc chuyển đề về Draft thay vì xóa.');
+      } else {
+        alert(errBody?.message || `Lỗi xóa đề thi (HTTP ${res.status})`);
+      }
+      return;
+    }
+
+    // Dropdown "Chọn đề thi" bên tab Câu hỏi cache riêng, cần invalidate
+    // giống hệt sau khi tạo/sửa đề (xem submitExamForm()).
+    if (typeof examLinkState !== 'undefined') {
+      examLinkState.examsLoaded = false;
+    }
+
+    // Đang xóa ngay tại màn chi tiết của chính đề đó -> quay lại danh sách,
+    // không load lại header với dữ liệu đề đã không còn tồn tại.
+    if (examDetailState.examId === examId) {
+      showExamListView();
+    }
+
+    await loadExamAdminList();
+  } catch (err) {
+    console.error('Lỗi xóa đề thi:', err);
+    alert('Có lỗi khi xóa đề thi. Vui lòng thử lại.');
+  }
+}
+
 async function openExamDetail(examId) {
   examDetailState.examId = examId;
   showExamDetailView();
@@ -444,6 +495,9 @@ function renderExamDetailHeader() {
     ` : '';
   }
   if (editBtn) editBtn.onclick = () => openExamForm(exam);
+
+  const deleteBtn = document.getElementById('exam-detail-delete-btn');
+  if (deleteBtn) deleteBtn.onclick = () => deleteExam(exam.id, exam.title);
 }
 
 // ── Cấu hình nhắc làm lại (exam_retry_rules riêng theo đề, tùy chọn) ────
@@ -959,11 +1013,29 @@ async function openSectionForm(row = null) {
     sectionTitleTouchedByUser = true; // đã có tiêu đề cũ -> không tự điền đè khi sửa
 
     skillSelect.value = String(row.skill_id);
-    // Khóa đổi kỹ năng khi sửa — đổi skill_id của 1 section đã có
-    // subsection/câu hỏi bên trong sẽ làm sai lệch dữ liệu đã chọn theo
-    // đúng kỹ năng cũ (modal chọn câu hỏi lọc theo skill_id của section).
-    skillSelect.disabled = true;
-    if (lockHint) lockHint.style.display = 'block';
+    skillSelect.disabled = false; // luôn cho sửa — xem lý do ở comment dưới
+
+    // TRƯỚC ĐÂY: khóa cứng dropdown khi section đã có câu hỏi, với giả định
+    // "section + câu hỏi bên trong đang khớp skill, đừng đổi kẻo lệch".
+    // Giả định này chỉ đúng tại thời điểm CHỌN câu hỏi (modal lọc theo
+    // đúng skill_id của section). Nhưng sau đó admin vẫn có thể tự đổi
+    // question_bank.skill_id của từng câu ở tab Câu hỏi — lúc đó sai lệch
+    // đã xảy ra RỒI, không liên quan gì đến việc section có bị khóa hay
+    // không. Khóa cứng chỉ chặn nhầm chỗ: nó ngăn admin sửa LẠI cho khớp
+    // từ phía section, trong khi bất lực trước nguồn gây lệch thật sự.
+    // -> Đổi thành cảnh báo mềm (không chặn), để admin tự quyết định.
+    const subsectionsOfSection = examDetailState.subsectionsBySection?.[row.id] || [];
+    const totalQuestionsInSection = subsectionsOfSection.reduce((sum, sub) => sum + (sub.questionCount || 0), 0);
+
+    if (totalQuestionsInSection > 0) {
+      if (lockHint) {
+        lockHint.textContent = `⚠️ Phần thi này đang có ${totalQuestionsInSection} câu hỏi bên trong. Đổi kỹ năng ở đây KHÔNG tự động cập nhật kỹ năng của từng câu hỏi đã chọn (2 dữ liệu độc lập) — hãy vào tab Câu hỏi kiểm tra/sửa lại kỹ năng từng câu cho khớp sau khi đổi, nếu cần.`;
+        lockHint.style.display = 'block';
+      }
+    } else {
+      skillSelect.disabled = false;
+      if (lockHint) lockHint.style.display = 'none';
+    }
 
     document.getElementById('section-title').value = row.title || '';
     document.getElementById('section-minutes').value = Math.round(row.time_limit_seconds / 60);
@@ -1378,6 +1450,16 @@ async function submitExamForm(e) {
     }
 
     await loadExamAdminList();
+
+    // Dropdown "Chọn đề thi" bên tab Câu hỏi (fetchExamsList() trong
+    // questions.js) cache danh sách đề vĩnh viễn trong session (examLinkState.
+    // examsLoaded), không tự biết đề vừa được tạo/sửa ở đây. Cả 2 file cùng
+    // load vào 1 window nên examLinkState là biến global — reset cờ để lần
+    // mở dropdown tiếp theo tự fetch lại danh sách mới nhất.
+    if (typeof examLinkState !== 'undefined') {
+      examLinkState.examsLoaded = false;
+    }
+
     closeExamForm();
   } catch (err) {
     console.error('Lỗi lưu đề thi:', err);
