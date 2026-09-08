@@ -53,6 +53,8 @@ state.examState = state.examState || {
   saveStatus: {},                // { [exam_questions.id]: { status: 'saving'|'saved'|'error', message } } — trạng thái autosave từng câu
   sectionsById: {},              // { [exam_section_id]: section row (title, time_limit_seconds...) } — build lúc load đề
   lockedSections: {},            // { [exam_section_id]: true } — section đã hết giờ, khóa input
+  playingReviewAudioId: null,    // examQuestionId của audio đang phát ở màn Đáp án (renderResultQuestionDetail),
+                                  // dùng để đổi icon play/pause đúng nút — null = không có gì đang phát
   timerActiveSectionId: null,    // section_id đang chạy đồng hồ, dùng để phát hiện khi nào cần khởi động lại timer
   currentSectionTimerId: null    // id trả về từ setInterval, dùng để clearInterval khi đổi section
 };
@@ -1136,6 +1138,10 @@ function renderQuestionNavGrid(sectionId, activeGlobalIndex) {
 function goToQuestionIndex(globalIndex) {
   const flatQuestions = state.examState.flatQuestions;
   if (globalIndex < 0 || globalIndex >= flatQuestions.length) return;
+  // Dừng audio của câu đang xem trước khi nhảy sang câu khác — hàm này
+  // dùng chung cho cả lưới số câu lẫn nút Câu trước/sau (goToPrevQuestion/
+  // goToNextQuestion đều gọi qua đây), nên chỉ cần chèn 1 chỗ.
+  stopCurrentAudio();
   state.examState.currentQuestionIndex = globalIndex;
   renderExamTaking();
 }
@@ -1383,6 +1389,54 @@ function playExamAudio(url) {
   state.currentAudio.play().catch(e => console.log(e));
 }
 
+// ------------------------------------------------------------
+// Nghe lại audio ở màn Đáp án (renderResultQuestionDetail) — CHỈ màn này
+// có yêu cầu icon play/pause đổi theo trạng thái, màn làm bài (playExamAudio
+// ở trên) không cần nên giữ nguyên, không đụng vào.
+// Vẫn tái dùng state.currentAudio/stopCurrentAudio() có sẵn — không tạo
+// audio element hay cơ chế phát mới, chỉ thêm phần track id câu đang phát
+// để biết đường đổi icon đúng nút.
+// ------------------------------------------------------------
+function toggleReviewQuestionAudio(examQuestionId, url) {
+  const wasPlayingThisOne = state.examState.playingReviewAudioId === examQuestionId && !!state.currentAudio;
+
+  // Luôn tắt icon của nút đang phát trước đó (nếu có) trước khi xử lý tiếp,
+  // dù đó là chính nút vừa bấm (sắp dừng) hay nút khác (sắp bị thay bằng nút mới).
+  setReviewAudioIcon(state.examState.playingReviewAudioId, false);
+
+  stopCurrentAudio();
+
+  if (wasPlayingThisOne) {
+    // Bấm lại đúng nút đang phát -> chỉ dừng, không phát lại.
+    state.examState.playingReviewAudioId = null;
+    return;
+  }
+
+  state.currentAudio = new Audio(url);
+  state.examState.playingReviewAudioId = examQuestionId;
+  setReviewAudioIcon(examQuestionId, true);
+
+  const resetOnFinish = () => {
+    setReviewAudioIcon(examQuestionId, false);
+    if (state.examState.playingReviewAudioId === examQuestionId) {
+      state.examState.playingReviewAudioId = null;
+    }
+  };
+  state.currentAudio.onended = resetOnFinish;
+  state.currentAudio.onerror = resetOnFinish;
+
+  state.currentAudio.play().catch(e => {
+    console.log(e);
+    resetOnFinish();
+  });
+}
+
+function setReviewAudioIcon(examQuestionId, isPlaying) {
+  if (!examQuestionId) return;
+  const icon = document.getElementById(`review-audio-icon-${examQuestionId}`);
+  if (icon) icon.className = isPlaying ? 'ti ti-player-pause' : 'ti ti-player-play';
+}
+
 // ============================================================
 // TIMER THEO SECTION — MODEL "PHẢI HOÀN THÀNH MỚI ĐƯỢC CHUYỂN"
 // Học viên tự chọn THỨ TỰ làm các section qua màn tổng quan, nhưng một khi
@@ -1545,6 +1599,10 @@ async function completeCurrentSection() {
 
   if (!confirm(confirmMsg)) return;
 
+  // Dừng audio đang phát của section vừa hoàn thành trước khi rời đi
+  // (về màn tổng quan hoặc sang section khác).
+  stopCurrentAudio();
+
   clearSectionTimer();
 
   const entry = getOrCreateTimingEntry(current.sectionId);
@@ -1563,6 +1621,10 @@ async function completeCurrentSection() {
 // rồi quay về màn tổng quan để chọn section khác — hoặc tự nộp bài nếu
 // không còn section nào khác để làm.
 function handleSectionTimeout(sectionId) {
+  // Hết giờ cũng là 1 điểm chuyển section (tự động) — dừng audio đang
+  // phát của section vừa hết giờ trước khi khóa/chuyển màn.
+  stopCurrentAudio();
+
   state.examState.lockedSections[sectionId] = true;
   state.examState.timerActiveSectionId = null;
 
@@ -1598,6 +1660,9 @@ function goToNextIncompleteSectionOrSubmit() {
 // tiên của section đó (hoặc câu đầu tiên CHƯA trả lời nếu đang làm dở).
 // ------------------------------------------------------------
 function enterSection(sectionId) {
+  // Dừng audio còn sót lại (nếu có) trước khi vào section mới.
+  stopCurrentAudio();
+
   const section = state.examState.sectionsById[sectionId];
   if (!section) return;
 
@@ -1756,6 +1821,11 @@ async function submitExamAttempt(opts) {
 
     if (!confirm(confirmMsg)) return;
   }
+
+  // Dừng audio đang phát trước khi nộp bài — áp dụng cho cả nộp thủ công
+  // (nút "Nộp bài") lẫn tự động (hết giờ section cuối, skipConfirm=true),
+  // vì cả 2 nhánh đều đi qua điểm này sau khi confirm (hoặc bỏ qua confirm).
+  stopCurrentAudio();
 
   state.examState.isSubmitting = true;
   setExamSubmitButtonsLoading(true);
@@ -2281,6 +2351,7 @@ function buildQuestionsReview(flatQuestions, answersByBankId) {
       correct_answer: qb.correct_answer,
       explanation: qb.explanation,
       audio_url: qb.audio_url,
+      passage_id: qb.passage_id || null,
       selected_answer: answer.selected_answer,
       is_correct: !!answer.is_correct
     };
@@ -2315,6 +2386,16 @@ function scrollToReviewQuestion(examQuestionId) {
 // ------------------------------------------------------------
 function renderResultQuestionDetail(q) {
   let answerHtml = '';
+
+  // Nút nghe lại audio câu hỏi ở màn Đáp án — CHỈ ở màn này mới có icon
+  // play/pause đổi theo trạng thái đang phát (màn làm bài không cần, giữ
+  // nguyên icon play tĩnh như cũ). Tái dùng state.currentAudio/
+  // stopCurrentAudio() có sẵn, không tạo audio element riêng.
+  const audioBtnHtml = q.audio_url ? `
+    <button type="button" class="btn btn-outline exam-audio-btn" onclick="toggleReviewQuestionAudio('${q.examQuestionId}', '${q.audio_url}')">
+      <i class="ti ti-player-play" id="review-audio-icon-${q.examQuestionId}"></i> Nghe lại audio
+    </button>
+  ` : '';
 
   const normalizedType = (q.question_type || '').trim().toLowerCase();
 
@@ -2373,6 +2454,7 @@ function renderResultQuestionDetail(q) {
         </span>
       </div>
       <div class="exam-question-content">${q.question_text || ''}</div>
+      ${audioBtnHtml}
       ${answerHtml}
       ${feedbackHtml}
     </div>
@@ -2382,12 +2464,53 @@ function renderResultQuestionDetail(q) {
 function renderResultQuestionsReview(questionsReview) {
   if (!questionsReview || questionsReview.length === 0) return '';
 
-  const detailsHtml = questionsReview.map(q => renderResultQuestionDetail(q)).join('');
+  // Gộp theo passage_id liền kề — chỉ render 1 passage box (kèm 1 nút audio
+  // chung) ngay trước nhóm câu đầu tiên thuộc passage đó, giống đúng quy
+  // tắc "chỉ 1 nút audio chung, không lặp" đã áp dụng ở màn làm bài.
+  // Dùng "liền kề" (so với passage_id ngay trước) chứ không group toàn cục,
+  // vì flatQuestions vốn đã được xếp theo đúng thứ tự sections/subsections/
+  // questions, nên các câu chung passage luôn nằm cạnh nhau.
+  let lastPassageId = null;
+  const detailsHtml = questionsReview.map(q => {
+    let block = '';
+    if (q.passage_id && q.passage_id !== lastPassageId) {
+      block += renderResultPassageBox(q.passage_id);
+    }
+    lastPassageId = q.passage_id || null;
+    block += renderResultQuestionDetail(q);
+    return block;
+  }).join('');
 
   return `
     <div class="exam-review-section-title">Chi tiết bài làm</div>
     <div class="exam-review-questions-list">
       ${detailsHtml}
+    </div>
+  `;
+}
+
+// ------------------------------------------------------------
+// Passage box dùng chung cho 1 nhóm câu ở màn Đáp án — lấy dữ liệu từ
+// state.examState.passagesMap (đã được load sẵn ở cả 2 luồng gọi tới
+// renderResultQuestionsReview: submitExamAttempt và viewExamAttemptResult).
+// Nút audio dùng chung toggleReviewQuestionAudio()/setReviewAudioIcon(),
+// prefix id bằng "passage-" để không đụng examQuestionId của câu hỏi.
+// ------------------------------------------------------------
+function renderResultPassageBox(passageId) {
+  const passage = state.examState.passagesMap[passageId];
+  if (!passage) return '';
+
+  const toggleId = `passage-${passageId}`;
+
+  return `
+    <div class="exam-passage-box exam-review-passage-box">
+      ${passage.title ? `<div class="exam-passage-title">${passage.title}</div>` : ''}
+      ${passage.audio_url ? `
+        <button type="button" class="btn btn-outline exam-audio-btn" onclick="toggleReviewQuestionAudio('${toggleId}', '${passage.audio_url}')">
+          <i class="ti ti-player-play" id="review-audio-icon-${toggleId}"></i> Nghe lại đoạn hội thoại
+        </button>
+      ` : ''}
+      ${passage.content ? `<div class="exam-passage-content">${passage.content}</div>` : ''}
     </div>
   `;
 }
