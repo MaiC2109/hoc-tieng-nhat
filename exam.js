@@ -2093,7 +2093,7 @@ async function submitExamAttempt(opts) {
         id, exam_id, attempt_number, status,
         total_score, total_possible, section_scores,
         started_at, submitted_at, next_retry_date, retry_note,
-        exams ( title, pass_threshold_pct )
+        exams ( title, exam_type, pass_threshold_pct )
       `)
       .single();
 
@@ -2112,6 +2112,11 @@ async function submitExamAttempt(opts) {
       };
     });
     const questionsReview = buildQuestionsReview(state.examState.flatQuestions, answersByBankId);
+
+    // 6b. Tra sẵn skill code (nếu đề dạng 'skill') để hiển thị "Dạng bài" ở
+    // màn kết quả — tái dùng đúng cache/hàm đã có cho dropdown "Dạng bài"
+    // ở danh sách đề (ensureSkillCodeMapForExamIds), không query riêng.
+    await ensureSkillCodeMapForExamIds([updatedAttempt.exam_id]);
 
     // 7. Hiển thị màn kết quả đầy đủ (điểm tổng + chi tiết từng câu)
     renderExamResultScreen(updatedAttempt, questionsReview);
@@ -2324,7 +2329,7 @@ async function viewExamAttemptResult(attemptId) {
         id, exam_id, attempt_number, status,
         total_score, total_possible, section_scores,
         started_at, submitted_at, next_retry_date, retry_note,
-        exams ( title, pass_threshold_pct )
+        exams ( title, exam_type, pass_threshold_pct )
       `)
       .eq('id', attemptId)
       .single();
@@ -2382,6 +2387,10 @@ async function viewExamAttemptResult(attemptId) {
     });
 
     const questionsReview = buildQuestionsReview(flatQuestions, answersByBankId);
+
+    // Tra sẵn skill code (nếu đề dạng 'skill') để hiển thị "Dạng bài" ở
+    // màn kết quả — tái dùng đúng cache/hàm đã có cho dropdown "Dạng bài".
+    await ensureSkillCodeMapForExamIds([attempt.exam_id]);
 
     renderExamResultScreen(attempt, questionsReview);
   } catch (err) {
@@ -2651,12 +2660,25 @@ function renderExamResultScreen(attempt, questionsReview) {
   const statusLabel = statusLabelMap[attempt.status] || attempt.status;
   const statusClass = statusClassMap[attempt.status] || 'exam-status-submitted';
 
+  // "Dạng bài" — tái dùng đúng logic label ở renderExamCard() (danh sách
+  // đề): 'full' -> Đề tổng hợp, còn lại -> Đề theo kỹ năng + tên skill (lấy
+  // từ examSkillMap đã tra ở nơi gọi hàm này, map qua SKILL_CODE_LABELS).
+  let examTypeLabel = null;
+  if (exam.exam_type) {
+    const skillCode = state.examState.examSkillMap[attempt.exam_id];
+    const skillLabel = skillCode ? (SKILL_CODE_LABELS[skillCode] || SKILL_CODE_LABELS[skillCode.toLowerCase()] || skillCode) : null;
+    examTypeLabel = exam.exam_type === 'full'
+      ? 'Đề tổng hợp'
+      : `Đề theo kỹ năng${skillLabel ? ' — ' + skillLabel : ''}`;
+  }
+
   let sidebarHtml = `
     <div class="exam-result-box">
       <div class="exam-result-status-row">
         <span class="exam-status-badge ${statusClass}">${statusLabel}</span>
         <span class="exam-result-attempt-number">Lần thi thứ ${attempt.attempt_number || 1}</span>
       </div>
+      ${examTypeLabel ? `<div class="exam-result-type">${examTypeLabel}</div>` : ''}
 
       <div class="exam-result-score-big">
         ${scoreText}
