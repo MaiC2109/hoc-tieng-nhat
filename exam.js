@@ -839,7 +839,7 @@ async function loadExamStructure(examId) {
   try {
     const { data: sections, error: sectionsError } = await supabaseClient
       .from('exam_sections')
-      .select('id, exam_id, skill_id, title, time_limit_seconds, order_index')
+      .select('id, exam_id, skill_id, title, time_limit_seconds, order_index, skills ( code )')
       .eq('exam_id', examId)
       .order('order_index', { ascending: true });
 
@@ -997,9 +997,16 @@ function renderExamTaking() {
 
   // Passage dùng chung cho các câu cùng passage_id — hiện phía trên câu hỏi
   if (passage) {
+    // Ẩn tiêu đề passage riêng ở skill Đọc hiểu (reading) trong màn LÀM BÀI —
+    // theo yêu cầu, không đụng tới màn Đáp án (renderResultPassageBox vẫn
+    // hiện title bình thường, không thuộc phạm vi thay đổi này).
+    const currentSection = state.examState.sectionsById[current.sectionId];
+    const isReadingSection = currentSection?.skills?.code === 'reading';
+    const showPassageTitle = passage.title && !isReadingSection;
+
     html += `
       <div class="exam-passage-box">
-        ${passage.title ? `<div class="exam-passage-title">${passage.title}</div>` : ''}
+        ${showPassageTitle ? `<div class="exam-passage-title">${passage.title}</div>` : ''}
         ${passage.audio_url ? `
           <button class="btn btn-outline exam-audio-btn" onclick="playExamAudio('${passage.audio_url}')">
             <i class="ti ti-player-play"></i> Nghe đoạn hội thoại
@@ -2339,6 +2346,22 @@ async function viewExamAttemptResult(attemptId) {
     }
     const flatQuestions = flattenExamStructure(structure);
 
+    // startExamAttempt() có set sectionsById/passagesMap khi làm bài, nhưng
+    // luồng "Xem lại" (viewExamAttemptResult) này gọi loadExamStructure()
+    // độc lập nên cần tự load lại — thiếu sẽ khiến renderResultPassageBox()
+    // không tra được passage (passagesMap rỗng/cũ) lẫn không tra được
+    // skills.code (sectionsById rỗng/cũ) để quyết định ẩn tiêu đề passage.
+    const passageIds = [...new Set(
+      flatQuestions
+        .map(q => q.question_bank && q.question_bank.passage_id)
+        .filter(Boolean)
+    )];
+    state.examState.passagesMap = await loadPassagesByIds(passageIds);
+
+    const sectionsById = {};
+    (structure || []).forEach(section => { sectionsById[section.id] = section; });
+    state.examState.sectionsById = sectionsById;
+
     const { data: savedAnswers, error: answersError } = await supabaseClient
       .from('attempt_answers')
       .select('question_id, selected_answer, is_correct')
@@ -2520,7 +2543,7 @@ function renderResultQuestionsReview(questionsReview) {
   const detailsHtml = questionsReview.map(q => {
     let block = '';
     if (q.passage_id && q.passage_id !== lastPassageId) {
-      block += renderResultPassageBox(q.passage_id);
+      block += renderResultPassageBox(q.passage_id, q.sectionId);
     }
     lastPassageId = q.passage_id || null;
     block += renderResultQuestionDetail(q);
@@ -2542,15 +2565,22 @@ function renderResultQuestionsReview(questionsReview) {
 // Nút audio dùng chung toggleReviewQuestionAudio()/setReviewAudioIcon(),
 // prefix id bằng "passage-" để không đụng examQuestionId của câu hỏi.
 // ------------------------------------------------------------
-function renderResultPassageBox(passageId) {
+function renderResultPassageBox(passageId, sectionId) {
   const passage = state.examState.passagesMap[passageId];
   if (!passage) return '';
 
   const toggleId = `passage-${passageId}`;
 
+  // Ẩn tiêu đề passage ở skill Đọc hiểu (reading) — đồng bộ đúng quy tắc
+  // đã áp dụng ở màn làm bài (renderExamTaking), tra skill qua sectionsById
+  // (đã có sẵn skills.code nhờ join thêm ở loadExamStructure()).
+  const section = state.examState.sectionsById[sectionId];
+  const isReadingSection = section?.skills?.code === 'reading';
+  const showPassageTitle = passage.title && !isReadingSection;
+
   return `
     <div class="exam-passage-box exam-review-passage-box">
-      ${passage.title ? `<div class="exam-passage-title">${passage.title}</div>` : ''}
+      ${showPassageTitle ? `<div class="exam-passage-title">${passage.title}</div>` : ''}
       ${passage.audio_url ? `
         <div class="exam-audio-controls">
           <button type="button" class="btn btn-outline exam-audio-btn" onclick="toggleReviewQuestionAudio('${toggleId}', '${passage.audio_url}')">
