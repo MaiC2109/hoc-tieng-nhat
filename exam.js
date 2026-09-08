@@ -1400,9 +1400,10 @@ function playExamAudio(url) {
 function toggleReviewQuestionAudio(examQuestionId, url) {
   const wasPlayingThisOne = state.examState.playingReviewAudioId === examQuestionId && !!state.currentAudio;
 
-  // Luôn tắt icon của nút đang phát trước đó (nếu có) trước khi xử lý tiếp,
-  // dù đó là chính nút vừa bấm (sắp dừng) hay nút khác (sắp bị thay bằng nút mới).
-  setReviewAudioIcon(state.examState.playingReviewAudioId, false);
+  // Luôn tắt icon + reset progress bar của nút đang phát trước đó (nếu có)
+  // trước khi xử lý tiếp, dù đó là chính nút vừa bấm (sắp dừng) hay nút
+  // khác (sắp bị thay bằng nút mới).
+  resetReviewAudioUI(state.examState.playingReviewAudioId);
 
   stopCurrentAudio();
 
@@ -1417,13 +1418,18 @@ function toggleReviewQuestionAudio(examQuestionId, url) {
   setReviewAudioIcon(examQuestionId, true);
 
   const resetOnFinish = () => {
-    setReviewAudioIcon(examQuestionId, false);
+    resetReviewAudioUI(examQuestionId);
     if (state.examState.playingReviewAudioId === examQuestionId) {
       state.examState.playingReviewAudioId = null;
     }
   };
   state.currentAudio.onended = resetOnFinish;
   state.currentAudio.onerror = resetOnFinish;
+
+  // Cập nhật thanh tiến độ theo tiến trình phát thật (currentTime/duration)
+  // — chạy liên tục trong lúc phát, KHÔNG chạy khi đang bị người dùng kéo
+  // (kéo dùng seekReviewAudio() riêng, xử lý trực tiếp trên state.currentAudio).
+  state.currentAudio.ontimeupdate = () => updateReviewAudioProgress(examQuestionId);
 
   state.currentAudio.play().catch(e => {
     console.log(e);
@@ -1435,6 +1441,35 @@ function setReviewAudioIcon(examQuestionId, isPlaying) {
   if (!examQuestionId) return;
   const icon = document.getElementById(`review-audio-icon-${examQuestionId}`);
   if (icon) icon.className = isPlaying ? 'ti ti-player-pause' : 'ti ti-player-play';
+}
+
+// Đồng bộ thanh <input type="range"> theo vị trí phát thật. Bỏ qua nếu chưa
+// có duration hợp lệ (đang tải metadata) để tránh chia cho 0/NaN.
+function updateReviewAudioProgress(examQuestionId) {
+  const bar = document.getElementById(`review-audio-progress-${examQuestionId}`);
+  if (!bar || !state.currentAudio) return;
+  const duration = state.currentAudio.duration;
+  if (!isFinite(duration) || duration <= 0) return;
+  bar.value = (state.currentAudio.currentTime / duration) * 100;
+}
+
+// Học viên kéo thanh tiến độ để tua tới vị trí khác — CHỈ tua được audio
+// đang thật sự phát (khớp id đang track), bấm/kéo thanh của nút không phải
+// đang phát thì bỏ qua (không có audio nào gắn với nó để tua).
+function seekReviewAudio(examQuestionId, percent) {
+  if (state.examState.playingReviewAudioId !== examQuestionId || !state.currentAudio) return;
+  const duration = state.currentAudio.duration;
+  if (!isFinite(duration) || duration <= 0) return;
+  state.currentAudio.currentTime = (parseFloat(percent) / 100) * duration;
+}
+
+// Reset icon về play + thanh tiến độ về 0 cho 1 nút cụ thể (dùng khi dừng,
+// phát xong, lỗi, hoặc chuyển sang phát nút khác).
+function resetReviewAudioUI(examQuestionId) {
+  if (!examQuestionId) return;
+  setReviewAudioIcon(examQuestionId, false);
+  const bar = document.getElementById(`review-audio-progress-${examQuestionId}`);
+  if (bar) bar.value = 0;
 }
 
 // ============================================================
@@ -2392,9 +2427,14 @@ function renderResultQuestionDetail(q) {
   // nguyên icon play tĩnh như cũ). Tái dùng state.currentAudio/
   // stopCurrentAudio() có sẵn, không tạo audio element riêng.
   const audioBtnHtml = q.audio_url ? `
-    <button type="button" class="btn btn-outline exam-audio-btn" onclick="toggleReviewQuestionAudio('${q.examQuestionId}', '${q.audio_url}')">
-      <i class="ti ti-player-play" id="review-audio-icon-${q.examQuestionId}"></i> Nghe lại audio
-    </button>
+    <div class="exam-audio-controls">
+      <button type="button" class="btn btn-outline exam-audio-btn" onclick="toggleReviewQuestionAudio('${q.examQuestionId}', '${q.audio_url}')">
+        <i class="ti ti-player-play" id="review-audio-icon-${q.examQuestionId}"></i> Nghe lại audio
+      </button>
+      <input type="range" class="exam-audio-progress" id="review-audio-progress-${q.examQuestionId}"
+        min="0" max="100" step="0.1" value="0"
+        oninput="seekReviewAudio('${q.examQuestionId}', this.value)" />
+    </div>
   ` : '';
 
   const normalizedType = (q.question_type || '').trim().toLowerCase();
@@ -2506,9 +2546,14 @@ function renderResultPassageBox(passageId) {
     <div class="exam-passage-box exam-review-passage-box">
       ${passage.title ? `<div class="exam-passage-title">${passage.title}</div>` : ''}
       ${passage.audio_url ? `
-        <button type="button" class="btn btn-outline exam-audio-btn" onclick="toggleReviewQuestionAudio('${toggleId}', '${passage.audio_url}')">
-          <i class="ti ti-player-play" id="review-audio-icon-${toggleId}"></i> Nghe lại đoạn hội thoại
-        </button>
+        <div class="exam-audio-controls">
+          <button type="button" class="btn btn-outline exam-audio-btn" onclick="toggleReviewQuestionAudio('${toggleId}', '${passage.audio_url}')">
+            <i class="ti ti-player-play" id="review-audio-icon-${toggleId}"></i> Nghe lại đoạn hội thoại
+          </button>
+          <input type="range" class="exam-audio-progress" id="review-audio-progress-${toggleId}"
+            min="0" max="100" step="0.1" value="0"
+            oninput="seekReviewAudio('${toggleId}', this.value)" />
+        </div>
       ` : ''}
       ${passage.content ? `<div class="exam-passage-content">${passage.content}</div>` : ''}
     </div>
