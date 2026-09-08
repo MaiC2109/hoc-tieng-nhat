@@ -1398,20 +1398,26 @@ function playExamAudio(url) {
 // để biết đường đổi icon đúng nút.
 // ------------------------------------------------------------
 function toggleReviewQuestionAudio(examQuestionId, url) {
-  const wasPlayingThisOne = state.examState.playingReviewAudioId === examQuestionId && !!state.currentAudio;
-
-  // Luôn tắt icon + reset progress bar của nút đang phát trước đó (nếu có)
-  // trước khi xử lý tiếp, dù đó là chính nút vừa bấm (sắp dừng) hay nút
-  // khác (sắp bị thay bằng nút mới).
-  resetReviewAudioUI(state.examState.playingReviewAudioId);
-
-  stopCurrentAudio();
-
-  if (wasPlayingThisOne) {
-    // Bấm lại đúng nút đang phát -> chỉ dừng, không phát lại.
-    state.examState.playingReviewAudioId = null;
+  // Bấm đúng nút đang gắn với state.currentAudio hiện tại (dù đang phát hay
+  // đang tạm dừng) -> pause()/play() TẠI CHỖ, không tạo lại Audio mới, không
+  // gọi stopCurrentAudio() -> giữ nguyên currentTime, tiếp tục đúng vị trí
+  // đã dừng thay vì phát lại từ đầu.
+  if (state.examState.playingReviewAudioId === examQuestionId && state.currentAudio) {
+    if (state.currentAudio.paused) {
+      state.currentAudio.play().catch(e => console.log(e));
+      setReviewAudioIcon(examQuestionId, true);
+    } else {
+      state.currentAudio.pause();
+      setReviewAudioIcon(examQuestionId, false);
+    }
     return;
   }
+
+  // Bấm sang 1 audio khác (câu/passage khác) -> đây mới là lúc cần dừng hẳn
+  // + unload audio cũ (đổi bài thật sự, không thể "tiếp tục" audio cũ được
+  // nữa), rồi tải audio mới và phát từ đầu.
+  resetReviewAudioUI(state.examState.playingReviewAudioId);
+  stopCurrentAudio();
 
   state.currentAudio = new Audio(url);
   state.examState.playingReviewAudioId = examQuestionId;
