@@ -2414,6 +2414,8 @@ function buildQuestionsReview(flatQuestions, answersByBankId) {
       examQuestionId: q.id,
       sectionId: q.sectionId,
       sectionTitle: q.sectionTitle,
+      subsectionId: q.subsectionId,
+      instruction_text: q.instruction_text,
       // Đánh số TUẦN TỰ TOÀN ĐỀ (không reset theo từng section) — khớp
       // đúng với số hiện trên lưới tổng quan (renderResultQuestionsGrid
       // cũng dùng chính index toàn mảng này, i + 1).
@@ -2542,19 +2544,31 @@ function renderResultQuestionDetail(q) {
 function renderResultQuestionsReview(questionsReview) {
   if (!questionsReview || questionsReview.length === 0) return '';
 
+  // Gộp theo subsectionId liền kề — chỉ render 1 khối "Dạng bài" (tiêu đề
+  // section + instruction_text, vd 問題1：...) ngay trước nhóm câu đầu tiên
+  // của subsection đó. Render TRƯỚC passage box, đúng thứ tự như màn làm
+  // bài (renderExamTaking: instruction box rồi mới tới passage box).
+  //
   // Gộp theo passage_id liền kề — chỉ render 1 passage box (kèm 1 nút audio
   // chung) ngay trước nhóm câu đầu tiên thuộc passage đó, giống đúng quy
   // tắc "chỉ 1 nút audio chung, không lặp" đã áp dụng ở màn làm bài.
-  // Dùng "liền kề" (so với passage_id ngay trước) chứ không group toàn cục,
+  // Cả 2 đều dùng "liền kề" (so với id ngay trước) chứ không group toàn cục,
   // vì flatQuestions vốn đã được xếp theo đúng thứ tự sections/subsections/
-  // questions, nên các câu chung passage luôn nằm cạnh nhau.
+  // questions, nên các câu cùng subsection/passage luôn nằm cạnh nhau.
+  let lastSubsectionId = null;
   let lastPassageId = null;
   const detailsHtml = questionsReview.map(q => {
     let block = '';
+    if (q.subsectionId && q.subsectionId !== lastSubsectionId) {
+      block += renderResultInstructionBox(q);
+    }
+    lastSubsectionId = q.subsectionId || null;
+
     if (q.passage_id && q.passage_id !== lastPassageId) {
       block += renderResultPassageBox(q.passage_id, q.sectionId);
     }
     lastPassageId = q.passage_id || null;
+
     block += renderResultQuestionDetail(q);
     return block;
   }).join('');
@@ -2563,6 +2577,22 @@ function renderResultQuestionsReview(questionsReview) {
     <div class="exam-review-section-title">Chi tiết bài làm</div>
     <div class="exam-review-questions-list">
       ${detailsHtml}
+    </div>
+  `;
+}
+
+// ------------------------------------------------------------
+// Khối "Dạng bài" ở màn Đáp án — tiêu đề section + instruction_text của
+// subsection (vd "問題1：（　　）の中に正しいものを選びながら読みなさい。"),
+// tái dùng đúng class exam-instruction-box/-label/-text đã dùng ở màn làm
+// bài (renderExamTaking) để đồng bộ giao diện, không tạo style mới.
+// ------------------------------------------------------------
+function renderResultInstructionBox(q) {
+  if (!q.instruction_text && !q.sectionTitle) return '';
+  return `
+    <div class="exam-instruction-box exam-review-instruction-box">
+      <div class="exam-instruction-label">${q.sectionTitle || ''}</div>
+      <div class="exam-instruction-text">${q.instruction_text || ''}</div>
     </div>
   `;
 }
