@@ -1001,7 +1001,10 @@ function renderExamTaking() {
     // theo yêu cầu, không đụng tới màn Đáp án (renderResultPassageBox vẫn
     // hiện title bình thường, không thuộc phạm vi thay đổi này).
     const currentSection = state.examState.sectionsById[current.sectionId];
-    const isReadingSection = currentSection?.skills?.code === 'reading';
+    // isReadingSection: tên biến giữ nguyên từ lúc chỉ áp dụng cho Đọc hiểu,
+    // nay đã mở rộng ẩn title cho cả Ngữ pháp (grammar) — cả 2 skill này
+    // dùng chung 1 đoạn văn/mondai nên tiêu đề riêng của passage là dư thừa.
+    const isReadingSection = currentSection?.skills?.code === 'reading' || currentSection?.skills?.code === 'grammar';
     const showPassageTitle = passage.title && !isReadingSection;
 
     html += `
@@ -2614,7 +2617,9 @@ function renderResultPassageBox(passageId, sectionId) {
   // đã áp dụng ở màn làm bài (renderExamTaking), tra skill qua sectionsById
   // (đã có sẵn skills.code nhờ join thêm ở loadExamStructure()).
   const section = state.examState.sectionsById[sectionId];
-  const isReadingSection = section?.skills?.code === 'reading';
+  // isReadingSection: tên biến giữ nguyên từ lúc chỉ áp dụng cho Đọc hiểu,
+  // nay đã mở rộng ẩn title cho cả Ngữ pháp (grammar).
+  const isReadingSection = section?.skills?.code === 'reading' || section?.skills?.code === 'grammar';
   const showPassageTitle = passage.title && !isReadingSection;
 
   return `
