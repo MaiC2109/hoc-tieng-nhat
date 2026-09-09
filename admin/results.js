@@ -208,7 +208,9 @@ const RESULT_SKILL_CODE_LABELS = {
 const resultDetailState = {
   attempt: null,
   questionsReview: [],
-  answerFilter: 'all' // 'all' | 'correct' | 'wrong'
+  answerFilter: 'all', // 'all' | 'correct' | 'wrong'
+  passagesMap: {},      // { [passage_id]: passage row } — port từ state.examState.passagesMap
+  sectionsById: {}       // { [exam_section_id]: section row (kèm skills.code) } — dùng để ẩn title passage ở skill Đọc hiểu
 };
 
 function showResultListView() {
@@ -237,7 +239,7 @@ async function loadExamStructureForAdmin(examId) {
   try {
     const { data: sections, error: sectionsError } = await supabaseClient
       .from('exam_sections')
-      .select('id, exam_id, skill_id, title, time_limit_seconds, order_index')
+      .select('id, exam_id, skill_id, title, time_limit_seconds, order_index, skills ( code )')
       .eq('exam_id', examId)
       .order('order_index', { ascending: true });
 
@@ -329,6 +331,31 @@ function flattenExamStructureForAdmin(structure) {
   return flat;
 }
 
+// Port loadPassagesByIds() từ exam.js — admin chưa có hàm này, cần để
+// resolve nội dung passage (Đọc hiểu, Ngữ pháp,...) cho màn chi tiết.
+async function loadPassagesByIdsForAdmin(passageIds) {
+  if (!passageIds || passageIds.length === 0) return {};
+
+  try {
+    const { data, error } = await supabaseClient
+      .from('passages')
+      .select('id, title, content, audio_url')
+      .in('id', passageIds);
+
+    if (error) {
+      console.error('Lỗi tải passages:', error);
+      return {};
+    }
+
+    const map = {};
+    (data || []).forEach(p => { map[p.id] = p; });
+    return map;
+  } catch (err) {
+    console.error('Lỗi không xác định khi tải passages:', err);
+    return {};
+  }
+}
+
 // Copy nguyên buildQuestionsReview() từ exam.js.
 function buildAdminQuestionsReview(flatQuestions, answersByBankId) {
   return flatQuestions.map((q, i) => {
@@ -339,6 +366,8 @@ function buildAdminQuestionsReview(flatQuestions, answersByBankId) {
       examQuestionId: q.id,
       sectionId: q.sectionId,
       sectionTitle: q.sectionTitle,
+      subsectionId: q.subsectionId,
+      instruction_text: q.instruction_text,
       globalNumber: i + 1,
       question_type: qb.question_type,
       question_text: qb.question_text,
@@ -346,6 +375,7 @@ function buildAdminQuestionsReview(flatQuestions, answersByBankId) {
       correct_answer: qb.correct_answer,
       explanation: qb.explanation,
       audio_url: qb.audio_url,
+      passage_id: qb.passage_id || null,
       selected_answer: answer.selected_answer,
       is_correct: !!answer.is_correct
     };
@@ -384,6 +414,20 @@ async function openResultDetail(attemptId) {
       return;
     }
     const flatQuestions = flattenExamStructureForAdmin(structure);
+
+    // sectionsById (kèm skills.code, để ẩn title passage ở skill Đọc hiểu)
+    // + passagesMap (nội dung passage Đọc hiểu/Ngữ pháp...) — trước đây
+    // chưa load nên màn admin không hiện được passage.
+    const sectionsById = {};
+    (structure || []).forEach(section => { sectionsById[section.id] = section; });
+    resultDetailState.sectionsById = sectionsById;
+
+    const passageIds = [...new Set(
+      flatQuestions
+        .map(q => q.question_bank && q.question_bank.passage_id)
+        .filter(Boolean)
+    )];
+    resultDetailState.passagesMap = await loadPassagesByIdsForAdmin(passageIds);
 
     const { data: savedAnswers, error: answersError } = await supabaseClient
       .from('attempt_answers')
@@ -600,7 +644,78 @@ function renderAdminReviewQuestionsList(questionsReview) {
   if (!questionsReview || questionsReview.length === 0) {
     return '<div class="empty-state">Không có câu nào khớp bộ lọc.</div>';
   }
-  return questionsReview.map(q => renderAdminReviewQuestionDetail(q)).join('');
+
+  // Gộp theo subsectionId/passage_id liền kề — port đúng logic từ
+  // renderResultQuestionsReview() trong exam.js: chỉ render 1 khối "Dạng
+  // bài" (instruction) + 1 passage box trước nhóm câu đầu tiên thuộc
+  // subsection/passage đó, không lặp lại từng câu.
+  // Lưu ý: questionsReview truyền vào đây có thể đã bị filter (Đúng/Sai),
+  // nhưng thứ tự gốc vẫn giữ nguyên nên logic "liền kề" vẫn đúng.
+  let lastSubsectionId = null;
+  let lastPassageId = null;
+  return questionsReview.map(q => {
+    let block = '';
+    if (q.subsectionId && q.subsectionId !== lastSubsectionId) {
+      block += renderAdminInstructionBox(q);
+    }
+    lastSubsectionId = q.subsectionId || null;
+
+    if (q.passage_id && q.passage_id !== lastPassageId) {
+      block += renderAdminPassageBox(q.passage_id, q.sectionId);
+    }
+    lastPassageId = q.passage_id || null;
+
+    block += renderAdminReviewQuestionDetail(q);
+    return block;
+  }).join('');
+}
+
+// Khối "Dạng bài" — port renderResultInstructionBox() từ exam.js.
+function renderAdminInstructionBox(q) {
+  if (!q.instruction_text && !q.sectionTitle) return '';
+  return `
+    <div class="exam-instruction-box exam-review-instruction-box">
+      <div class="exam-instruction-label">${q.sectionTitle || ''}</div>
+      <div class="exam-instruction-text">${q.instruction_text || ''}</div>
+    </div>
+  `;
+}
+
+// Passage box (nội dung Đọc hiểu/Ngữ pháp...) — port renderResultPassageBox()
+// từ exam.js, gồm cả logic ẩn title ở skill Đọc hiểu (tra qua sectionsById.skills.code).
+function renderAdminPassageBox(passageId, sectionId) {
+  const passage = resultDetailState.passagesMap[passageId];
+  if (!passage) return '';
+
+  const section = resultDetailState.sectionsById[sectionId];
+  const isReadingSection = section?.skills?.code === 'reading';
+  const showPassageTitle = passage.title && !isReadingSection;
+
+  return `
+    <div class="exam-passage-box exam-review-passage-box">
+      ${showPassageTitle ? `<div class="exam-passage-title">${passage.title}</div>` : ''}
+      ${passage.audio_url ? `
+        <button type="button" class="btn btn-outline exam-audio-btn" onclick="playAdminReviewAudio('${passage.audio_url}')">
+          <i class="ti ti-player-play"></i> Nghe đoạn hội thoại
+        </button>
+      ` : ''}
+      ${passage.content ? `<div class="exam-passage-content">${passage.content}</div>` : ''}
+    </div>
+  `;
+}
+
+// Admin chưa có cơ chế audio nào sẵn (khác học viên có state.currentAudio/
+// stopCurrentAudio() dùng chung toàn site) — tạo 1 slot audio riêng, đơn
+// giản, chỉ cho đúng mục đích nghe thử ở màn xem chi tiết kết quả.
+let adminReviewAudio = null;
+function playAdminReviewAudio(url) {
+  if (adminReviewAudio) {
+    adminReviewAudio.pause();
+    adminReviewAudio.src = '';
+    adminReviewAudio = null;
+  }
+  adminReviewAudio = new Audio(url);
+  adminReviewAudio.play().catch(e => console.log(e));
 }
 
 // ── Màn chi tiết chính — PORT từ renderExamResultScreen() trong exam.js.
