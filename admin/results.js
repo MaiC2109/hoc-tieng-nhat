@@ -688,7 +688,9 @@ function renderAdminPassageBox(passageId, sectionId) {
   if (!passage) return '';
 
   const section = resultDetailState.sectionsById[sectionId];
-  const isReadingSection = section?.skills?.code === 'reading';
+  // isReadingSection: tên biến giữ nguyên từ lúc chỉ áp dụng cho Đọc hiểu,
+  // nay đã mở rộng ẩn title cho cả Ngữ pháp (grammar), đồng bộ với exam.js.
+  const isReadingSection = section?.skills?.code === 'reading' || section?.skills?.code === 'grammar';
   const showPassageTitle = passage.title && !isReadingSection;
 
   return `
