@@ -12,7 +12,19 @@
 // ============================================================
 
 let examsFragmentLoaded = false;
-const examAdminState = { rows: [] };
+const examAdminState = {
+  rows: [],              // toàn bộ đề thi (chưa lọc) — load 1 lần từ loadExamAdminList()
+  skillIdByExam: {},      // { exam_id: skill_id } — chỉ có với đề loại "skill" (1 section duy nhất)
+  sectionCountByExam: {}, // { exam_id: số section } — dùng lại cho cột "Số section"
+  filters: {
+    search: '',
+    examType: '',   // '' | 'full' | 'skill'
+    skillId: '',     // '' | '<skill_id>'
+    status: '',      // '' | 'published' | 'draft'
+    sortField: 'created_at', // 'created_at' | 'available_from' | 'title'
+    sortDirection: 'desc'    // 'asc' | 'desc'
+  }
+};
 
 // Rule mặc định toàn hệ thống trong exam_retry_rules (exam_id IS NULL) —
 // sửa được qua UI ở màn danh sách đề thi (không gắn với 1 đề cụ thể nào).
@@ -70,7 +82,7 @@ async function loadExamAdminList() {
     // mô 1 giáo viên quản lý là nhỏ, chưa cần RPC/aggregate riêng).
     const [examsRes, sectionsRes] = await Promise.all([
       fetch(`${ADMIN_CONFIG.supabaseUrl}/rest/v1/exams?select=id,title,exam_type,pass_threshold_pct,retry_disabled,is_published,available_from,created_at&order=created_at.desc`, { headers }),
-      fetch(`${ADMIN_CONFIG.supabaseUrl}/rest/v1/exam_sections?select=exam_id`, { headers })
+      fetch(`${ADMIN_CONFIG.supabaseUrl}/rest/v1/exam_sections?select=exam_id,skill_id`, { headers })
     ]);
 
     if (!examsRes.ok) throw new Error(`Lỗi tải danh sách đề thi (HTTP ${examsRes.status})`);
@@ -80,19 +92,126 @@ async function loadExamAdminList() {
     const sections = await sectionsRes.json();
 
     const sectionCountByExam = {};
+    // Đề loại "skill" chỉ có đúng 1 section (ràng buộc nghiệp vụ) -> skill_id
+    // của section đó chính là "skill của cả đề", dùng cho filter Kỹ năng.
+    // Đề loại "full" không set (giữ undefined) vì không có 1 skill duy nhất.
+    const skillIdByExam = {};
     sections.forEach(s => {
       sectionCountByExam[s.exam_id] = (sectionCountByExam[s.exam_id] || 0) + 1;
+      if (s.skill_id != null) skillIdByExam[s.exam_id] = s.skill_id;
     });
 
     examAdminState.rows = exams;
-    renderExamAdminTable(exams, sectionCountByExam);
+    examAdminState.skillIdByExam = skillIdByExam;
+    examAdminState.sectionCountByExam = sectionCountByExam;
+    await populateExamFilterSkillOptions();
+    applyExamListFilters();
   } catch (err) {
     console.error('Lỗi tải danh sách đề thi:', err);
     tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state">Có lỗi khi tải danh sách đề thi.</div></td></tr>';
   }
 }
 
-// ── Rule mặc định toàn hệ thống (exam_retry_rules, exam_id IS NULL) ────
+// Đổ options cho dropdown "Kỹ năng" từ skills đã cache (fetchSkillsList()
+// trong questions.js) — gọi lại mỗi lần loadExamAdminList() để chắc chắn
+// list skill mới nhất, nhưng giữ nguyên lựa chọn hiện tại nếu còn hợp lệ.
+async function populateExamFilterSkillOptions() {
+  const select = document.getElementById('exam-filter-skill');
+  if (!select) return;
+
+  const skills = await fetchSkillsList();
+  const currentValue = examAdminState.filters.skillId;
+
+  select.innerHTML = '<option value="">Tất cả kỹ năng</option>' +
+    skills.map(sk => `<option value="${sk.id}">${escHtml(sk.name)}</option>`).join('');
+
+  select.value = skills.some(sk => String(sk.id) === currentValue) ? currentValue : '';
+  if (select.value !== currentValue) examAdminState.filters.skillId = select.value;
+
+  toggleExamSkillFilterEnabled();
+}
+
+// Dropdown Kỹ năng chỉ có ý nghĩa khi Loại đề = 'skill' (đề 'full' không
+// có 1 skill_id duy nhất đại diện cho cả đề) — disable + reset về "Tất cả"
+// khi Loại đề khác 'skill', tránh admin tưởng filter đang áp dụng mà thực
+// ra bị bỏ qua ở applyExamListFilters().
+function toggleExamSkillFilterEnabled() {
+  const select = document.getElementById('exam-filter-skill');
+  if (!select) return;
+
+  const isSkillType = examAdminState.filters.examType === 'skill';
+  select.disabled = !isSkillType;
+  if (!isSkillType && examAdminState.filters.skillId) {
+    examAdminState.filters.skillId = '';
+    select.value = '';
+  }
+}
+
+// Đảo chiều sort — đổi icon mũi tên cho khớp trạng thái, rồi apply lại.
+function toggleExamSortDirection() {
+  examAdminState.filters.sortDirection = examAdminState.filters.sortDirection === 'asc' ? 'desc' : 'asc';
+
+  const icon = document.getElementById('exam-sort-direction-icon');
+  if (icon) {
+    icon.className = examAdminState.filters.sortDirection === 'asc'
+      ? 'ti ti-sort-ascending'
+      : 'ti ti-sort-descending';
+  }
+
+  applyExamListFilters();
+}
+
+// Đọc toàn bộ giá trị filter/sort hiện tại từ UI -> lưu vào
+// examAdminState.filters -> lọc + sort examAdminState.rows (giữ nguyên,
+// không sửa) -> render lại bảng. Lọc/sort hoàn toàn phía client vì
+// examAdminState.rows đã tải đủ 1 lần từ loadExamAdminList(), không cần
+// query lại Supabase mỗi lần đổi filter.
+function applyExamListFilters() {
+  const f = examAdminState.filters;
+  f.search = document.getElementById('exam-search-input')?.value.trim().toLowerCase() || '';
+  f.examType = document.getElementById('exam-filter-type')?.value || '';
+  f.status = document.getElementById('exam-filter-status')?.value || '';
+  f.sortField = document.getElementById('exam-sort-field')?.value || 'created_at';
+
+  toggleExamSkillFilterEnabled();
+  f.skillId = document.getElementById('exam-filter-skill')?.value || '';
+
+  let rows = examAdminState.rows.slice();
+
+  if (f.search) {
+    rows = rows.filter(exam => (exam.title || '').toLowerCase().includes(f.search));
+  }
+  if (f.examType) {
+    rows = rows.filter(exam => exam.exam_type === f.examType);
+  }
+  if (f.status) {
+    const wantPublished = f.status === 'published';
+    rows = rows.filter(exam => !!exam.is_published === wantPublished);
+  }
+  // Chỉ áp dụng khi Loại đề = 'skill' (khớp toggleExamSkillFilterEnabled()) —
+  // dùng skillIdByExam đã tính sẵn từ exam_sections lúc load danh sách.
+  if (f.examType === 'skill' && f.skillId) {
+    rows = rows.filter(exam => String(examAdminState.skillIdByExam[exam.id]) === f.skillId);
+  }
+
+  const dir = f.sortDirection === 'asc' ? 1 : -1;
+  rows.sort((a, b) => {
+    if (f.sortField === 'title') {
+      return a.title.localeCompare(b.title, 'vi') * dir;
+    }
+    // created_at / available_from — đề trống available_from (null, "hiện
+    // ngay") coi như giá trị nhỏ nhất, luôn xếp trước khi sort desc (mới
+    // nhất trước) hoặc sau cùng khi sort asc, tránh null xen giữa list.
+    const valA = a[f.sortField] || '';
+    const valB = b[f.sortField] || '';
+    if (valA === valB) return 0;
+    return (valA > valB ? 1 : -1) * dir;
+  });
+
+  renderExamAdminTable(rows, examAdminState.sectionCountByExam);
+}
+
+
 // Hiển thị ở màn DANH SÁCH đề thi (không thuộc về 1 đề cụ thể nào) —
 // tự chèn container ngay trước bảng danh sách đề thi, idempotent.
 
