@@ -716,7 +716,8 @@ function openExamPreviewModal(exam) {
 // chưa render nội dung bên trong) song song với việc gọi API; tạm thời chỉ
 // console.log(data) để kiểm tra dữ liệu trước khi dựng UI modal ở bước sau.
 const examPreviewState = {
-  tree: [] // [{ ...section, subsections: [{ ...subsection, questions: [] }] }]
+  tree: [], // [{ ...section, subsections: [{ ...subsection, questions: [] }] }]
+  passagesMap: {} // { [passage_id]: { id, title, content, audio_url } }
 };
 
 async function openExamPreview(exam) {
@@ -780,6 +781,15 @@ async function openExamPreview(exam) {
 
     examPreviewState.tree = tree;
     await ensureExamPreviewAssetsLoaded();
+
+    // Tải nội dung passage (reading/grammar dùng đoạn văn chung cho nhiều
+    // câu) — TÁI DÙNG nguyên loadPassagesByIds() từ exam.js, không viết
+    // lại query. Gom passage_id duy nhất từ toàn bộ câu hỏi trong đề.
+    const passageIds = [...new Set(
+      questions.map(q => q.question_bank && q.question_bank.passage_id).filter(Boolean)
+    )];
+    examPreviewState.passagesMap = await loadPassagesByIds(passageIds);
+
     renderExamPreviewBody();
   } catch (err) {
     console.error('Lỗi khi tải dữ liệu xem trước đề thi:', err);
@@ -788,12 +798,10 @@ async function openExamPreview(exam) {
   }
 }
 
-// ── Render nội dung modal: danh sách section + subsection theo order_index ──
-// Chưa render câu hỏi bên trong (subsection.questions đã có sẵn trong
-// examPreviewState.tree từ openExamPreview(), để dành cho bước sau).
+// ── Render nội dung modal: section -> subsection -> câu hỏi ─────────────
 // Tái dùng skillNameById()/escHtml() và class .admin-panel-card/.empty-state
-// sẵn có — không viết CSS mới, không có nút hành động (chỉ xem, không
-// sửa/xóa/di chuyển như renderExamSectionsList()).
+// sẵn có — không viết CSS mới cho khung ngoài, không có nút hành động (chỉ
+// xem, không sửa/xóa/di chuyển như renderExamSectionsList()).
 function renderExamPreviewBody() {
   const body = document.getElementById('exam-preview-body');
   if (!body) return;
@@ -804,17 +812,135 @@ function renderExamPreviewBody() {
     return;
   }
 
+  // lastPassageId dùng CHUNG xuyên suốt cả đề (không reset theo section/
+  // subsection) để gộp đúng passage liền kề kể cả khi 1 passage lỡ vắt
+  // qua ranh giới subsection — cùng nguyên tắc "liền kề" renderResultQuestionsReview()
+  // đang dùng ở màn Đáp án phía học viên.
+  const passageTracker = { lastPassageId: null };
+
   body.innerHTML = tree.map(sec => `
     <div class="admin-panel-card" style="margin-bottom:10px; padding:12px 16px;">
       <div style="font-weight:600;">${escHtml(sec.title || skillNameById(sec.skill_id))}</div>
       <div style="font-size:12px; color:var(--ink-soft); margin-bottom:10px;">
         ${escHtml(skillNameById(sec.skill_id))} · ${Math.round((sec.time_limit_seconds || 0) / 60)} phút
       </div>
-      ${renderExamPreviewSubsections(sec.subsections)}
+      ${renderExamPreviewSubsections(sec.subsections, passageTracker)}
     </div>
   `).join('');
 
   markCorrectAnswersInPreviewBody();
+}
+
+function renderExamPreviewSubsections(subs, passageTracker) {
+  if (!subs || !subs.length) {
+    return '<div class="empty-state" style="padding:10px 0;">Chưa có dạng bài nào trong phần này.</div>';
+  }
+
+  return subs.map((sub, idx) => `
+    <div style="padding:8px 0; ${idx > 0 ? 'border-top:1px solid var(--border-md);' : ''}">
+      <div style="font-size:13px;">${escHtml(sub.instruction_text || '—')}</div>
+      <div style="font-size:12px; color:var(--ink-soft); margin-bottom:6px;">
+        ${sub.questions.length} câu hỏi${sub.audio_url ? ' · <i class="ti ti-volume" title="Đã có audio"></i> Có audio' : ''}
+      </div>
+      ${renderExamPreviewQuestions(sub.questions, passageTracker)}
+    </div>
+  `).join('');
+}
+
+// ── Tái dùng NGUYÊN hàm render câu hỏi của Tier 3 (exam.js, phía học
+// viên) — renderMultipleChoiceAnswers()/renderFillBlankAnswer() — không
+// viết lại UI câu hỏi mới. 2 hàm đó nhận sẵn tham số isLocked để disable
+// input/click chọn đáp án -> readonly=true ở đây chính là isLocked=true.
+//
+// Passage: tái dùng markup/class y hệt renderResultPassageBox() (màn Đáp
+// án của exam.js) — .exam-passage-box/-title/-content, nút audio + progress
+// bar dùng chung toggleReviewQuestionAudio()/seekReviewAudio() (tái dùng
+// nguyên, không viết cơ chế audio mới). Chỉ show 1 lần cho nhóm câu liền
+// kề cùng passage_id, y hệt quy tắc renderResultQuestionsReview().
+//
+// Audio riêng của từng câu hỏi (qb.audio_url, khác với audio của passage):
+// dùng chung 1 hàm toggleReviewQuestionAudio() nhưng với id = current.id,
+// y hệt cách renderResultQuestionDetail() đang làm ở màn Đáp án.
+function renderExamPreviewQuestions(questions, passageTracker) {
+  if (!questions || !questions.length) return '';
+
+  return questions.map((current, idx) => {
+    const qb = current.question_bank || {};
+    const normalizedType = (qb.question_type || '').trim().toLowerCase();
+
+    let passageHtml = '';
+    const passageId = qb.passage_id || null;
+    if (passageId && passageId !== passageTracker.lastPassageId) {
+      passageHtml = renderExamPreviewPassageBox(passageId);
+    }
+    passageTracker.lastPassageId = passageId;
+
+    let answerHtml = '';
+    if (normalizedType === 'multiple_choice') {
+      if (Array.isArray(qb.choices) && qb.choices.length > 0) {
+        answerHtml = renderMultipleChoiceAnswers(current, qb.choices, qb.correct_answer, /* isLocked = */ true);
+      } else {
+        answerHtml = `<div class="exam-question-warning">⚠️ Câu hỏi này chưa có đáp án (choices rỗng trong question_bank).</div>`;
+      }
+    } else if (normalizedType === 'fill_blank') {
+      answerHtml = renderFillBlankAnswer(current, /* isLocked = */ true);
+    } else {
+      answerHtml = `<div class="exam-question-warning">⚠️ Không nhận diện được loại câu hỏi ("${escHtml(qb.question_type || '')}").</div>`;
+    }
+
+    // Nút nghe audio riêng của câu hỏi — TÁI DÙNG toggleReviewQuestionAudio()/
+    // seekReviewAudio() (đã có icon play/pause đổi trạng thái + progress bar),
+    // không phải playExamAudio() (chỉ phát 1 chiều, không toggle) vì ngữ cảnh
+    // "xem lại, không phải đang làm bài thật" khớp với màn Đáp án hơn màn làm bài.
+    const questionAudioHtml = qb.audio_url ? `
+      <div class="exam-audio-controls">
+        <button type="button" class="btn btn-outline exam-audio-btn" onclick="toggleReviewQuestionAudio('${current.id}', '${qb.audio_url}')">
+          <i class="ti ti-player-play" id="review-audio-icon-${current.id}"></i> Nghe audio
+        </button>
+        <input type="range" class="exam-audio-progress" id="review-audio-progress-${current.id}"
+          min="0" max="100" step="0.1" value="0"
+          oninput="seekReviewAudio('${current.id}', this.value)" />
+      </div>
+    ` : '';
+
+    return `
+      ${passageHtml}
+      <div class="exam-question-block" style="margin-top:10px;">
+        <div class="exam-question-number">Câu ${idx + 1}</div>
+        <div class="exam-question-content">${qb.question_text || ''}</div>
+        ${questionAudioHtml}
+        ${answerHtml}
+      </div>
+    `;
+  }).join('');
+}
+
+// Passage box cho reading/grammar (đoạn văn dùng chung nhiều câu) — tái
+// dùng đúng class .exam-passage-box/-title/-content của exam.js, dữ liệu
+// lấy từ examPreviewState.passagesMap (đã tải qua loadPassagesByIds() tái
+// dùng ở openExamPreview()).
+function renderExamPreviewPassageBox(passageId) {
+  const passage = examPreviewState.passagesMap[passageId];
+  if (!passage) return '';
+
+  const toggleId = `passage-${passageId}`;
+
+  return `
+    <div class="exam-passage-box">
+      ${passage.title ? `<div class="exam-passage-title">${escHtml(passage.title)}</div>` : ''}
+      ${passage.audio_url ? `
+        <div class="exam-audio-controls">
+          <button type="button" class="btn btn-outline exam-audio-btn" onclick="toggleReviewQuestionAudio('${toggleId}', '${passage.audio_url}')">
+            <i class="ti ti-player-play" id="review-audio-icon-${toggleId}"></i> Nghe đoạn hội thoại
+          </button>
+          <input type="range" class="exam-audio-progress" id="review-audio-progress-${toggleId}"
+            min="0" max="100" step="0.1" value="0"
+            oninput="seekReviewAudio('${toggleId}', this.value)" />
+        </div>
+      ` : ''}
+      ${passage.content ? `<div class="exam-passage-content">${passage.content}</div>` : ''}
+    </div>
+  `;
 }
 
 // ── Đánh dấu đáp án đúng (chỉ ở Xem trước, admin mới thấy) ──────────────
@@ -872,31 +998,42 @@ function markCorrectAnswersInPreviewBody() {
   });
 }
 
-// Class .correct-answer (xanh nhạt) theo đúng yêu cầu — CHỈ tái dùng biến
-// màu đã có sẵn trong style.css (--sage/--sage-light, đang dùng cho
-// .choice-btn.correct và .exam-choice-btn.selected), không tạo màu mới.
-// Inject bằng JS 1 lần duy nhất vì đây là style CHỈ dùng cho khung Xem
-// trước của admin — không thêm vào style.css (file của học viên) hay
-// admin.css để tránh rò rỉ sang các màn khác.
+// Class .correct-answer — ĐÃ SỬA theo phản hồi: chữ trước dùng var(--sage)
+// (#5a7a6a) tương phản yếu trên nền --sage-light nên bị "mờ". Đổi sang cặp
+// màu #0f6e56/#e1f5ee — KHÔNG phải màu mới tự bịa, đây chính là cặp màu đã
+// dùng sẵn cho .exam-status-badge.is-published trong admin.css (badge
+// "Published", cũng mang nghĩa tích cực/thành công), chỉ tái dùng lại cho
+// nhất quán + tăng font-weight cho rõ. Vẫn inject bằng JS, chỉ áp dụng
+// trong khung Xem trước, không đụng style.css/admin.css.
 function ensureCorrectAnswerStyleInjected() {
   if (document.getElementById('exam-preview-correct-answer-style')) return;
   const style = document.createElement('style');
   style.id = 'exam-preview-correct-answer-style';
   style.textContent = `
-    .exam-choice-btn.correct-answer {
-      border-color: var(--sage) !important;
-      background: var(--sage-light) !important;
-      color: var(--sage) !important;
+    #exam-preview-body .exam-choice-btn.correct-answer {
+      border-color: #0f6e56 !important;
+      background: #e1f5ee !important;
+      color: #0f6e56 !important;
+      font-weight: 700 !important;
     }
-    .exam-choice-btn.correct-answer .exam-choice-label { background: var(--sage) !important; }
-    .exam-choice-btn.correct-answer::after { content: "✓ Đáp án đúng"; margin-left: 8px; font-size: 11px; font-weight: 600; }
-    div.correct-answer {
+    #exam-preview-body .exam-choice-btn.correct-answer .exam-choice-label {
+      background: #0f6e56 !important;
+      color: #fff !important;
+    }
+    #exam-preview-body .exam-choice-btn.correct-answer::after {
+      content: "✓ Đáp án đúng";
+      margin-left: 8px;
+      font-size: 12px;
+      font-weight: 700;
+      color: #0f6e56;
+    }
+    #exam-preview-body div.correct-answer {
       margin-top: 6px;
       display: inline-block;
       font-size: 13px;
-      font-weight: 500;
-      color: var(--sage);
-      background: var(--sage-light);
+      font-weight: 700;
+      color: #0f6e56;
+      background: #e1f5ee;
       padding: 4px 12px;
       border-radius: 20px;
     }
@@ -904,78 +1041,42 @@ function ensureCorrectAnswerStyleInjected() {
   document.head.appendChild(style);
 }
 
-function renderExamPreviewSubsections(subs) {
-  if (!subs || !subs.length) {
-    return '<div class="empty-state" style="padding:10px 0;">Chưa có dạng bài nào trong phần này.</div>';
-  }
-
-  return subs.map((sub, idx) => `
-    <div style="padding:8px 0; ${idx > 0 ? 'border-top:1px solid var(--border-md);' : ''}">
-      <div style="font-size:13px;">${escHtml(sub.instruction_text || '—')}</div>
-      <div style="font-size:12px; color:var(--ink-soft); margin-bottom:6px;">
-        ${sub.questions.length} câu hỏi${sub.audio_url ? ' · <i class="ti ti-volume" title="Đã có audio"></i> Có audio' : ''}
-      </div>
-      ${renderExamPreviewQuestions(sub.questions)}
-    </div>
-  `).join('');
-}
-
-// ── Tái dùng NGUYÊN hàm render câu hỏi của Tier 3 (exam.js, phía học
-// viên) — renderMultipleChoiceAnswers()/renderFillBlankAnswer() — không
-// viết lại UI câu hỏi mới. 2 hàm đó nhận sẵn tham số isLocked để
-// disable input/click chọn đáp án -> readonly=true ở đây chính là
-// isLocked=true, không cần thêm tham số/nhánh mới trong exam.js.
+// Nạp exam.js (chứa renderMultipleChoiceAnswers/renderFillBlankAnswer/
+// toggleReviewQuestionAudio/loadPassagesByIds...) và style.css (chứa toàn
+// bộ class .exam-*) bằng JS, vì admin/index.html không có sẵn 2 file này
+// (Tier 3 là app riêng của học viên) — tránh phải sửa markup admin/index.html
+// mà mình chưa có. Chỉ nạp 1 lần duy nhất.
 //
-// Object câu hỏi trong examPreviewState.tree (lấy từ query exam_questions
-// ?select=id,...,question_bank(...)) đã đúng shape mà exam.js kỳ vọng cho
-// "current" (id = exam_questions.id, current.question_bank = object join)
-// — xem flattenExamStructure() trong exam.js, nên truyền thẳng không cần
-// map lại.
-function renderExamPreviewQuestions(questions) {
-  if (!questions || !questions.length) return '';
-
-  return questions.map((current, idx) => {
-    const qb = current.question_bank || {};
-    const normalizedType = (qb.question_type || '').trim().toLowerCase();
-
-    let answerHtml = '';
-    if (normalizedType === 'multiple_choice') {
-      if (Array.isArray(qb.choices) && qb.choices.length > 0) {
-        answerHtml = renderMultipleChoiceAnswers(current, qb.choices, qb.correct_answer, /* isLocked = */ true);
-      } else {
-        answerHtml = `<div class="exam-question-warning">⚠️ Câu hỏi này chưa có đáp án (choices rỗng trong question_bank).</div>`;
-      }
-    } else if (normalizedType === 'fill_blank') {
-      answerHtml = renderFillBlankAnswer(current, /* isLocked = */ true);
-    } else {
-      answerHtml = `<div class="exam-question-warning">⚠️ Không nhận diện được loại câu hỏi ("${escHtml(qb.question_type || '')}").</div>`;
-    }
-
-    return `
-      <div class="exam-question-block" style="margin-top:10px;">
-        <div class="exam-question-number">Câu ${idx + 1}</div>
-        <div class="exam-question-content">${qb.question_text || ''}</div>
-        ${qb.audio_url ? `<div class="exam-question-warning" style="background:transparent; border:none; padding:4px 0; color:var(--ink-soft);"><i class="ti ti-volume"></i> Có audio (không phát trong Xem trước)</div>` : ''}
-        ${answerHtml}
-      </div>
-    `;
-  }).join('');
-}
-
-// Nạp exam.js (chứa renderMultipleChoiceAnswers/renderFillBlankAnswer) và
-// style.css (chứa toàn bộ class .exam-*) bằng JS, vì admin/index.html
-// không có sẵn 2 file này (Tier 3 là app riêng của học viên) — tránh phải
-// sửa markup admin/index.html mà mình chưa có. Chỉ nạp 1 lần duy nhất.
-//
-// exam.js cần biến global `state.examState.selectedAnswers` tồn tại (bình
-// thường do app.js khai báo — admin không load app.js) nên tự tạo 1
-// `state` rỗng RIÊNG cho admin ở đây, không phải state thật của học viên.
+// exam.js cần 2 biến global sau (bình thường do app.js khai báo — admin
+// không load app.js vì app.js tự khai báo `const supabaseClient` riêng,
+// SẼ ĐỤNG với `const supabaseClient` admin.js đã khai báo sẵn -> lỗi
+// "already declared". Vì vậy KHÔNG load app.js, chỉ tự tạo 2 phần tối
+// thiểu mà exam.js thực sự cần, RIÊNG cho admin, không đụng state/audio
+// thật của học viên):
+//   1) state.examState.selectedAnswers — renderMultipleChoiceAnswers()/
+//      renderFillBlankAnswer() đọc kể cả khi locked.
+//   2) stopCurrentAudio() — toggleReviewQuestionAudio()/playExamAudio()
+//      gọi để dừng audio trước đó trước khi phát audio mới. Copy nguyên
+//      logic từ app.js (hàm gốc rất nhỏ, thuần thao tác trên 1 thẻ
+//      <audio>, không phải UI) vì không thể load cả app.js.
 let examPreviewAssetsPromise = null;
 function ensureExamPreviewAssetsLoaded() {
   if (examPreviewAssetsPromise) return examPreviewAssetsPromise;
 
   window.state = window.state || {};
   window.state.examState = window.state.examState || { selectedAnswers: {} };
+
+  if (typeof window.stopCurrentAudio !== 'function') {
+    window.stopCurrentAudio = function stopCurrentAudio() {
+      if (window.state.currentAudio) {
+        window.state.currentAudio.onended = null;
+        window.state.currentAudio.onerror = null;
+        window.state.currentAudio.pause();
+        window.state.currentAudio.src = '';
+        window.state.currentAudio = null;
+      }
+    };
+  }
 
   ensureCorrectAnswerStyleInjected();
 
