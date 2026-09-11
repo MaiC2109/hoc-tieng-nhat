@@ -12,7 +12,19 @@
 // ============================================================
 
 let examsFragmentLoaded = false;
-const examAdminState = { rows: [] };
+const examAdminState = {
+  rows: [],              // toàn bộ đề thi (chưa lọc) — load 1 lần từ loadExamAdminList()
+  skillIdByExam: {},      // { exam_id: skill_id } — chỉ có với đề loại "skill" (1 section duy nhất)
+  sectionCountByExam: {}, // { exam_id: số section } — dùng lại cho cột "Số section"
+  filters: {
+    search: '',
+    examType: '',   // '' | 'full' | 'skill'
+    skillId: '',     // '' | '<skill_id>'
+    status: '',      // '' | 'published' | 'draft'
+    sortField: 'created_at', // 'created_at' | 'available_from' | 'title'
+    sortDirection: 'desc'    // 'asc' | 'desc'
+  }
+};
 
 // Rule mặc định toàn hệ thống trong exam_retry_rules (exam_id IS NULL) —
 // sửa được qua UI ở màn danh sách đề thi (không gắn với 1 đề cụ thể nào).
@@ -70,7 +82,7 @@ async function loadExamAdminList() {
     // mô 1 giáo viên quản lý là nhỏ, chưa cần RPC/aggregate riêng).
     const [examsRes, sectionsRes] = await Promise.all([
       fetch(`${ADMIN_CONFIG.supabaseUrl}/rest/v1/exams?select=id,title,exam_type,pass_threshold_pct,retry_disabled,is_published,available_from,created_at&order=created_at.desc`, { headers }),
-      fetch(`${ADMIN_CONFIG.supabaseUrl}/rest/v1/exam_sections?select=exam_id`, { headers })
+      fetch(`${ADMIN_CONFIG.supabaseUrl}/rest/v1/exam_sections?select=exam_id,skill_id`, { headers })
     ]);
 
     if (!examsRes.ok) throw new Error(`Lỗi tải danh sách đề thi (HTTP ${examsRes.status})`);
@@ -80,19 +92,126 @@ async function loadExamAdminList() {
     const sections = await sectionsRes.json();
 
     const sectionCountByExam = {};
+    // Đề loại "skill" chỉ có đúng 1 section (ràng buộc nghiệp vụ) -> skill_id
+    // của section đó chính là "skill của cả đề", dùng cho filter Kỹ năng.
+    // Đề loại "full" không set (giữ undefined) vì không có 1 skill duy nhất.
+    const skillIdByExam = {};
     sections.forEach(s => {
       sectionCountByExam[s.exam_id] = (sectionCountByExam[s.exam_id] || 0) + 1;
+      if (s.skill_id != null) skillIdByExam[s.exam_id] = s.skill_id;
     });
 
     examAdminState.rows = exams;
-    renderExamAdminTable(exams, sectionCountByExam);
+    examAdminState.skillIdByExam = skillIdByExam;
+    examAdminState.sectionCountByExam = sectionCountByExam;
+    await populateExamFilterSkillOptions();
+    applyExamListFilters();
   } catch (err) {
     console.error('Lỗi tải danh sách đề thi:', err);
     tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state">Có lỗi khi tải danh sách đề thi.</div></td></tr>';
   }
 }
 
-// ── Rule mặc định toàn hệ thống (exam_retry_rules, exam_id IS NULL) ────
+// Đổ options cho dropdown "Kỹ năng" từ skills đã cache (fetchSkillsList()
+// trong questions.js) — gọi lại mỗi lần loadExamAdminList() để chắc chắn
+// list skill mới nhất, nhưng giữ nguyên lựa chọn hiện tại nếu còn hợp lệ.
+async function populateExamFilterSkillOptions() {
+  const select = document.getElementById('exam-filter-skill');
+  if (!select) return;
+
+  const skills = await fetchSkillsList();
+  const currentValue = examAdminState.filters.skillId;
+
+  select.innerHTML = '<option value="">Tất cả kỹ năng</option>' +
+    skills.map(sk => `<option value="${sk.id}">${escHtml(sk.name)}</option>`).join('');
+
+  select.value = skills.some(sk => String(sk.id) === currentValue) ? currentValue : '';
+  if (select.value !== currentValue) examAdminState.filters.skillId = select.value;
+
+  toggleExamSkillFilterEnabled();
+}
+
+// Dropdown Kỹ năng chỉ có ý nghĩa khi Loại đề = 'skill' (đề 'full' không
+// có 1 skill_id duy nhất đại diện cho cả đề) — disable + reset về "Tất cả"
+// khi Loại đề khác 'skill', tránh admin tưởng filter đang áp dụng mà thực
+// ra bị bỏ qua ở applyExamListFilters().
+function toggleExamSkillFilterEnabled() {
+  const select = document.getElementById('exam-filter-skill');
+  if (!select) return;
+
+  const isSkillType = examAdminState.filters.examType === 'skill';
+  select.disabled = !isSkillType;
+  if (!isSkillType && examAdminState.filters.skillId) {
+    examAdminState.filters.skillId = '';
+    select.value = '';
+  }
+}
+
+// Đảo chiều sort — đổi icon mũi tên cho khớp trạng thái, rồi apply lại.
+function toggleExamSortDirection() {
+  examAdminState.filters.sortDirection = examAdminState.filters.sortDirection === 'asc' ? 'desc' : 'asc';
+
+  const icon = document.getElementById('exam-sort-direction-icon');
+  if (icon) {
+    icon.className = examAdminState.filters.sortDirection === 'asc'
+      ? 'ti ti-sort-ascending'
+      : 'ti ti-sort-descending';
+  }
+
+  applyExamListFilters();
+}
+
+// Đọc toàn bộ giá trị filter/sort hiện tại từ UI -> lưu vào
+// examAdminState.filters -> lọc + sort examAdminState.rows (giữ nguyên,
+// không sửa) -> render lại bảng. Lọc/sort hoàn toàn phía client vì
+// examAdminState.rows đã tải đủ 1 lần từ loadExamAdminList(), không cần
+// query lại Supabase mỗi lần đổi filter.
+function applyExamListFilters() {
+  const f = examAdminState.filters;
+  f.search = document.getElementById('exam-search-input')?.value.trim().toLowerCase() || '';
+  f.examType = document.getElementById('exam-filter-type')?.value || '';
+  f.status = document.getElementById('exam-filter-status')?.value || '';
+  f.sortField = document.getElementById('exam-sort-field')?.value || 'created_at';
+
+  toggleExamSkillFilterEnabled();
+  f.skillId = document.getElementById('exam-filter-skill')?.value || '';
+
+  let rows = examAdminState.rows.slice();
+
+  if (f.search) {
+    rows = rows.filter(exam => (exam.title || '').toLowerCase().includes(f.search));
+  }
+  if (f.examType) {
+    rows = rows.filter(exam => exam.exam_type === f.examType);
+  }
+  if (f.status) {
+    const wantPublished = f.status === 'published';
+    rows = rows.filter(exam => !!exam.is_published === wantPublished);
+  }
+  // Chỉ áp dụng khi Loại đề = 'skill' (khớp toggleExamSkillFilterEnabled()) —
+  // dùng skillIdByExam đã tính sẵn từ exam_sections lúc load danh sách.
+  if (f.examType === 'skill' && f.skillId) {
+    rows = rows.filter(exam => String(examAdminState.skillIdByExam[exam.id]) === f.skillId);
+  }
+
+  const dir = f.sortDirection === 'asc' ? 1 : -1;
+  rows.sort((a, b) => {
+    if (f.sortField === 'title') {
+      return a.title.localeCompare(b.title, 'vi') * dir;
+    }
+    // created_at / available_from — đề trống available_from (null, "hiện
+    // ngay") coi như giá trị nhỏ nhất, luôn xếp trước khi sort desc (mới
+    // nhất trước) hoặc sau cùng khi sort asc, tránh null xen giữa list.
+    const valA = a[f.sortField] || '';
+    const valB = b[f.sortField] || '';
+    if (valA === valB) return 0;
+    return (valA > valB ? 1 : -1) * dir;
+  });
+
+  renderExamAdminTable(rows, examAdminState.sectionCountByExam);
+}
+
+
 // Hiển thị ở màn DANH SÁCH đề thi (không thuộc về 1 đề cụ thể nào) —
 // tự chèn container ngay trước bảng danh sách đề thi, idempotent.
 
@@ -498,6 +617,389 @@ function renderExamDetailHeader() {
 
   const deleteBtn = document.getElementById('exam-detail-delete-btn');
   if (deleteBtn) deleteBtn.onclick = () => deleteExam(exam.id, exam.title);
+
+  // Nút "Xem trước" — admin/exams.html chưa có sẵn markup cho nút này nên
+  // tự tạo bằng JS nếu chưa tồn tại (idempotent, renderExamDetailHeader()
+  // có thể được gọi lại nhiều lần). Chèn cạnh nút Sửa/Xóa, cùng parent.
+  let previewBtn = document.getElementById('exam-detail-preview-btn');
+  if (!previewBtn && editBtn && editBtn.parentElement) {
+    previewBtn = document.createElement('button');
+    previewBtn.id = 'exam-detail-preview-btn';
+    previewBtn.type = 'button';
+    previewBtn.className = 'btn btn-outline';
+    previewBtn.textContent = '👁️ Xem trước';
+    editBtn.parentElement.insertBefore(previewBtn, editBtn);
+  }
+  if (previewBtn) previewBtn.onclick = () => openExamPreview(exam);
+}
+
+// ── Modal "Xem trước đề thi" — khung rỗng ───────────────────────────────
+// admin/exams.html chưa có sẵn markup cho modal này nên dựng DOM bằng JS
+// (giống cách tạo nút previewBtn ở trên), CHỈ dùng lại class CSS đã có
+// trong admin.css (.admin-overlay, .admin-slide-panel, .admin-modal-centered,
+// .admin-slide-panel-header, .admin-slide-close-btn, .admin-slide-panel-body,
+// .exam-status-badge) — không viết CSS mới. Tạo 1 lần duy nhất, các lần mở
+// sau chỉ toggle display + đổi lại nội dung header.
+function ensureExamPreviewModalDom() {
+  if (document.getElementById('exam-preview-overlay')) return;
+
+  const overlay = document.createElement('div');
+  overlay.id = 'exam-preview-overlay';
+  overlay.className = 'admin-overlay';
+  overlay.style.display = 'none';
+  overlay.onclick = closeExamPreviewModal;
+
+  const panel = document.createElement('div');
+  panel.id = 'exam-preview-panel';
+  panel.className = 'admin-slide-panel admin-modal-centered';
+  panel.style.display = 'none';
+  // Chặn click bên trong panel nổi bọt lên overlay (tránh đóng nhầm khi
+  // click vào nội dung modal) — cùng pattern các slide-panel khác thường
+  // đặt onclick đóng ở overlay riêng, không đặt trên panel.
+  panel.onclick = (e) => e.stopPropagation();
+
+  panel.innerHTML = `
+    <div class="admin-slide-panel-header">
+      <div>
+        <h3 id="exam-preview-title" style="margin-bottom:6px;">Đề thi</h3>
+        <div id="exam-preview-badges" style="display:flex; gap:6px;"></div>
+      </div>
+      <button type="button" class="admin-slide-close-btn" id="exam-preview-close-btn">✕</button>
+    </div>
+    <div class="admin-slide-panel-body" id="exam-preview-body">
+      <!-- Chưa render nội dung — sẽ thêm ở bước sau -->
+    </div>
+  `;
+
+  document.body.appendChild(overlay);
+  document.body.appendChild(panel);
+
+  document.getElementById('exam-preview-close-btn').onclick = closeExamPreviewModal;
+}
+
+function closeExamPreviewModal() {
+  const overlay = document.getElementById('exam-preview-overlay');
+  const panel = document.getElementById('exam-preview-panel');
+  if (overlay) overlay.style.display = 'none';
+  if (panel) panel.style.display = 'none';
+}
+
+// Điền header (tên đề + badge Draft/Published + badge Full/Skill) rồi mở
+// modal. Tái dùng class .exam-status-badge sẵn có cho cả 2 badge — badge
+// Full/Skill không có màu is-published/is-draft riêng nên set inline style
+// trung tính (đúng tiền lệ đã có sẵn trong file này ở dòng badge "Không
+// cần retry" tại renderExamDetailHeader(), không phải CSS mới).
+function openExamPreviewModal(exam) {
+  ensureExamPreviewModalDom();
+
+  const titleEl = document.getElementById('exam-preview-title');
+  const badgesEl = document.getElementById('exam-preview-badges');
+  if (titleEl) titleEl.textContent = exam.title || 'Đề thi';
+  if (badgesEl) {
+    badgesEl.innerHTML = `
+      <span class="exam-status-badge ${exam.is_published ? 'is-published' : 'is-draft'}">
+        ${exam.is_published ? 'Published' : 'Draft'}
+      </span>
+      <span class="exam-status-badge" style="background:var(--paper-warm); color:var(--ink-soft);">
+        ${exam.exam_type === 'full' ? 'Full' : 'Skill'}
+      </span>
+    `;
+  }
+
+  document.getElementById('exam-preview-overlay').style.display = 'block';
+  document.getElementById('exam-preview-panel').style.display = 'flex';
+}
+
+// ── Xem trước đề thi — query dữ liệu ─────────────────────────────────────
+// Query lồng đúng thứ tự exam_sections -> exam_subsections -> exam_questions
+// (join question_bank), sort order_index ở cả 3 cấp. Mở modal (khung rỗng,
+// chưa render nội dung bên trong) song song với việc gọi API; tạm thời chỉ
+// console.log(data) để kiểm tra dữ liệu trước khi dựng UI modal ở bước sau.
+const examPreviewState = {
+  tree: [] // [{ ...section, subsections: [{ ...subsection, questions: [] }] }]
+};
+
+async function openExamPreview(exam) {
+  openExamPreviewModal(exam);
+
+  const body = document.getElementById('exam-preview-body');
+  if (body) body.innerHTML = '<div class="empty-state">Đang tải...</div>';
+
+  const examId = exam.id;
+  try {
+    const headers = await sbAuthedHeaders();
+
+    const sectionsRes = await fetch(
+      `${ADMIN_CONFIG.supabaseUrl}/rest/v1/exam_sections?exam_id=eq.${examId}` +
+      `&select=id,exam_id,skill_id,title,time_limit_seconds,order_index&order=order_index.asc`,
+      { headers }
+    );
+    const sections = await sectionsRes.json();
+
+    const sectionIds = sections.map(s => s.id);
+    let subsections = [];
+    if (sectionIds.length) {
+      const subsRes = await fetch(
+        `${ADMIN_CONFIG.supabaseUrl}/rest/v1/exam_subsections?exam_section_id=in.(${sectionIds.join(',')})` +
+        `&select=id,exam_section_id,instruction_text,audio_url,order_index&order=order_index.asc`,
+        { headers }
+      );
+      subsections = await subsRes.json();
+    }
+
+    const subsectionIds = subsections.map(s => s.id);
+    let questions = [];
+    if (subsectionIds.length) {
+      // PostgREST embed question_bank(...) trong 1 request duy nhất, giống
+      // pattern đã dùng ở openSubsectionQuestionList().
+      const questionsRes = await fetch(
+        `${ADMIN_CONFIG.supabaseUrl}/rest/v1/exam_questions?exam_subsection_id=in.(${subsectionIds.join(',')})` +
+        `&select=id,exam_subsection_id,order_index,points,question_id,question_bank(id,question_text,question_type,choices,correct_answer,explanation,audio_url,passage_id)` +
+        `&order=order_index.asc`,
+        { headers }
+      );
+      questions = await questionsRes.json();
+    }
+
+    // Ráp lại thành cây section -> subsections -> questions để dễ kiểm tra
+    // bằng mắt trong console, đồng thời vẫn console.log riêng từng mảng gốc.
+    const tree = sections.map(sec => ({
+      ...sec,
+      subsections: subsections
+        .filter(sub => sub.exam_section_id === sec.id)
+        .map(sub => ({
+          ...sub,
+          questions: questions.filter(q => q.exam_subsection_id === sub.id)
+        }))
+    }));
+
+    console.log('[openExamPreview] sections:', sections);
+    console.log('[openExamPreview] subsections:', subsections);
+    console.log('[openExamPreview] questions (join question_bank):', questions);
+    console.log('[openExamPreview] tree:', tree);
+
+    examPreviewState.tree = tree;
+    await ensureExamPreviewAssetsLoaded();
+    renderExamPreviewBody();
+  } catch (err) {
+    console.error('Lỗi khi tải dữ liệu xem trước đề thi:', err);
+    const body = document.getElementById('exam-preview-body');
+    if (body) body.innerHTML = '<div class="empty-state">Có lỗi khi tải dữ liệu đề thi.</div>';
+  }
+}
+
+// ── Render nội dung modal: danh sách section + subsection theo order_index ──
+// Chưa render câu hỏi bên trong (subsection.questions đã có sẵn trong
+// examPreviewState.tree từ openExamPreview(), để dành cho bước sau).
+// Tái dùng skillNameById()/escHtml() và class .admin-panel-card/.empty-state
+// sẵn có — không viết CSS mới, không có nút hành động (chỉ xem, không
+// sửa/xóa/di chuyển như renderExamSectionsList()).
+function renderExamPreviewBody() {
+  const body = document.getElementById('exam-preview-body');
+  if (!body) return;
+
+  const tree = examPreviewState.tree;
+  if (!tree.length) {
+    body.innerHTML = '<div class="empty-state">Đề thi này chưa có phần thi nào.</div>';
+    return;
+  }
+
+  body.innerHTML = tree.map(sec => `
+    <div class="admin-panel-card" style="margin-bottom:10px; padding:12px 16px;">
+      <div style="font-weight:600;">${escHtml(sec.title || skillNameById(sec.skill_id))}</div>
+      <div style="font-size:12px; color:var(--ink-soft); margin-bottom:10px;">
+        ${escHtml(skillNameById(sec.skill_id))} · ${Math.round((sec.time_limit_seconds || 0) / 60)} phút
+      </div>
+      ${renderExamPreviewSubsections(sec.subsections)}
+    </div>
+  `).join('');
+
+  markCorrectAnswersInPreviewBody();
+}
+
+// ── Đánh dấu đáp án đúng (chỉ ở Xem trước, admin mới thấy) ──────────────
+// Không sửa renderMultipleChoiceAnswers()/renderFillBlankAnswer() gốc (2
+// hàm đó không có khái niệm "đáp án đúng hiển thị sẵn" vì phía học viên
+// không được lộ đáp án) — thay vào đó post-process DOM SAU KHI đã render
+// xong, dựa theo đúng thứ tự lồng nhau tree -> subsections -> questions
+// (khớp 1:1 với thứ tự .exam-question-block xuất hiện trong DOM).
+function flattenPreviewQuestions(tree) {
+  const flat = [];
+  (tree || []).forEach(sec => {
+    (sec.subsections || []).forEach(sub => {
+      (sub.questions || []).forEach(q => flat.push(q));
+    });
+  });
+  return flat;
+}
+
+function markCorrectAnswersInPreviewBody() {
+  const body = document.getElementById('exam-preview-body');
+  if (!body) return;
+
+  const flatQuestions = flattenPreviewQuestions(examPreviewState.tree);
+  const blocks = body.querySelectorAll('.exam-question-block');
+
+  blocks.forEach((block, i) => {
+    const current = flatQuestions[i];
+    if (!current) return;
+
+    const qb = current.question_bank || {};
+    const normalizedType = (qb.question_type || '').trim().toLowerCase();
+
+    if (normalizedType === 'multiple_choice' && Array.isArray(qb.choices)) {
+      // Khớp lại đúng nút bằng INDEX trong choices (cùng thứ tự
+      // renderMultipleChoiceAnswers() dùng để render từng button), không
+      // so khớp bằng giá trị để tránh lệch nếu choices chứa HTML trùng nhau.
+      const correctIndex = qb.choices.indexOf(qb.correct_answer);
+      const buttons = block.querySelectorAll('.exam-choice-btn');
+      if (correctIndex >= 0 && buttons[correctIndex]) {
+        buttons[correctIndex].classList.add('correct-answer');
+      }
+    } else if ((normalizedType === 'fill_blank' || normalizedType === 'type_answer') && qb.correct_answer != null) {
+      const wrap = block.querySelector('.exam-fill-blank-wrap');
+      const note = document.createElement('div');
+      note.className = 'correct-answer';
+      note.textContent = `Đáp án đúng: ${qb.correct_answer}`;
+      if (wrap) {
+        wrap.insertAdjacentElement('afterend', note);
+      } else {
+        // type_answer chưa có hàm render riêng (xem báo cáo Bước 1) nên
+        // chưa có .exam-fill-blank-wrap để chèn cạnh -> gắn thẳng cuối block.
+        block.appendChild(note);
+      }
+    }
+  });
+}
+
+// Class .correct-answer (xanh nhạt) theo đúng yêu cầu — CHỈ tái dùng biến
+// màu đã có sẵn trong style.css (--sage/--sage-light, đang dùng cho
+// .choice-btn.correct và .exam-choice-btn.selected), không tạo màu mới.
+// Inject bằng JS 1 lần duy nhất vì đây là style CHỈ dùng cho khung Xem
+// trước của admin — không thêm vào style.css (file của học viên) hay
+// admin.css để tránh rò rỉ sang các màn khác.
+function ensureCorrectAnswerStyleInjected() {
+  if (document.getElementById('exam-preview-correct-answer-style')) return;
+  const style = document.createElement('style');
+  style.id = 'exam-preview-correct-answer-style';
+  style.textContent = `
+    .exam-choice-btn.correct-answer {
+      border-color: var(--sage) !important;
+      background: var(--sage-light) !important;
+      color: var(--sage) !important;
+    }
+    .exam-choice-btn.correct-answer .exam-choice-label { background: var(--sage) !important; }
+    .exam-choice-btn.correct-answer::after { content: "✓ Đáp án đúng"; margin-left: 8px; font-size: 11px; font-weight: 600; }
+    div.correct-answer {
+      margin-top: 6px;
+      display: inline-block;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--sage);
+      background: var(--sage-light);
+      padding: 4px 12px;
+      border-radius: 20px;
+    }
+  `;
+  document.head.appendChild(style);
+}
+
+function renderExamPreviewSubsections(subs) {
+  if (!subs || !subs.length) {
+    return '<div class="empty-state" style="padding:10px 0;">Chưa có dạng bài nào trong phần này.</div>';
+  }
+
+  return subs.map((sub, idx) => `
+    <div style="padding:8px 0; ${idx > 0 ? 'border-top:1px solid var(--border-md);' : ''}">
+      <div style="font-size:13px;">${escHtml(sub.instruction_text || '—')}</div>
+      <div style="font-size:12px; color:var(--ink-soft); margin-bottom:6px;">
+        ${sub.questions.length} câu hỏi${sub.audio_url ? ' · <i class="ti ti-volume" title="Đã có audio"></i> Có audio' : ''}
+      </div>
+      ${renderExamPreviewQuestions(sub.questions)}
+    </div>
+  `).join('');
+}
+
+// ── Tái dùng NGUYÊN hàm render câu hỏi của Tier 3 (exam.js, phía học
+// viên) — renderMultipleChoiceAnswers()/renderFillBlankAnswer() — không
+// viết lại UI câu hỏi mới. 2 hàm đó nhận sẵn tham số isLocked để
+// disable input/click chọn đáp án -> readonly=true ở đây chính là
+// isLocked=true, không cần thêm tham số/nhánh mới trong exam.js.
+//
+// Object câu hỏi trong examPreviewState.tree (lấy từ query exam_questions
+// ?select=id,...,question_bank(...)) đã đúng shape mà exam.js kỳ vọng cho
+// "current" (id = exam_questions.id, current.question_bank = object join)
+// — xem flattenExamStructure() trong exam.js, nên truyền thẳng không cần
+// map lại.
+function renderExamPreviewQuestions(questions) {
+  if (!questions || !questions.length) return '';
+
+  return questions.map((current, idx) => {
+    const qb = current.question_bank || {};
+    const normalizedType = (qb.question_type || '').trim().toLowerCase();
+
+    let answerHtml = '';
+    if (normalizedType === 'multiple_choice') {
+      if (Array.isArray(qb.choices) && qb.choices.length > 0) {
+        answerHtml = renderMultipleChoiceAnswers(current, qb.choices, qb.correct_answer, /* isLocked = */ true);
+      } else {
+        answerHtml = `<div class="exam-question-warning">⚠️ Câu hỏi này chưa có đáp án (choices rỗng trong question_bank).</div>`;
+      }
+    } else if (normalizedType === 'fill_blank') {
+      answerHtml = renderFillBlankAnswer(current, /* isLocked = */ true);
+    } else {
+      answerHtml = `<div class="exam-question-warning">⚠️ Không nhận diện được loại câu hỏi ("${escHtml(qb.question_type || '')}").</div>`;
+    }
+
+    return `
+      <div class="exam-question-block" style="margin-top:10px;">
+        <div class="exam-question-number">Câu ${idx + 1}</div>
+        <div class="exam-question-content">${qb.question_text || ''}</div>
+        ${qb.audio_url ? `<div class="exam-question-warning" style="background:transparent; border:none; padding:4px 0; color:var(--ink-soft);"><i class="ti ti-volume"></i> Có audio (không phát trong Xem trước)</div>` : ''}
+        ${answerHtml}
+      </div>
+    `;
+  }).join('');
+}
+
+// Nạp exam.js (chứa renderMultipleChoiceAnswers/renderFillBlankAnswer) và
+// style.css (chứa toàn bộ class .exam-*) bằng JS, vì admin/index.html
+// không có sẵn 2 file này (Tier 3 là app riêng của học viên) — tránh phải
+// sửa markup admin/index.html mà mình chưa có. Chỉ nạp 1 lần duy nhất.
+//
+// exam.js cần biến global `state.examState.selectedAnswers` tồn tại (bình
+// thường do app.js khai báo — admin không load app.js) nên tự tạo 1
+// `state` rỗng RIÊNG cho admin ở đây, không phải state thật của học viên.
+let examPreviewAssetsPromise = null;
+function ensureExamPreviewAssetsLoaded() {
+  if (examPreviewAssetsPromise) return examPreviewAssetsPromise;
+
+  window.state = window.state || {};
+  window.state.examState = window.state.examState || { selectedAnswers: {} };
+
+  ensureCorrectAnswerStyleInjected();
+
+  if (!document.getElementById('exam-preview-student-css')) {
+    const link = document.createElement('link');
+    link.id = 'exam-preview-student-css';
+    link.rel = 'stylesheet';
+    link.href = '../style.css';
+    document.head.appendChild(link);
+  }
+
+  examPreviewAssetsPromise = new Promise((resolve, reject) => {
+    if (typeof renderMultipleChoiceAnswers === 'function' && typeof renderFillBlankAnswer === 'function') {
+      resolve();
+      return;
+    }
+    const script = document.createElement('script');
+    script.src = '../exam.js';
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error('Không tải được exam.js (../exam.js) để tái dùng UI câu hỏi.'));
+    document.head.appendChild(script);
+  });
+
+  return examPreviewAssetsPromise;
 }
 
 // ── Cấu hình nhắc làm lại (exam_retry_rules riêng theo đề, tùy chọn) ────

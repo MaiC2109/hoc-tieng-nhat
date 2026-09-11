@@ -14,7 +14,37 @@
 <div id="exam-list-view">
 
   <div class="admin-vocab-toolbar">
-    <div class="admin-filter-group"></div>
+    <div class="admin-filter-group">
+      <input type="text" id="exam-search-input" class="admin-select" placeholder="🔍 Tìm theo tên đề thi..." style="min-width:220px;" oninput="applyExamListFilters()" />
+
+      <select id="exam-filter-type" class="admin-select" onchange="applyExamListFilters()">
+        <option value="">Tất cả loại đề</option>
+        <option value="full">Full — đủ kỹ năng</option>
+        <option value="skill">Skill — 1 kỹ năng</option>
+      </select>
+
+      <!-- Chỉ thực sự có tác dụng khi loại đề = skill (đề full không có 1
+           skill_id duy nhất, xem exam-filter-type ở trên) -->
+      <select id="exam-filter-skill" class="admin-select" disabled onchange="applyExamListFilters()">
+        <option value="">Tất cả kỹ năng</option>
+      </select>
+
+      <select id="exam-filter-status" class="admin-select" onchange="applyExamListFilters()">
+        <option value="">Tất cả trạng thái</option>
+        <option value="published">Published</option>
+        <option value="draft">Draft</option>
+      </select>
+
+      <select id="exam-sort-field" class="admin-select" onchange="applyExamListFilters()">
+        <option value="created_at">Sắp xếp: Ngày tạo</option>
+        <option value="available_from">Sắp xếp: Ngày publish</option>
+        <option value="title">Sắp xếp: Tên đề thi (A-Z)</option>
+      </select>
+
+      <button type="button" class="btn btn-outline" id="exam-sort-direction-btn" title="Đảo chiều sắp xếp" onclick="toggleExamSortDirection()">
+        <i class="ti ti-sort-descending" id="exam-sort-direction-icon"></i>
+      </button>
+    </div>
     <div class="admin-toolbar-actions">
       <button type="button" class="btn btn-primary" id="btn-add-exam" onclick="openExamForm()">
         <i class="ti ti-plus"></i> Tạo đề mới
