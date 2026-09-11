@@ -899,7 +899,7 @@ function renderExamPreviewQuestions(questions, passageTracker) {
         </button>
         <input type="range" class="exam-audio-progress" id="review-audio-progress-${current.id}"
           min="0" max="100" step="0.1" value="0"
-          oninput="seekReviewAudio('${current.id}', this.value)" />
+          oninput="previewSeekAudio('${current.id}', this.value)" />
       </div>
     ` : '';
 
@@ -935,7 +935,7 @@ function renderExamPreviewPassageBox(passageId) {
           </button>
           <input type="range" class="exam-audio-progress" id="review-audio-progress-${toggleId}"
             min="0" max="100" step="0.1" value="0"
-            oninput="seekReviewAudio('${toggleId}', this.value)" />
+            oninput="previewSeekAudio('${toggleId}', this.value)" />
         </div>
       ` : ''}
       ${passage.content ? `<div class="exam-passage-content">${passage.content}</div>` : ''}
@@ -1015,6 +1015,7 @@ function ensureCorrectAnswerStyleInjected() {
       background: #e1f5ee !important;
       color: #0f6e56 !important;
       font-weight: 700 !important;
+      opacity: 1 !important;
     }
     #exam-preview-body .exam-choice-btn.correct-answer .exam-choice-label {
       background: #0f6e56 !important;
@@ -1065,6 +1066,30 @@ function ensureExamPreviewAssetsLoaded() {
 
   window.state = window.state || {};
   window.state.examState = window.state.examState || { selectedAnswers: {} };
+
+  // Wrapper riêng cho admin, KHÔNG sửa seekReviewAudio() gốc trong exam.js
+  // — màn Xem đáp án thật của học viên đang tua audio bình thường với cùng
+  // hàm gốc đó, nên bug không nằm ở exam.js mà ở môi trường admin (rất có
+  // thể do `state.examState.playingReviewAudioId` trong shim admin lệch
+  // nhịp so với thời điểm người dùng kéo thanh, hoặc do modal vừa mới
+  // display:flex/innerHTML cùng lúc). Thay vì tiếp tục đoán, thêm 1 lớp
+  // fallback: nếu seekReviewAudio() gốc không tua được (do guard
+  // playingReviewAudioId không khớp) thì vẫn ép tua thẳng lên
+  // state.currentAudio đang có — chấp nhận đánh đổi nhỏ (nếu có audio khác
+  // đang treo không match) vì trong Xem trước chỉ 1 admin thao tác tuần
+  // tự, rủi ro thực tế rất thấp.
+  if (typeof window.previewSeekAudio !== 'function') {
+    window.previewSeekAudio = function previewSeekAudio(examQuestionId, percent) {
+      if (typeof seekReviewAudio === 'function') {
+        try { seekReviewAudio(examQuestionId, percent); } catch (e) { console.error(e); }
+      }
+      const audio = window.state && window.state.currentAudio;
+      if (!audio) return;
+      const duration = audio.duration;
+      if (!isFinite(duration) || duration <= 0) return;
+      audio.currentTime = (parseFloat(percent) / 100) * duration;
+    };
+  }
 
   if (typeof window.stopCurrentAudio !== 'function') {
     window.stopCurrentAudio = function stopCurrentAudio() {
