@@ -1479,13 +1479,75 @@ function seekReviewAudio(examQuestionId, percent) {
   state.currentAudio.currentTime = (parseFloat(percent) / 100) * duration;
 }
 
-// Reset icon về play + thanh tiến độ về 0 cho 1 nút cụ thể (dùng khi dừng,
-// phát xong, lỗi, hoặc chuyển sang phát nút khác).
+// Đổi tốc độ phát — PER-AUDIO: chỉ áp dụng cho đúng audio đang gắn
+// (playingReviewAudioId khớp), không "dính" sang audio khác. Không cần tự
+// reset về 1x khi chuyển bài vì mỗi lần chuyển sang audio khác đều tạo
+// `new Audio()` mới (xem toggleReviewQuestionAudio), mà Audio mới luôn mặc
+// định playbackRate = 1 sẵn.
+function setReviewAudioSpeed(examQuestionId, rate, btnEl) {
+  if (state.examState.playingReviewAudioId !== examQuestionId || !state.currentAudio) return;
+  state.currentAudio.playbackRate = rate;
+
+  const group = btnEl.closest('.exam-audio-speed-group');
+  if (group) {
+    group.querySelectorAll('.exam-audio-speed-btn').forEach(b => b.classList.remove('active'));
+    btnEl.classList.add('active');
+  }
+}
+
+// ------------------------------------------------------------
+// Phím Space = play/pause cho audio đang gắn ở màn Đáp án (không phát mới,
+// không áp dụng cho màn Câu hỏi/Vocab vì 2 nơi đó không set
+// playingReviewAudioId — biến này CHỈ được set trong
+// toggleReviewQuestionAudio(), tức chỉ khi đang ở màn Đáp án).
+// Đăng ký 1 lần, global, nhưng tự guard bên trong để không nuốt Space của
+// input/button khác trên trang (gõ chữ, nút "Quay lại danh sách", tab lọc
+// Đúng/Sai...).
+// ------------------------------------------------------------
+document.addEventListener('keydown', (e) => {
+  if (e.code !== 'Space') return;
+
+  const active = document.activeElement;
+  const tag = active?.tagName;
+
+  // Đang gõ trong ô nhập liệu -> không phải lúc nào Space cũng nên bị chặn.
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+
+  // Đang focus đúng nút audio của mình (nút play hoặc nút tốc độ) -> để
+  // trình duyệt tự xử lý Space=click như bình thường (onclick có sẵn đã
+  // làm đúng việc cần làm), tránh xử lý trùng 2 lần.
+  if (tag === 'BUTTON' && (active.classList.contains('exam-audio-btn') || active.classList.contains('exam-audio-speed-btn'))) {
+    return;
+  }
+
+  // Đang focus 1 button/link KHÁC (nút "Quay lại danh sách", tab lọc...) ->
+  // không nuốt Space của chúng, để hành vi mặc định (click) chạy bình thường.
+  if (tag === 'BUTTON' || tag === 'A') return;
+
+  // Còn lại -> coi Space là phím tắt toggle play/pause cho audio đang gắn
+  // ở màn Đáp án, nếu có audio nào đang thực sự gắn.
+  if (!state.examState.playingReviewAudioId || !state.currentAudio) return;
+
+  e.preventDefault(); // chặn hành vi cuộn trang mặc định của phím Space
+  const id = state.examState.playingReviewAudioId;
+  if (state.currentAudio.paused) {
+    state.currentAudio.play().catch(err => console.log(err));
+    setReviewAudioIcon(id, true);
+  } else {
+    state.currentAudio.pause();
+    setReviewAudioIcon(id, false);
+  }
+});
+
+// Reset icon về play + thanh tiến độ về 0 + bỏ highlight nút tốc độ cho 1
+// nút cụ thể (dùng khi dừng, phát xong, lỗi, hoặc chuyển sang phát nút khác).
 function resetReviewAudioUI(examQuestionId) {
   if (!examQuestionId) return;
   setReviewAudioIcon(examQuestionId, false);
   const bar = document.getElementById(`review-audio-progress-${examQuestionId}`);
   if (bar) bar.value = 0;
+  const speedGroup = document.getElementById(`review-audio-speed-${examQuestionId}`);
+  if (speedGroup) speedGroup.querySelectorAll('.exam-audio-speed-btn').forEach(b => b.classList.remove('active'));
 }
 
 // ============================================================
@@ -2477,6 +2539,12 @@ function renderResultQuestionDetail(q) {
       <input type="range" class="exam-audio-progress" id="review-audio-progress-${q.examQuestionId}"
         min="0" max="100" step="0.1" value="0"
         oninput="seekReviewAudio('${q.examQuestionId}', this.value)" />
+      <div class="exam-audio-speed-group" id="review-audio-speed-${q.examQuestionId}">
+        <button type="button" class="exam-audio-speed-btn" onclick="setReviewAudioSpeed('${q.examQuestionId}', 0.5, this)">0.5x</button>
+        <button type="button" class="exam-audio-speed-btn" onclick="setReviewAudioSpeed('${q.examQuestionId}', 0.75, this)">0.75x</button>
+        <button type="button" class="exam-audio-speed-btn" onclick="setReviewAudioSpeed('${q.examQuestionId}', 1, this)">1x</button>
+        <button type="button" class="exam-audio-speed-btn" onclick="setReviewAudioSpeed('${q.examQuestionId}', 1.5, this)">1.5x</button>
+      </div>
     </div>
   ` : '';
 
@@ -2633,6 +2701,12 @@ function renderResultPassageBox(passageId, sectionId) {
           <input type="range" class="exam-audio-progress" id="review-audio-progress-${toggleId}"
             min="0" max="100" step="0.1" value="0"
             oninput="seekReviewAudio('${toggleId}', this.value)" />
+          <div class="exam-audio-speed-group" id="review-audio-speed-${toggleId}">
+            <button type="button" class="exam-audio-speed-btn" onclick="setReviewAudioSpeed('${toggleId}', 0.5, this)">0.5x</button>
+            <button type="button" class="exam-audio-speed-btn" onclick="setReviewAudioSpeed('${toggleId}', 0.75, this)">0.75x</button>
+            <button type="button" class="exam-audio-speed-btn" onclick="setReviewAudioSpeed('${toggleId}', 1, this)">1x</button>
+            <button type="button" class="exam-audio-speed-btn" onclick="setReviewAudioSpeed('${toggleId}', 1.5, this)">1.5x</button>
+          </div>
         </div>
       ` : ''}
       ${passage.content ? `<div class="exam-passage-content">${passage.content}</div>` : ''}

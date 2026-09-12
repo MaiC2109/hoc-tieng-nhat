@@ -1244,6 +1244,36 @@ body {
   cursor: pointer;
 }
 
+/* Nhóm nút tốc độ (0.5x/0.75x/1.5x) cạnh nút play — chỉ ở màn Đáp án,
+   per-audio (setReviewAudioSpeed trong exam.js). */
+.exam-audio-speed-group {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.exam-audio-speed-btn {
+  font-size: 12px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border-md);
+  background: transparent;
+  color: var(--ink-soft);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.exam-audio-speed-btn:hover {
+  border-color: var(--sage);
+  color: var(--ink);
+}
+
+.exam-audio-speed-btn.active {
+  background: var(--sage);
+  border-color: var(--sage);
+  color: #fff;
+}
+
 .exam-choices-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
