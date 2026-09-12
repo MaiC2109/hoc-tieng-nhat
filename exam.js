@@ -2542,6 +2542,7 @@ function renderResultQuestionDetail(q) {
       <div class="exam-audio-speed-group" id="review-audio-speed-${q.examQuestionId}">
         <button type="button" class="exam-audio-speed-btn" onclick="setReviewAudioSpeed('${q.examQuestionId}', 0.5, this)">0.5x</button>
         <button type="button" class="exam-audio-speed-btn" onclick="setReviewAudioSpeed('${q.examQuestionId}', 0.75, this)">0.75x</button>
+        <button type="button" class="exam-audio-speed-btn" onclick="setReviewAudioSpeed('${q.examQuestionId}', 1, this)">1x</button>
         <button type="button" class="exam-audio-speed-btn" onclick="setReviewAudioSpeed('${q.examQuestionId}', 1.5, this)">1.5x</button>
       </div>
     </div>
@@ -2703,6 +2704,7 @@ function renderResultPassageBox(passageId, sectionId) {
           <div class="exam-audio-speed-group" id="review-audio-speed-${toggleId}">
             <button type="button" class="exam-audio-speed-btn" onclick="setReviewAudioSpeed('${toggleId}', 0.5, this)">0.5x</button>
             <button type="button" class="exam-audio-speed-btn" onclick="setReviewAudioSpeed('${toggleId}', 0.75, this)">0.75x</button>
+            <button type="button" class="exam-audio-speed-btn" onclick="setReviewAudioSpeed('${toggleId}', 1, this)">1x</button>
             <button type="button" class="exam-audio-speed-btn" onclick="setReviewAudioSpeed('${toggleId}', 1.5, this)">1.5x</button>
           </div>
         </div>
