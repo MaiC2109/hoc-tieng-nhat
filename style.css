@@ -1219,6 +1219,61 @@ body {
   gap: 6px;
 }
 
+/* Nút play/pause + thanh tiến độ ở màn Đáp án (renderResultQuestionDetail/
+   renderResultPassageBox) — nút audio bình thường ở màn làm bài
+   (playExamAudio) không dùng wrapper này nên không bị ảnh hưởng. */
+.exam-audio-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.exam-audio-controls .exam-audio-btn {
+  margin-bottom: 0;
+  flex-shrink: 0;
+}
+
+.exam-audio-progress {
+  flex: 1;
+  min-width: 120px;
+  height: 4px;
+  border-radius: 999px;
+  accent-color: var(--sage);
+  cursor: pointer;
+}
+
+/* Nhóm nút tốc độ (0.5x/0.75x/1.5x) cạnh nút play — chỉ ở màn Đáp án,
+   per-audio (setReviewAudioSpeed trong exam.js). */
+.exam-audio-speed-group {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.exam-audio-speed-btn {
+  font-size: 12px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border-md);
+  background: transparent;
+  color: var(--ink-soft);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.exam-audio-speed-btn:hover {
+  border-color: var(--sage);
+  color: var(--ink);
+}
+
+.exam-audio-speed-btn.active {
+  background: var(--sage);
+  border-color: var(--sage);
+  color: #fff;
+}
+
 .exam-choices-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -1479,6 +1534,12 @@ body {
 .exam-result-attempt-number {
   font-size: 12px;
   color: var(--ink-mute);
+}
+
+.exam-result-type {
+  font-size: 13px;
+  color: var(--ink-soft);
+  margin-bottom: 12px;
 }
 
 .exam-result-score-big {
