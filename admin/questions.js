@@ -942,8 +942,56 @@ async function loadBulkExamSectionsForSkill(examId, skillId) {
   const emptyMsg = document.querySelector(`.bulk-exam-section-empty-msg[data-skill-id="${skillId}"]`);
   if (!sectionSelect) return;
 
+  const exam = examLinkState.exams.find(e => String(e.id) === String(examId));
+
   try {
     const sections = await fetchExamSections(examId);
+
+    // ---- Nhánh exam_type = 'skill' ----
+    // Đề chỉ có đúng 1 section (ràng buộc nghiệp vụ ở exams.js) -> không
+    // cho chọn "Chọn phần" nữa, lấy thẳng section đó và so skill_id với
+    // kỹ năng của NHÓM câu hỏi đang xét (mỗi nhóm 1 skill khác nhau).
+    if (exam?.exam_type === 'skill') {
+      sectionSelect.style.display = 'none';
+      sectionSelect.innerHTML = '<option value="">— Chọn phần —</option>';
+
+      const onlySection = sections[0];
+      const group = bulkExamState.skillGroups.find(g => g.skillId === skillId);
+
+      if (!onlySection) {
+        if (group) { group.sectionId = ''; group.subsectionId = ''; }
+        if (emptyMsg) {
+          emptyMsg.textContent = 'Đề này chưa có phần nào. Vui lòng vào màn Quản lý đề thi để thêm phần trước.';
+          emptyMsg.style.display = 'block';
+        }
+        onBulkExamSectionChange(skillId, ''); // ẩn dropdown dạng bài
+        return;
+      }
+
+      const isMatch = String(onlySection.skill_id) === String(skillId);
+
+      if (!isMatch) {
+        if (group) { group.sectionId = ''; group.subsectionId = ''; }
+        const examSkillName = questionsAdminState.skills.find(sk => String(sk.id) === String(onlySection.skill_id))?.name
+          || `#${onlySection.skill_id}`;
+        const groupSkillName = group?.skillName || `#${skillId}`;
+        if (emptyMsg) {
+          emptyMsg.textContent = `Đề này thuộc kỹ năng ${examSkillName}, không khớp với câu hỏi ${groupSkillName} đang thêm`;
+          emptyMsg.style.display = 'block';
+        }
+        onBulkExamSectionChange(skillId, ''); // ẩn dropdown dạng bài
+        return;
+      }
+
+      // Khớp skill -> nạp thẳng dropdown "Chọn dạng bài" cho section duy
+      // nhất này, tái dùng onBulkExamSectionChange() có sẵn (đã tự cập
+      // nhật group.sectionId + nạp fetchExamSubsections).
+      if (emptyMsg) emptyMsg.style.display = 'none';
+      await onBulkExamSectionChange(skillId, onlySection.id);
+      return;
+    }
+
+    // ---- Nhánh exam_type = 'full' (giữ nguyên logic cũ) ----
     const matched = sections.filter(s => String(s.skill_id) === String(skillId));
 
     // Luôn có option "+ Tạo phần mới…" dù đề đã có phần khớp skill hay chưa
