@@ -718,7 +718,7 @@ async function populateBulkExamDropdown() {
     const keepValue = select.value;
     select.innerHTML = '<option value="">— Chọn đề thi —</option>'
       + '<option value="__create_new__">+ Tạo đề thi mới…</option>'
-      + exams.map(ex => `<option value="${ex.id}">${escHtml(ex.title)}${ex.is_published ? '' : ' (nháp)'}</option>`).join('');
+      + exams.map(ex => `<option value="${ex.id}">${formatExamOptionLabel(ex)}</option>`).join('');
     if (keepValue) select.value = keepValue;
   } catch (err) {
     console.error('Lỗi nạp dropdown đề thi (bulk):', err);
@@ -1715,13 +1715,23 @@ async function fetchExamsList() {
   // Lấy cả nháp lẫn published — admin cần thấy hết để gắn câu hỏi vào đề
   // đang soạn dở. RLS bảng exams yêu cầu auth (giống question_bank) nên
   // dùng sbAuthedHeaders() thay vì sbHeaders().
-  const url = `${ADMIN_CONFIG.supabaseUrl}/rest/v1/exams?select=id,title,is_published&order=created_at.desc`;
+  const url = `${ADMIN_CONFIG.supabaseUrl}/rest/v1/exams?select=id,title,exam_type,is_published&order=created_at.desc`;
   const res = await fetch(url, { headers: await sbAuthedHeaders() });
   if (!res.ok) throw new Error(`Lỗi tải danh sách đề thi: ${res.status}`);
 
   examLinkState.exams = await res.json();
   examLinkState.examsLoaded = true;
   return examLinkState.exams;
+}
+
+// Nhãn hiển thị dùng chung cho các dropdown "Thêm vào đề thi" (form đơn +
+// bulk): kèm loại đề (Full/Skill) để giáo viên phân biệt nhanh, không phải
+// mở từng đề ra xem. Chỉ đổi label hiển thị — value vẫn là exam.id, chưa
+// đụng tới logic chọn phần/dạng bài phía sau.
+function formatExamOptionLabel(exam) {
+  const typeLabel = exam.exam_type === 'skill' ? 'Skill' : exam.exam_type === 'full' ? 'Full' : '—';
+  const draftSuffix = exam.is_published ? '' : ' (nháp)';
+  return `${escHtml(exam.title)} (${typeLabel})${draftSuffix}`;
 }
 
 async function fetchExamSections(examId) {
@@ -1835,7 +1845,7 @@ async function populateExamLinkExamDropdown() {
     const keepValue = select.value;
     select.innerHTML = '<option value="">— Không thêm vào đề nào —</option>'
       + '<option value="__create_new__">+ Tạo đề thi mới…</option>'
-      + exams.map(ex => `<option value="${ex.id}">${escHtml(ex.title)}${ex.is_published ? '' : ' (nháp)'}</option>`).join('');
+      + exams.map(ex => `<option value="${ex.id}">${formatExamOptionLabel(ex)}</option>`).join('');
     if (keepValue) select.value = keepValue;
   } catch (err) {
     console.error('Lỗi nạp dropdown đề thi:', err);
@@ -1958,12 +1968,18 @@ function handleExamCreateCancel() {
   document.getElementById('question-exam-create-title').value = '';
 }
 
-// Nạp exam_sections của đề đang chọn, LỌC theo skill_id đang chọn ở đầu
-// form câu hỏi (#question-skill). Không có phần khớp -> hiện thông báo nhẹ
-// thay vì dropdown rỗng.
+// Nạp exam_sections của đề đang chọn.
+// - exam_type = 'full': LỌC theo skill_id đang chọn ở đầu form câu hỏi
+//   (#question-skill), hiện dropdown "Chọn phần" như cũ.
+// - exam_type = 'skill': đề chỉ có đúng 1 section (ràng buộc nghiệp vụ ở
+//   exams.js) -> lấy thẳng section đó, ẨN dropdown "Chọn phần" (không cần
+//   người dùng chọn gì), rồi so skill_id của section với skill đang chọn:
+//   khớp -> nạp thẳng dropdown "Chọn dạng bài"; không khớp -> báo lỗi rõ
+//   ràng, ẩn dropdown dạng bài.
 async function loadExamLinkSections(examId) {
   const sectionSelect = document.getElementById('question-exam-section-select');
   const emptyMsg = document.getElementById('question-exam-section-empty-msg');
+  const subsectionWrap = document.getElementById('question-exam-subsection-wrap');
   const currentSkillId = document.getElementById('question-skill')?.value;
 
   if (!currentSkillId) {
@@ -1975,13 +1991,65 @@ async function loadExamLinkSections(examId) {
       emptyMsg.textContent = 'Vui lòng chọn Kỹ năng ở trên trước khi chọn phần thi.';
       emptyMsg.style.display = 'block';
     }
+    if (subsectionWrap) subsectionWrap.style.display = 'none';
     return;
   }
+
+  const exam = examLinkState.exams.find(e => String(e.id) === String(examId));
 
   try {
     const sections = await fetchExamSections(examId);
     examLinkState.sections = sections;
 
+    // ---- Nhánh exam_type = 'skill' ----
+    if (exam?.exam_type === 'skill') {
+      // Luôn ẩn dropdown "Chọn phần" ở nhánh này — section được lấy thẳng,
+      // không cần người dùng chọn.
+      if (sectionSelect) {
+        sectionSelect.innerHTML = '<option value="">— Chọn phần —</option>';
+        sectionSelect.style.display = 'none';
+      }
+
+      const onlySection = sections[0];
+
+      if (!onlySection) {
+        if (emptyMsg) {
+          emptyMsg.textContent = 'Đề này chưa có phần nào. Vui lòng vào màn Quản lý đề thi để thêm phần trước.';
+          emptyMsg.style.display = 'block';
+        }
+        if (subsectionWrap) subsectionWrap.style.display = 'none';
+        return;
+      }
+
+      const isMatch = String(onlySection.skill_id) === String(currentSkillId);
+
+      if (!isMatch) {
+        const examSkillName = questionsAdminState.skills.find(sk => String(sk.id) === String(onlySection.skill_id))?.name
+          || `#${onlySection.skill_id}`;
+        const questionSkillName = questionsAdminState.skills.find(sk => String(sk.id) === String(currentSkillId))?.name
+          || `#${currentSkillId}`;
+        if (emptyMsg) {
+          emptyMsg.textContent = `Đề này thuộc kỹ năng ${examSkillName}, không khớp với câu hỏi ${questionSkillName} đang tạo`;
+          emptyMsg.style.display = 'block';
+        }
+        if (subsectionWrap) subsectionWrap.style.display = 'none';
+        return;
+      }
+
+      // Khớp skill -> nạp thẳng dropdown "Chọn dạng bài" cho section duy
+      // nhất này. Gán value ẩn vào sectionSelect (dù đang display:none) để
+      // onExamLinkSectionChange() đọc đúng sectionId khi tái sử dụng, và để
+      // logic đọc giá trị lúc submit (dòng ~2388) không cần sửa gì thêm.
+      if (emptyMsg) emptyMsg.style.display = 'none';
+      if (sectionSelect) {
+        sectionSelect.innerHTML = `<option value="${onlySection.id}" selected>${escHtml(onlySection.title || '(Chưa đặt tên phần)')}</option>`;
+        sectionSelect.value = onlySection.id;
+      }
+      await onExamLinkSectionChange();
+      return;
+    }
+
+    // ---- Nhánh exam_type = 'full' (giữ nguyên logic cũ) ----
     const matched = sections.filter(s => String(s.skill_id) === String(currentSkillId));
 
     if (matched.length === 0) {
@@ -1995,6 +2063,7 @@ async function loadExamLinkSections(examId) {
         emptyMsg.textContent = `Đề này chưa có phần ${skillName}`;
         emptyMsg.style.display = 'block';
       }
+      if (subsectionWrap) subsectionWrap.style.display = 'none';
       return;
     }
 
@@ -2091,7 +2160,7 @@ function resetExamLinkBlock() {
 async function fetchQuestionExamUsage(questionId) {
   const url = `${ADMIN_CONFIG.supabaseUrl}/rest/v1/exam_questions`
     + `?question_id=eq.${encodeURIComponent(questionId)}`
-    + `&select=id,exam_subsections(instruction_text,exam_sections(title,exams(title)))`;
+    + `&select=id,exam_subsections(instruction_text,exam_sections(title,exams(title,exam_type)))`;
   const res = await fetch(url, { headers: await sbAuthedHeaders() });
   if (!res.ok) throw new Error(`Lỗi kiểm tra câu hỏi đang thuộc đề thi nào: ${res.status}`);
   return res.json();
@@ -2117,9 +2186,15 @@ async function loadAndRenderQuestionExamUsage(questionId) {
 
     const items = rows.map(r => {
       const examTitle = r.exam_subsections?.exam_sections?.exams?.title || '(Không rõ đề)';
+      const examType = r.exam_subsections?.exam_sections?.exams?.exam_type;
       const sectionTitle = r.exam_subsections?.exam_sections?.title || '(Không rõ phần)';
       const subInstruction = truncateText(stripHtml(r.exam_subsections?.instruction_text || ''), 60);
-      return `<li>${escHtml(examTitle)} - ${escHtml(sectionTitle)} - ${escHtml(subInstruction)}</li>`;
+      // Đề exam_type='skill' chỉ có đúng 1 section (không có ý nghĩa phân
+      // biệt) -> bỏ [Tên section] khỏi chuỗi hiển thị, chỉ còn Đề - Dạng bài.
+      const parts = examType === 'skill'
+        ? [examTitle, subInstruction]
+        : [examTitle, sectionTitle, subInstruction];
+      return `<li>${parts.map(escHtml).join(' - ')}</li>`;
     }).join('');
 
     container.innerHTML = `
