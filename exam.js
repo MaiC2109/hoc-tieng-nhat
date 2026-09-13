@@ -2339,7 +2339,6 @@ function renderResultQuestionDetail(q, prevQuestion) {
     if (passage) {
       passageHtml = `
         <div class="exam-passage-box">
-          ${passage.title ? `<div class="exam-passage-title">${passage.title}</div>` : ''}
           ${passage.audio_url ? `
             <button class="btn btn-outline exam-audio-btn" onclick="playExamAudio('${passage.audio_url}')">
               <i class="ti ti-player-play"></i> Nghe đoạn hội thoại
