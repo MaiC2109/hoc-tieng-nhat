@@ -340,6 +340,8 @@ function buildAdminQuestionsReview(flatQuestions, answersByBankId) {
       examQuestionId: q.id,
       sectionId: q.sectionId,
       sectionTitle: q.sectionTitle,
+      subsectionId: q.subsectionId,
+      instruction_text: q.instruction_text,
       globalNumber: i + 1,
       question_type: qb.question_type,
       question_text: qb.question_text,
@@ -548,6 +550,17 @@ function renderAdminReviewQuestionDetail(q, prevQuestion) {
   let answerHtml = '';
   const normalizedType = (q.question_type || '').trim().toLowerCase();
 
+  // "Dạng bài" (instruction_text của subsection) — dedup: chỉ hiện khi
+  // khác subsection với câu ngay trước đó.
+  let instructionHtml = '';
+  if (q.instruction_text && q.subsectionId !== prevQuestion?.subsectionId) {
+    instructionHtml = `
+      <div class="exam-instruction-box">
+        <div class="exam-instruction-text">${q.instruction_text}</div>
+      </div>
+    `;
+  }
+
   // Passage (đoạn văn dùng chung cho nhiều câu, vd Đọc hiểu/Ngữ pháp) —
   // trước đây results.js select sẵn passage_id nhưng chưa từng fetch/render,
   // nên màn admin luôn thiếu đoạn văn. Chỉ hiện 1 lần khi khác câu ngay
@@ -614,6 +627,7 @@ function renderAdminReviewQuestionDetail(q, prevQuestion) {
   ` : '';
 
   return `
+    ${instructionHtml}
     ${passageHtml}
     <div class="exam-question-block exam-review-question-block" id="admin-review-q-${q.examQuestionId}">
       <div class="exam-question-number">
