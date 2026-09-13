@@ -208,6 +208,7 @@ const RESULT_SKILL_CODE_LABELS = {
 const resultDetailState = {
   attempt: null,
   questionsReview: [],
+  passagesMap: {},        // { [passage_id]: passage row } cho câu Đọc hiểu/Ngữ pháp dùng chung đoạn văn
   answerFilter: 'all' // 'all' | 'correct' | 'wrong'
 };
 
@@ -346,6 +347,7 @@ function buildAdminQuestionsReview(flatQuestions, answersByBankId) {
       correct_answer: qb.correct_answer,
       explanation: qb.explanation,
       audio_url: qb.audio_url,
+      passage_id: qb.passage_id || null,
       selected_answer: answer.selected_answer,
       is_correct: !!answer.is_correct
     };
@@ -353,6 +355,34 @@ function buildAdminQuestionsReview(flatQuestions, answersByBankId) {
 }
 
 // Click vào 1 dòng trong bảng danh sách -> mở màn chi tiết.
+// Load nội dung passages theo danh sách passage_id — results.js trước giờ
+// select sẵn passage_id trong question_bank (dòng ~281) nhưng CHƯA từng
+// fetch nội dung bảng passages lẫn render ra UI, nên màn Đọc hiểu/Ngữ pháp
+// (loại câu hỏi dùng chung 1 đoạn văn) luôn thiếu đoạn văn khi admin xem
+// kết quả. Mirror đúng loadPassagesByIds() bên exam.js (học viên).
+async function loadPassagesByIdsAdmin(passageIds) {
+  if (!passageIds || passageIds.length === 0) return {};
+
+  try {
+    const { data, error } = await supabaseClient
+      .from('passages')
+      .select('id, title, content, audio_url')
+      .in('id', passageIds);
+
+    if (error) {
+      console.error('Lỗi tải passages:', error);
+      return {};
+    }
+
+    const map = {};
+    (data || []).forEach(p => { map[p.id] = p; });
+    return map;
+  } catch (err) {
+    console.error('Lỗi không xác định khi tải passages:', err);
+    return {};
+  }
+}
+
 async function openResultDetail(attemptId) {
   showResultDetailView();
   const zone = document.getElementById('result-detail-zone');
@@ -384,6 +414,13 @@ async function openResultDetail(attemptId) {
       return;
     }
     const flatQuestions = flattenExamStructureForAdmin(structure);
+
+    const passageIds = [...new Set(
+      flatQuestions
+        .map(q => q.question_bank && q.question_bank.passage_id)
+        .filter(Boolean)
+    )];
+    resultDetailState.passagesMap = await loadPassagesByIdsAdmin(passageIds);
 
     const { data: savedAnswers, error: answersError } = await supabaseClient
       .from('attempt_answers')
@@ -507,9 +544,29 @@ function scrollToAdminReviewQuestion(examQuestionId) {
 // Chi tiết 1 câu — copy renderResultQuestionDetail() từ exam.js, chỉ đổi
 // id phần tử (admin-review-q-...) để không đụng id bên site học viên nếu
 // lỡ mở song song 2 tab.
-function renderAdminReviewQuestionDetail(q) {
+function renderAdminReviewQuestionDetail(q, prevQuestion) {
   let answerHtml = '';
   const normalizedType = (q.question_type || '').trim().toLowerCase();
+
+  // Passage (đoạn văn dùng chung cho nhiều câu, vd Đọc hiểu/Ngữ pháp) —
+  // trước đây results.js select sẵn passage_id nhưng chưa từng fetch/render,
+  // nên màn admin luôn thiếu đoạn văn. Chỉ hiện 1 lần khi khác câu ngay
+  // trước đó (tránh lặp lại đoạn văn dài cho mỗi câu cùng nhóm).
+  let passageHtml = '';
+  if (q.passage_id && q.passage_id !== prevQuestion?.passage_id) {
+    const passage = resultDetailState.passagesMap[q.passage_id];
+    if (passage) {
+      passageHtml = `
+        <div class="exam-passage-box">
+          ${passage.title ? `<div class="exam-passage-title">${passage.title}</div>` : ''}
+          ${passage.audio_url ? `
+            <audio controls style="display:block; margin:8px 0; width:100%; max-width:400px;" src="${passage.audio_url}"></audio>
+          ` : ''}
+          ${passage.content ? `<div class="exam-passage-content">${passage.content}</div>` : ''}
+        </div>
+      `;
+    }
+  }
 
   if (normalizedType === 'multiple_choice' && Array.isArray(q.choices)) {
     const optionsHtml = q.choices.map(choiceValue => {
@@ -558,6 +615,7 @@ function renderAdminReviewQuestionDetail(q) {
   ` : '';
 
   return `
+    ${passageHtml}
     <div class="exam-question-block exam-review-question-block" id="admin-review-q-${q.examQuestionId}">
       <div class="exam-question-number">
         Câu ${q.globalNumber} <span class="exam-review-section-tag">${q.sectionTitle || ''}</span>
@@ -600,7 +658,7 @@ function renderAdminReviewQuestionsList(questionsReview) {
   if (!questionsReview || questionsReview.length === 0) {
     return '<div class="empty-state">Không có câu nào khớp bộ lọc.</div>';
   }
-  return questionsReview.map(q => renderAdminReviewQuestionDetail(q)).join('');
+  return questionsReview.map((q, i) => renderAdminReviewQuestionDetail(q, questionsReview[i - 1])).join('');
 }
 
 // ── Màn chi tiết chính — PORT từ renderExamResultScreen() trong exam.js.
