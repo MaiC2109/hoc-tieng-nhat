@@ -558,7 +558,6 @@ function renderAdminReviewQuestionDetail(q, prevQuestion) {
     if (passage) {
       passageHtml = `
         <div class="exam-passage-box">
-          ${passage.title ? `<div class="exam-passage-title">${passage.title}</div>` : ''}
           ${passage.audio_url ? `
             <audio controls style="display:block; margin:8px 0; width:100%; max-width:400px;" src="${passage.audio_url}"></audio>
           ` : ''}
