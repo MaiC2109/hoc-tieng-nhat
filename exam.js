@@ -2281,6 +2281,8 @@ function buildQuestionsReview(flatQuestions, answersByBankId) {
       examQuestionId: q.id,
       sectionId: q.sectionId,
       sectionTitle: q.sectionTitle,
+      subsectionId: q.subsectionId,
+      instruction_text: q.instruction_text,
       // Đánh số TUẦN TỰ TOÀN ĐỀ (không reset theo từng section) — khớp
       // đúng với số hiện trên lưới tổng quan (renderResultQuestionsGrid
       // cũng dùng chính index toàn mảng này, i + 1).
@@ -2328,6 +2330,17 @@ function renderResultQuestionDetail(q, prevQuestion) {
   let answerHtml = '';
 
   const normalizedType = (q.question_type || '').trim().toLowerCase();
+
+  // "Dạng bài" (instruction_text của subsection) — cùng cơ chế dedup như
+  // passage: chỉ hiện khi khác subsection với câu ngay trước đó.
+  let instructionHtml = '';
+  if (q.instruction_text && q.subsectionId !== prevQuestion?.subsectionId) {
+    instructionHtml = `
+      <div class="exam-instruction-box">
+        <div class="exam-instruction-text">${q.instruction_text}</div>
+      </div>
+    `;
+  }
 
   // Passage dùng chung cho nhiều câu (Đọc hiểu/Ngữ pháp) — trước đây
   // renderResultQuestionDetail() không hề render passage dù buildQuestionsReview()
@@ -2397,6 +2410,7 @@ function renderResultQuestionDetail(q, prevQuestion) {
   ` : '';
 
   return `
+    ${instructionHtml}
     ${passageHtml}
     <div class="exam-question-block exam-review-question-block" id="review-q-${q.examQuestionId}">
       <div class="exam-question-number">
