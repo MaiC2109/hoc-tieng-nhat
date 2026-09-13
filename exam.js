@@ -2228,6 +2228,16 @@ async function viewExamAttemptResult(attemptId) {
     }
     const flatQuestions = flattenExamStructure(structure);
 
+    // Trước đây "Xem lại" (viewExamAttemptResult) KHÔNG tải passagesMap —
+    // khác với luồng làm bài (renderExamTaking) đã có sẵn cơ chế này —
+    // nên màn kết quả luôn thiếu đoạn văn cho câu Đọc hiểu/Ngữ pháp.
+    const passageIds = [...new Set(
+      flatQuestions
+        .map(q => q.question_bank && q.question_bank.passage_id)
+        .filter(Boolean)
+    )];
+    state.examState.passagesMap = await loadPassagesByIds(passageIds);
+
     const { data: savedAnswers, error: answersError } = await supabaseClient
       .from('attempt_answers')
       .select('question_id, selected_answer, is_correct')
@@ -2281,6 +2291,7 @@ function buildQuestionsReview(flatQuestions, answersByBankId) {
       correct_answer: qb.correct_answer,
       explanation: qb.explanation,
       audio_url: qb.audio_url,
+      passage_id: qb.passage_id || null,
       selected_answer: answer.selected_answer,
       is_correct: !!answer.is_correct
     };
@@ -2313,10 +2324,32 @@ function scrollToReviewQuestion(examQuestionId) {
 // Render chi tiết từng câu: câu hỏi, đáp án đã chọn, đáp án đúng (nếu sai),
 // và feedback/explanation nếu có trong question_bank.
 // ------------------------------------------------------------
-function renderResultQuestionDetail(q) {
+function renderResultQuestionDetail(q, prevQuestion) {
   let answerHtml = '';
 
   const normalizedType = (q.question_type || '').trim().toLowerCase();
+
+  // Passage dùng chung cho nhiều câu (Đọc hiểu/Ngữ pháp) — trước đây
+  // renderResultQuestionDetail() không hề render passage dù buildQuestionsReview()
+  // giờ đã có passage_id. Chỉ hiện 1 lần khi khác câu ngay trước đó, tránh
+  // lặp lại đoạn văn dài cho mỗi câu cùng nhóm.
+  let passageHtml = '';
+  if (q.passage_id && q.passage_id !== prevQuestion?.passage_id) {
+    const passage = state.examState.passagesMap[q.passage_id];
+    if (passage) {
+      passageHtml = `
+        <div class="exam-passage-box">
+          ${passage.title ? `<div class="exam-passage-title">${passage.title}</div>` : ''}
+          ${passage.audio_url ? `
+            <button class="btn btn-outline exam-audio-btn" onclick="playExamAudio('${passage.audio_url}')">
+              <i class="ti ti-player-play"></i> Nghe đoạn hội thoại
+            </button>
+          ` : ''}
+          ${passage.content ? `<div class="exam-passage-content">${passage.content}</div>` : ''}
+        </div>
+      `;
+    }
+  }
 
   if (normalizedType === 'multiple_choice' && Array.isArray(q.choices)) {
     const optionsHtml = q.choices.map(choiceValue => {
@@ -2365,6 +2398,7 @@ function renderResultQuestionDetail(q) {
   ` : '';
 
   return `
+    ${passageHtml}
     <div class="exam-question-block exam-review-question-block" id="review-q-${q.examQuestionId}">
       <div class="exam-question-number">
         Câu ${q.globalNumber} <span class="exam-review-section-tag">${q.sectionTitle || ''}</span>
@@ -2382,7 +2416,7 @@ function renderResultQuestionDetail(q) {
 function renderResultQuestionsReview(questionsReview) {
   if (!questionsReview || questionsReview.length === 0) return '';
 
-  const detailsHtml = questionsReview.map(q => renderResultQuestionDetail(q)).join('');
+  const detailsHtml = questionsReview.map((q, i) => renderResultQuestionDetail(q, questionsReview[i - 1])).join('');
 
   return `
     <div class="exam-review-section-title">Chi tiết bài làm</div>
