@@ -14,9 +14,16 @@
 
 let resultsFragmentLoaded = false;
 const resultAdminState = {
-  rows: [],           // toàn bộ attempts đã load cho bộ filter hiện tại
+  rows: [],           // toàn bộ attempts đã load cho bộ filter server-side hiện tại (exam/student/status/ngày)
   examOptions: [],     // [{id, title}]
-  studentOptions: []   // [{id, full_name}]
+  studentOptions: [],  // [{id, full_name}]
+  examTypeByExamId: {}, // { exam_id: 'full' | 'skill' }
+  skillIdByExam: {},    // { exam_id: skill_id } — chỉ có với đề loại 'skill'
+  filters: {
+    skill: '',          // '' | 'full' | skill_id (string)
+    sortField: 'submitted_at', // 'submitted_at' | 'score'
+    sortDirection: 'desc'
+  }
 };
 
 // admin/results.html chỉ là fragment — fetch và inject 1 lần duy nhất vào
@@ -55,25 +62,47 @@ async function loadResultsSection() {
 async function populateResultFilterDropdowns() {
   const examSelect = document.getElementById('filter-result-exam');
   const studentSelect = document.getElementById('filter-result-student');
+  const skillSelect = document.getElementById('filter-result-skill');
   if (!examSelect || !studentSelect) return;
 
   try {
-    const [examsRes, profilesRes] = await Promise.all([
-      supabaseClient.from('exams').select('id, title').order('title', { ascending: true }),
-      supabaseClient.from(ADMIN_CONFIG.profilesTable).select('id, full_name').order('full_name', { ascending: true })
+    const [examsRes, profilesRes, sectionsRes, skills] = await Promise.all([
+      supabaseClient.from('exams').select('id, title, exam_type').order('title', { ascending: true }),
+      supabaseClient.from(ADMIN_CONFIG.profilesTable).select('id, full_name').order('full_name', { ascending: true }),
+      supabaseClient.from('exam_sections').select('exam_id, skill_id'),
+      fetchSkillsList()
     ]);
 
     if (examsRes.error) throw examsRes.error;
     if (profilesRes.error) throw profilesRes.error;
+    if (sectionsRes.error) throw sectionsRes.error;
 
     resultAdminState.examOptions = examsRes.data || [];
     resultAdminState.studentOptions = profilesRes.data || [];
+
+    const examTypeByExamId = {};
+    (resultAdminState.examOptions).forEach(e => { examTypeByExamId[e.id] = e.exam_type; });
+    resultAdminState.examTypeByExamId = examTypeByExamId;
+
+    // Đề loại "skill" chỉ có đúng 1 section -> skill_id của section đó
+    // chính là "skill của cả đề" (cùng cơ chế đã làm ở "Danh sách đề thi").
+    const skillIdByExam = {};
+    (sectionsRes.data || []).forEach(s => {
+      if (s.skill_id != null) skillIdByExam[s.exam_id] = s.skill_id;
+    });
+    resultAdminState.skillIdByExam = skillIdByExam;
 
     examSelect.innerHTML = '<option value="">Tất cả đề thi</option>' +
       resultAdminState.examOptions.map(e => `<option value="${e.id}">${escHtml(e.title)}</option>`).join('');
 
     studentSelect.innerHTML = '<option value="">Tất cả học viên</option>' +
       resultAdminState.studentOptions.map(s => `<option value="${s.id}">${escHtml(s.full_name || '(chưa có tên)')}</option>`).join('');
+
+    if (skillSelect) {
+      skillSelect.innerHTML = '<option value="">Tất cả kỹ năng</option>' +
+        skills.map(sk => `<option value="${sk.id}">${escHtml(sk.name)}</option>`).join('') +
+        '<option value="full">Full — tổng hợp</option>';
+    }
   } catch (err) {
     console.error('Lỗi tải danh sách đề thi/học viên cho filter:', err);
   }
@@ -87,6 +116,10 @@ async function loadResultAdminList() {
 
   const examId = document.getElementById('filter-result-exam')?.value || '';
   const studentId = document.getElementById('filter-result-student')?.value || '';
+  const status = document.getElementById('filter-result-status')?.value || '';
+  const dateFrom = document.getElementById('filter-result-date-from')?.value || '';
+  const dateTo = document.getElementById('filter-result-date-to')?.value || '';
+  resultAdminState.filters.skill = document.getElementById('filter-result-skill')?.value || '';
 
   try {
     const headers = await sbAuthedHeaders();
@@ -96,23 +129,80 @@ async function loadResultAdminList() {
     // auth.users(id) (không phải profiles(id)) nên KHÔNG embed được — phải
     // map tên học viên riêng ở phía client từ resultAdminState.studentOptions
     // (đã tải sẵn ở populateResultFilterDropdowns, không gọi lại profiles).
+    // Không order ở query nữa — sort giờ làm hoàn toàn phía client (xem
+    // applyResultSort()) để hỗ trợ sort theo Điểm lẫn đảo chiều linh hoạt.
     let url = `${ADMIN_CONFIG.supabaseUrl}/rest/v1/exam_attempts` +
-      `?select=id,exam_id,user_id,attempt_number,status,total_score,total_possible,submitted_at,next_retry_date,exams(title)` +
-      `&order=submitted_at.desc.nullslast`;
+      `?select=id,exam_id,user_id,attempt_number,status,total_score,total_possible,submitted_at,next_retry_date,exams(title)`;
 
     if (examId) url += `&exam_id=eq.${examId}`;
     if (studentId) url += `&user_id=eq.${studentId}`;
+    if (status) url += `&status=eq.${status}`;
+    // Input type="date" trả về 'YYYY-MM-DD' -> ghép giờ đầu/cuối ngày để
+    // lọc trọn vẹn cả ngày đã chọn trên cột submitted_at (timestamptz).
+    if (dateFrom) url += `&submitted_at=gte.${dateFrom}T00:00:00`;
+    if (dateTo) url += `&submitted_at=lte.${dateTo}T23:59:59`;
 
     const res = await fetch(url, { headers });
     if (!res.ok) throw new Error(`Lỗi tải danh sách kết quả thi (HTTP ${res.status})`);
 
-    const rows = await res.json();
+    let rows = await res.json();
+
+    // Filter theo Kỹ năng — làm phía client vì cần join qua exam_sections
+    // (skillIdByExam đã tính sẵn ở populateResultFilterDropdowns()).
+    const skillFilter = resultAdminState.filters.skill;
+    if (skillFilter === 'full') {
+      rows = rows.filter(r => resultAdminState.examTypeByExamId[r.exam_id] === 'full');
+    } else if (skillFilter) {
+      rows = rows.filter(r =>
+        resultAdminState.examTypeByExamId[r.exam_id] === 'skill' &&
+        String(resultAdminState.skillIdByExam[r.exam_id]) === skillFilter
+      );
+    }
+
+    applyResultSort(rows);
+
     resultAdminState.rows = rows;
     renderResultAdminTable(rows);
   } catch (err) {
     console.error('Lỗi tải danh sách kết quả thi:', err);
     tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state">Có lỗi khi tải dữ liệu. Thử tải lại trang.</div></td></tr>';
   }
+}
+
+// Sort tại chỗ (mutate rows) theo resultAdminState.filters.sortField/sortDirection.
+// 'score' so theo % (total_score/total_possible) để công bằng giữa các đề có
+// thang điểm khác nhau — không so trực tiếp total_score thô.
+function applyResultSort(rows) {
+  const { sortField, sortDirection } = resultAdminState.filters;
+  const dir = sortDirection === 'asc' ? 1 : -1;
+
+  rows.sort((a, b) => {
+    let valA, valB;
+    if (sortField === 'score') {
+      valA = (a.total_score != null && a.total_possible) ? a.total_score / a.total_possible : -1;
+      valB = (b.total_score != null && b.total_possible) ? b.total_score / b.total_possible : -1;
+    } else {
+      // submitted_at — attempt chưa nộp (null) luôn coi là giá trị nhỏ nhất.
+      valA = a.submitted_at || '';
+      valB = b.submitted_at || '';
+    }
+    if (valA === valB) return 0;
+    return (valA > valB ? 1 : -1) * dir;
+  });
+}
+
+function toggleResultSortDirection() {
+  resultAdminState.filters.sortDirection = resultAdminState.filters.sortDirection === 'asc' ? 'desc' : 'asc';
+
+  const icon = document.getElementById('result-sort-direction-icon');
+  if (icon) {
+    icon.className = resultAdminState.filters.sortDirection === 'asc'
+      ? 'ti ti-sort-ascending'
+      : 'ti ti-sort-descending';
+  }
+
+  applyResultSort(resultAdminState.rows);
+  renderResultAdminTable(resultAdminState.rows);
 }
 
 // Badge trạng thái — dùng đúng class exam-status-* đã có sẵn trong style.css
@@ -176,8 +266,30 @@ function renderResultAdminTable(rows) {
 function initResultFilterControls() {
   const examSelect = document.getElementById('filter-result-exam');
   const studentSelect = document.getElementById('filter-result-student');
+  const skillSelect = document.getElementById('filter-result-skill');
+  const statusSelect = document.getElementById('filter-result-status');
+  const dateFromInput = document.getElementById('filter-result-date-from');
+  const dateToInput = document.getElementById('filter-result-date-to');
+  const sortFieldSelect = document.getElementById('result-sort-field');
+  const sortDirectionBtn = document.getElementById('result-sort-direction-btn');
+
   if (examSelect) examSelect.addEventListener('change', loadResultAdminList);
   if (studentSelect) studentSelect.addEventListener('change', loadResultAdminList);
+  if (skillSelect) skillSelect.addEventListener('change', loadResultAdminList);
+  if (statusSelect) statusSelect.addEventListener('change', loadResultAdminList);
+  if (dateFromInput) dateFromInput.addEventListener('change', loadResultAdminList);
+  if (dateToInput) dateToInput.addEventListener('change', loadResultAdminList);
+
+  // Đổi trường sort -> vẫn cần loadResultAdminList() (không chỉ applyResultSort())
+  // vì filter khác có thể chưa được áp dụng lần load gần nhất; đơn giản và
+  // nhất quán hơn là load lại toàn bộ theo đúng bộ filter hiện tại.
+  if (sortFieldSelect) {
+    sortFieldSelect.addEventListener('change', () => {
+      resultAdminState.filters.sortField = sortFieldSelect.value;
+      loadResultAdminList();
+    });
+  }
+  if (sortDirectionBtn) sortDirectionBtn.addEventListener('click', toggleResultSortDirection);
 }
 
 // ============================================================

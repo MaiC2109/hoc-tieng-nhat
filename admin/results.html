@@ -12,6 +12,34 @@
       <select id="filter-result-student" class="admin-select">
         <option value="">Tất cả học viên</option>
       </select>
+      <!-- Chỉ có tác dụng cho đề loại 'skill' (khớp giá trị skill_id của
+           đề) hoặc chọn 'full' để lọc riêng đề tổng hợp — cùng cơ chế đã
+           làm ở "Danh sách đề thi". -->
+      <select id="filter-result-skill" class="admin-select">
+        <option value="">Tất cả kỹ năng</option>
+      </select>
+      <select id="filter-result-status" class="admin-select">
+        <option value="">Tất cả trạng thái</option>
+        <option value="in_progress">Đang làm dở</option>
+        <option value="submitted">Đã nộp bài</option>
+        <option value="passed">Đạt</option>
+        <option value="needs_retry">Cần làm lại</option>
+      </select>
+      <label style="font-size:13px; color:var(--ink-mute); display:flex; align-items:center; gap:6px;">
+        Từ ngày
+        <input type="date" id="filter-result-date-from" class="admin-select" style="width:auto;" />
+      </label>
+      <label style="font-size:13px; color:var(--ink-mute); display:flex; align-items:center; gap:6px;">
+        Đến ngày
+        <input type="date" id="filter-result-date-to" class="admin-select" style="width:auto;" />
+      </label>
+      <select id="result-sort-field" class="admin-select">
+        <option value="submitted_at">Sắp xếp: Ngày nộp</option>
+        <option value="score">Sắp xếp: Điểm</option>
+      </select>
+      <button type="button" class="btn btn-outline" id="result-sort-direction-btn" title="Đảo chiều sắp xếp">
+        <i class="ti ti-sort-descending" id="result-sort-direction-icon"></i>
+      </button>
     </div>
   </div>
 
