@@ -774,7 +774,7 @@ async function onBulkExamSelectChange() {
           <input type="number" class="admin-input bulk-exam-section-create-time" data-skill-id="${g.skillId}" value="10" min="1" />
         </div>
         <div class="admin-form-group" style="margin-bottom:6px;">
-          <label>Hướng dẫn đề bài (dạng bài)</label>
+          <label>Hướng dẫn đề bài (dạng bài) — không bắt buộc</label>
           <textarea class="admin-input bulk-exam-section-create-instruction" data-skill-id="${g.skillId}" rows="2"
                      placeholder="Ví dụ: 問題1：（　）に なにを いれますか。A・B・C・D から いちばん いい ものを ひとつ えらんで ください。"></textarea>
         </div>
@@ -794,7 +794,7 @@ async function onBulkExamSelectChange() {
       <div class="bulk-exam-subsection-create-wrap" data-skill-id="${g.skillId}"
            style="display:none; margin-top:8px; padding:10px; border:1px dashed var(--border-md, #ccc); border-radius:8px;">
         <div class="admin-form-group" style="margin-bottom:6px;">
-          <label>Hướng dẫn đề bài (dạng bài mới)</label>
+          <label>Hướng dẫn đề bài (dạng bài mới) — không bắt buộc</label>
           <textarea class="admin-input bulk-exam-subsection-create-instruction" data-skill-id="${g.skillId}" rows="2"
                      placeholder="Ví dụ: 問題2：＿＿＿の ことばは どう かきますか。A・B・C・D から いちばん いい ものを ひとつ えらんで ください。"></textarea>
         </div>
@@ -1052,6 +1052,29 @@ async function onBulkExamSectionChange(skillId, sectionId) {
 
   try {
     const subsections = await fetchExamSubsections(sectionId);
+
+    // Phần đã chọn CHƯA có dạng bài nào -> đa số trường hợp chỉ cần đúng 1
+    // dạng bài dùng chung cho cả phần (không cần chia nhỏ instruction_text
+    // theo từng mondai) -> tự tạo luôn 1 dạng bài rỗng (instruction_text: '')
+    // và chọn sẵn, bỏ hẳn bước phải mở mini-form + gõ hướng dẫn đề bài.
+    // Giáo viên vẫn có thể sửa lại instruction_text sau ở màn Quản lý đề thi,
+    // hoặc bấm "+ Tạo dạng bài mới…" ngay dưới đây nếu thật sự cần tách
+    // thêm dạng bài khác (vd đề có cả 問題1 lẫn 問題2).
+    if (subsections.length === 0) {
+      const autoSubsection = await createEmptyBulkExamSubsection(sectionId);
+      if (autoSubsection) {
+        if (group) group.subsectionId = autoSubsection.id;
+        subsectionSelect.style.display = '';
+        subsectionSelect.innerHTML = '<option value="">— Chọn dạng bài —</option>'
+          + '<option value="__create_new__">+ Tạo dạng bài mới…</option>'
+          + `<option value="${autoSubsection.id}">${escHtml(truncateText(stripHtml(autoSubsection.instruction_text) || '(Không có hướng dẫn riêng)', 60))}</option>`;
+        subsectionSelect.value = autoSubsection.id;
+        return;
+      }
+      // Tạo tự động thất bại (lỗi mạng/API) -> rơi về hành vi cũ: hiện dropdown
+      // rỗng, để giáo viên tự bấm "+ Tạo dạng bài mới…" thử lại thủ công.
+    }
+
     subsectionSelect.style.display = '';
     // Luôn có option "+ Tạo dạng bài mới…" — kể cả khi phần đã có sẵn dạng
     // bài, giáo viên có thể muốn tách thêm 1 mondai khác (vd 問題2) trong
@@ -1059,10 +1082,37 @@ async function onBulkExamSectionChange(skillId, sectionId) {
     subsectionSelect.innerHTML = '<option value="">— Chọn dạng bài —</option>'
       + '<option value="__create_new__">+ Tạo dạng bài mới…</option>'
       + subsections.map(sub =>
-          `<option value="${sub.id}">${escHtml(truncateText(stripHtml(sub.instruction_text), 60))}</option>`
+          `<option value="${sub.id}">${escHtml(truncateText(stripHtml(sub.instruction_text) || '(Không có hướng dẫn riêng)', 60))}</option>`
         ).join('');
   } catch (err) {
     console.error(`Lỗi nạp danh sách dạng bài cho kỹ năng ${skillId} (bulk):`, err);
+  }
+}
+
+// Tạo 1 exam_subsection rỗng (instruction_text: '') cho section đã có sẵn
+// nhưng chưa có dạng bài nào — dùng bởi auto-create trong
+// onBulkExamSectionChange(). Trả về null nếu lỗi (để chỗ gọi tự fallback
+// về hành vi thủ công cũ thay vì làm vỡ luồng).
+async function createEmptyBulkExamSubsection(sectionId) {
+  try {
+    const res = await fetch(`${ADMIN_CONFIG.supabaseUrl}/rest/v1/exam_subsections`, {
+      method: 'POST',
+      headers: await sbAuthedHeaders({ 'Prefer': 'return=representation' }),
+      body: JSON.stringify({
+        exam_section_id: sectionId,
+        instruction_text: '',
+        order_index: 0
+      })
+    });
+    if (!res.ok) {
+      console.error('Lỗi tự tạo dạng bài rỗng:', res.status, await res.text().catch(() => ''));
+      return null;
+    }
+    const [newSubsection] = await res.json();
+    return newSubsection;
+  } catch (err) {
+    console.error('Lỗi không xác định khi tự tạo dạng bài rỗng:', err);
+    return null;
   }
 }
 
@@ -1115,11 +1165,9 @@ async function handleBulkExamSectionCreateConfirm(skillId) {
     timeInput?.focus();
     return;
   }
-  if (!instructionText) {
-    if (errorEl) errorEl.textContent = 'Vui lòng nhập hướng dẫn đề bài.';
-    instructionInput?.focus();
-    return;
-  }
+  // instructionText để trống là hợp lệ — nhiều đề chỉ có đúng 1 dạng bài
+  // dùng chung cho cả phần, không cần chia nhỏ hướng dẫn theo từng mondai.
+  // Có thể bổ sung/sửa lại instruction_text sau ở màn Quản lý đề thi.
 
   const originalText = confirmBtn.textContent;
   confirmBtn.disabled = true;
@@ -1230,14 +1278,10 @@ async function handleBulkExamSubsectionCreateConfirm(skillId) {
     return;
   }
 
-  const instructionText = instructionInput?.value.trim();
+  const instructionText = instructionInput?.value.trim() || '';
   if (errorEl) errorEl.textContent = '';
 
-  if (!instructionText) {
-    if (errorEl) errorEl.textContent = 'Vui lòng nhập hướng dẫn đề bài.';
-    instructionInput?.focus();
-    return;
-  }
+  // Để trống là hợp lệ — xem giải thích ở handleBulkExamSectionCreateConfirm().
 
   const originalText = confirmBtn.textContent;
   confirmBtn.disabled = true;
@@ -2147,13 +2191,33 @@ async function onExamLinkSectionChange() {
 
   try {
     const subsections = await fetchExamSubsections(sectionId);
+
+    // Section chưa có dạng bài nào -> tự tạo 1 dạng bài rỗng (instruction_text:
+    // '') và chọn sẵn, đồng bộ hành vi với flow bulk (onBulkExamSectionChange).
+    // Form này không có mini-form tạo subsection riêng nên nếu không tự tạo,
+    // giáo viên sẽ bị kẹt hẳn (dropdown trống, không có lối nào để tiếp tục).
+    if (subsections.length === 0) {
+      const autoSubsection = await createEmptyBulkExamSubsection(sectionId);
+      if (autoSubsection) {
+        examLinkState.subsections = [autoSubsection];
+        if (subsectionWrap) subsectionWrap.style.display = 'block';
+        if (subsectionSelect) {
+          subsectionSelect.innerHTML =
+            `<option value="${autoSubsection.id}">${escHtml(truncateText(stripHtml(autoSubsection.instruction_text) || '(Không có hướng dẫn riêng)', 60))}</option>`;
+          subsectionSelect.value = autoSubsection.id;
+        }
+        return;
+      }
+      // Tạo tự động thất bại -> rơi xuống hiển thị dropdown rỗng như cũ.
+    }
+
     examLinkState.subsections = subsections;
 
     if (subsectionWrap) subsectionWrap.style.display = 'block';
     if (subsectionSelect) {
       subsectionSelect.innerHTML = '<option value="">— Chọn dạng bài —</option>' +
         subsections.map(sub =>
-          `<option value="${sub.id}">${escHtml(truncateText(stripHtml(sub.instruction_text), 60))}</option>`
+          `<option value="${sub.id}">${escHtml(truncateText(stripHtml(sub.instruction_text) || '(Không có hướng dẫn riêng)', 60))}</option>`
         ).join('');
     }
   } catch (err) {
