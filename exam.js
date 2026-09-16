@@ -2551,7 +2551,9 @@ function renderResultQuestionDetail(q) {
   const normalizedType = (q.question_type || '').trim().toLowerCase();
 
   if (normalizedType === 'multiple_choice' && Array.isArray(q.choices)) {
-    const optionsHtml = q.choices.map(choiceValue => {
+    const labels = ['A', 'B', 'C', 'D', 'E', 'F'];
+    const optionsHtml = q.choices.map((choiceValue, i) => {
+      const label = labels[i] || (i + 1);
       const isSelected = q.selected_answer === choiceValue;
       const isCorrectChoice = q.correct_answer === choiceValue;
 
@@ -2570,6 +2572,7 @@ function renderResultQuestionDetail(q) {
 
       return `
         <div class="exam-choice-btn exam-review-choice ${cls}">
+          <span class="exam-choice-label">${label}</span>
           <span class="exam-choice-content">${choiceValue}</span>
           ${badge}
         </div>
