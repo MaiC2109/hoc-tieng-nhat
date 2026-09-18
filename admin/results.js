@@ -321,10 +321,32 @@ const resultDetailState = {
   attempt: null,
   questionsReview: [],
   passagesMap: {},        // { [passage_id]: passage row } cho câu Đọc hiểu/Ngữ pháp dùng chung đoạn văn
-  answerFilter: 'all' // 'all' | 'correct' | 'wrong'
+  answerFilter: 'all', // 'all' | 'correct' | 'wrong'
+  playingAudioId: null     // id (examQuestionId hoặc "passage-<id>") của audio đang gắn ở màn chi tiết
 };
 
+// Admin không dùng chung state.currentAudio với bên học viên (2 site JS
+// riêng biệt) — 1 slot audio riêng cho toàn bộ màn chi tiết kết quả, mirror
+// đúng cơ chế state.currentAudio/stopCurrentAudio() bên exam.js.
+let adminReviewAudio = null;
+
+function stopAdminReviewAudio() {
+  if (adminReviewAudio) {
+    adminReviewAudio.onended = null;
+    adminReviewAudio.onerror = null;
+    adminReviewAudio.ontimeupdate = null;
+    adminReviewAudio.pause();
+    adminReviewAudio.src = '';
+  }
+  adminReviewAudio = null;
+}
+
 function showResultListView() {
+  // Rời màn chi tiết -> dừng hẳn audio đang gắn (nếu có), tránh phát ngầm
+  // sau khi DOM của nút/progress đã bị thay bởi bảng danh sách.
+  stopAdminReviewAudio();
+  resultDetailState.playingAudioId = null;
+
   const listView = document.getElementById('result-list-view');
   const detailView = document.getElementById('result-detail-view');
   if (listView) listView.style.display = '';
@@ -564,6 +586,12 @@ async function openResultDetail(attemptId) {
 }
 
 function setResultAnswerFilter(filterValue) {
+  // Đổi filter Đúng/Sai -> render lại toàn bộ danh sách câu, làm mất DOM
+  // của nút/progress đang gắn audio -> dừng trước để tránh audio phát
+  // ngầm không còn cách nào dừng qua UI nữa.
+  stopAdminReviewAudio();
+  resultDetailState.playingAudioId = null;
+
   resultDetailState.answerFilter = filterValue;
   renderAdminResultDetail();
 }
@@ -658,6 +686,117 @@ function scrollToAdminReviewQuestion(examQuestionId) {
 // Chi tiết 1 câu — copy renderResultQuestionDetail() từ exam.js, chỉ đổi
 // id phần tử (admin-review-q-...) để không đụng id bên site học viên nếu
 // lỡ mở song song 2 tab.
+// ------------------------------------------------------------
+// Audio ở màn chi tiết kết quả (admin) — port đúng UX từ màn Đáp án bên
+// học viên (exam.js: toggleReviewQuestionAudio/setReviewAudioSpeed...):
+// pause/resume giữ nguyên vị trí (không phát lại từ đầu), thanh tiến độ
+// tua được, 4 mức tốc độ cố định 0.5x/0.75x/1x/1.5x. Dùng chung cho cả
+// audio riêng từng câu (q.audio_url) lẫn audio passage (passage.audio_url),
+// phân biệt bằng id truyền vào ("passage-<id>" cho passage).
+// ------------------------------------------------------------
+function toggleAdminReviewAudio(id, url) {
+  if (resultDetailState.playingAudioId === id && adminReviewAudio) {
+    if (adminReviewAudio.paused) {
+      adminReviewAudio.play().catch(e => console.log(e));
+      setAdminReviewAudioIcon(id, true);
+    } else {
+      adminReviewAudio.pause();
+      setAdminReviewAudioIcon(id, false);
+    }
+    return;
+  }
+
+  resetAdminReviewAudioUI(resultDetailState.playingAudioId);
+  stopAdminReviewAudio();
+
+  adminReviewAudio = new Audio(url);
+  resultDetailState.playingAudioId = id;
+  setAdminReviewAudioIcon(id, true);
+
+  const resetOnFinish = () => {
+    resetAdminReviewAudioUI(id);
+    if (resultDetailState.playingAudioId === id) {
+      resultDetailState.playingAudioId = null;
+    }
+  };
+  adminReviewAudio.onended = resetOnFinish;
+  adminReviewAudio.onerror = resetOnFinish;
+  adminReviewAudio.ontimeupdate = () => updateAdminReviewAudioProgress(id);
+
+  adminReviewAudio.play().catch(e => {
+    console.log(e);
+    resetOnFinish();
+  });
+}
+
+function setAdminReviewAudioIcon(id, isPlaying) {
+  if (!id) return;
+  const icon = document.getElementById(`admin-review-audio-icon-${id}`);
+  if (icon) icon.className = isPlaying ? 'ti ti-player-pause' : 'ti ti-player-play';
+}
+
+function updateAdminReviewAudioProgress(id) {
+  const bar = document.getElementById(`admin-review-audio-progress-${id}`);
+  if (!bar || !adminReviewAudio) return;
+  const duration = adminReviewAudio.duration;
+  if (!isFinite(duration) || duration <= 0) return;
+  bar.value = (adminReviewAudio.currentTime / duration) * 100;
+}
+
+function seekAdminReviewAudio(id, percent) {
+  if (resultDetailState.playingAudioId !== id || !adminReviewAudio) return;
+  const duration = adminReviewAudio.duration;
+  if (!isFinite(duration) || duration <= 0) return;
+  adminReviewAudio.currentTime = (parseFloat(percent) / 100) * duration;
+}
+
+function resetAdminReviewAudioUI(id) {
+  if (!id) return;
+  setAdminReviewAudioIcon(id, false);
+  const bar = document.getElementById(`admin-review-audio-progress-${id}`);
+  if (bar) bar.value = 0;
+  const speedGroup = document.getElementById(`admin-review-audio-speed-${id}`);
+  if (speedGroup) speedGroup.querySelectorAll('.exam-audio-speed-btn').forEach(b => b.classList.remove('active'));
+}
+
+function setAdminReviewAudioSpeed(id, rate, btnEl) {
+  if (resultDetailState.playingAudioId !== id || !adminReviewAudio) return;
+
+  const isActive = btnEl.classList.contains('active');
+  const group = btnEl.parentElement;
+  group.querySelectorAll('.exam-audio-speed-btn').forEach(b => b.classList.remove('active'));
+
+  if (isActive) {
+    adminReviewAudio.playbackRate = 1;
+    return;
+  }
+
+  adminReviewAudio.playbackRate = rate;
+  btnEl.classList.add('active');
+}
+
+// Render block nút play/pause + progress + speed, dùng chung cho câu hỏi
+// và passage — chỉ khác id/url truyền vào.
+function renderAdminReviewAudioControls(id, url) {
+  if (!url) return '';
+  return `
+    <div class="exam-audio-controls">
+      <button type="button" class="btn btn-outline exam-audio-btn" onclick="toggleAdminReviewAudio('${id}', '${url}')">
+        <i class="ti ti-player-play" id="admin-review-audio-icon-${id}"></i> Nghe audio
+      </button>
+      <input type="range" class="exam-audio-progress" id="admin-review-audio-progress-${id}"
+        min="0" max="100" step="0.1" value="0"
+        oninput="seekAdminReviewAudio('${id}', this.value)" />
+      <div class="exam-audio-speed-group" id="admin-review-audio-speed-${id}">
+        <button type="button" class="exam-audio-speed-btn" onclick="setAdminReviewAudioSpeed('${id}', 0.5, this)">0.5x</button>
+        <button type="button" class="exam-audio-speed-btn" onclick="setAdminReviewAudioSpeed('${id}', 0.75, this)">0.75x</button>
+        <button type="button" class="exam-audio-speed-btn" onclick="setAdminReviewAudioSpeed('${id}', 1, this)">1x</button>
+        <button type="button" class="exam-audio-speed-btn" onclick="setAdminReviewAudioSpeed('${id}', 1.5, this)">1.5x</button>
+      </div>
+    </div>
+  `;
+}
+
 function renderAdminReviewQuestionDetail(q, prevQuestion) {
   let answerHtml = '';
   const normalizedType = (q.question_type || '').trim().toLowerCase();
@@ -683,9 +822,7 @@ function renderAdminReviewQuestionDetail(q, prevQuestion) {
     if (passage) {
       passageHtml = `
         <div class="exam-passage-box">
-          ${passage.audio_url ? `
-            <audio controls style="display:block; margin:8px 0; width:100%; max-width:400px;" src="${passage.audio_url}"></audio>
-          ` : ''}
+          ${renderAdminReviewAudioControls(`passage-${q.passage_id}`, passage.audio_url)}
           ${passage.content ? `<div class="exam-passage-content">${passage.content}</div>` : ''}
         </div>
       `;
@@ -752,6 +889,7 @@ function renderAdminReviewQuestionDetail(q, prevQuestion) {
         </span>
       </div>
       <div class="exam-question-content">${q.question_text || ''}</div>
+      ${renderAdminReviewAudioControls(q.examQuestionId, q.audio_url)}
       ${answerHtml}
       ${feedbackHtml}
     </div>
