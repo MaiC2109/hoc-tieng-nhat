@@ -1398,6 +1398,11 @@ async function handleBulkExamConfirm() {
 
     closeBulkExamModal();
     clearQuestionSelection();
+    // Load lại bảng ngay tại chỗ theo đúng filter đang chọn (đặc biệt quan
+    // trọng với filter "Chưa gắn vào đề nào" — các câu vừa thêm cần biến
+    // mất khỏi danh sách ngay, không bắt admin phải chuyển tab rồi quay
+    // lại mới thấy cập nhật).
+    await loadQuestionAdminList();
     alert('Đã thêm các câu hỏi đã chọn vào đề thi.');
   } catch (err) {
     console.error('Lỗi thêm hàng loạt câu hỏi vào đề thi:', err);
