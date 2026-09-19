@@ -960,11 +960,25 @@ async function loadBulkExamSectionsForSkill(examId, skillId) {
 
       if (!onlySection) {
         if (group) { group.sectionId = ''; group.subsectionId = ''; }
-        if (emptyMsg) {
-          emptyMsg.textContent = 'Đề này chưa có phần nào. Vui lòng vào màn Quản lý đề thi để thêm phần trước.';
-          emptyMsg.style.display = 'block';
-        }
-        onBulkExamSectionChange(skillId, ''); // ẩn dropdown dạng bài
+
+        // Đề skill chưa có section nào -> KHÔNG tự POST section với số phút
+        // mặc định, mà hiện luôn mini-form "Tạo phần" đã có sẵn (trước giờ
+        // chỉ hiện cho nhánh exam_type='full') ngay tại đây, để admin tự
+        // nhập số phút rồi bấm "Tạo phần" — không cần rời sang màn Quản lý
+        // đề thi nữa. Tái dùng nguyên handleBulkExamSectionCreateConfirm(),
+        // không viết logic tạo section mới.
+        if (emptyMsg) emptyMsg.style.display = 'none';
+
+        const createWrap = document.querySelector(`.bulk-exam-section-create-wrap[data-skill-id="${skillId}"]`);
+        const titleInput = document.querySelector(`.bulk-exam-section-create-title[data-skill-id="${skillId}"]`);
+        // Điền sẵn tên phần = tên kỹ năng (đề skill chỉ có đúng 1 section,
+        // tên phần luôn nên trùng tên kỹ năng) — admin vẫn có thể sửa lại.
+        // Không đụng tới ô "Thời gian làm bài" — để trống, bắt admin tự
+        // nhập (đúng yêu cầu, không lấy mặc định ngầm).
+        if (titleInput && !titleInput.value) titleInput.value = group?.skillName || '';
+        if (createWrap) createWrap.style.display = 'block';
+
+        onBulkExamSectionChange(skillId, ''); // ẩn dropdown dạng bài (chưa có section thật để chọn)
         return;
       }
 
@@ -1253,14 +1267,21 @@ function handleBulkExamSectionCreateCancel(skillId) {
   const group = bulkExamState.skillGroups.find(g => g.skillId === skillId);
   if (group) { group.sectionId = ''; group.subsectionId = ''; }
 
-  const sectionSelect = document.querySelector(`.bulk-exam-section-select[data-skill-id="${skillId}"]`);
-  if (sectionSelect) sectionSelect.value = '';
+  const errorEl = document.querySelector(`.bulk-exam-section-create-error[data-skill-id="${skillId}"]`);
+  if (errorEl) errorEl.textContent = '';
+
+  // Đề skill: dropdown "Chọn phần" luôn bị ẩn (display:none) vì đề skill
+  // không có lựa chọn nào khác ngoài tự tạo phần mới -> "Hủy" ở đây không
+  // có gì để quay về, nếu ẩn luôn mini-form sẽ thành màn trống, không còn
+  // cách nào tạo lại. Vì vậy GIỮ mini-form mở, chỉ xóa lỗi/không đóng.
+  const realSectionSelect = document.querySelector(`.bulk-exam-section-select[data-skill-id="${skillId}"]`);
+  const isSkillExamContext = realSectionSelect && realSectionSelect.style.display === 'none';
+  if (isSkillExamContext) return;
+
+  if (realSectionSelect) realSectionSelect.value = '';
 
   const createWrap = document.querySelector(`.bulk-exam-section-create-wrap[data-skill-id="${skillId}"]`);
   if (createWrap) createWrap.style.display = 'none';
-
-  const errorEl = document.querySelector(`.bulk-exam-section-create-error[data-skill-id="${skillId}"]`);
-  if (errorEl) errorEl.textContent = '';
 }
 
 // Tạo THÊM 1 exam_subsection mới trong phần (exam_section) ĐÃ CHỌN sẵn cho
