@@ -1098,6 +1098,16 @@ async function onBulkExamSectionChange(skillId, sectionId) {
       + subsections.map(sub =>
           `<option value="${sub.id}">${escHtml(truncateText(stripHtml(sub.instruction_text) || '(Không có hướng dẫn riêng)', 60))}</option>`
         ).join('');
+
+    // Section đã có sẵn ĐÚNG 1 dạng bài (không phải trường hợp vừa tự tạo
+    // ở nhánh trên) -> tự chọn sẵn luôn, cùng nguyên tắc "đa số chỉ cần 1
+    // dạng bài dùng chung cho cả phần" đã áp dụng cho nhánh tự tạo mới.
+    // Có từ 2 dạng bài trở lên thì vẫn để trống, bắt chọn tay vì không thể
+    // đoán đúng ý giáo viên muốn gán vào dạng bài nào.
+    if (subsections.length === 1) {
+      if (group) group.subsectionId = subsections[0].id;
+      subsectionSelect.value = subsections[0].id;
+    }
   } catch (err) {
     console.error(`Lỗi nạp danh sách dạng bài cho kỹ năng ${skillId} (bulk):`, err);
   }
