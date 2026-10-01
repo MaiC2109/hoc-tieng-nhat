@@ -933,6 +933,43 @@
             <input type="number" id="question-bulk-exam-create-threshold" class="admin-input" value="70" min="0" max="100" />
           </div>
         </div>
+
+        <!-- Chỉ hiện khi Loại đề = skill — toggle qua onBulkExamCreateTypeChange()
+             trong questions.js. Đề "skill" chỉ có đúng 1 phần thi (ràng buộc
+             nghiệp vụ, xem exams.js) nên gộp luôn việc tạo phần vào đây,
+             thay vì bắt chọn riêng ở bước sau. -->
+        <div id="question-bulk-exam-create-skill-wrap" style="display:none; margin-bottom:8px;">
+          <div class="admin-form-row" style="display:flex; gap:8px; margin-bottom:4px;">
+            <div class="admin-form-group" style="flex:1;">
+              <label for="question-bulk-exam-create-skill">Kỹ năng</label>
+              <select id="question-bulk-exam-create-skill" class="admin-input">
+                <option value="">— Chọn kỹ năng —</option>
+              </select>
+            </div>
+            <div class="admin-form-group" style="flex:1;">
+              <label for="question-bulk-exam-create-minutes">Thời gian làm bài (phút)</label>
+              <input type="number" id="question-bulk-exam-create-minutes" class="admin-input" min="1" step="1" placeholder="Ví dụ: 15" />
+            </div>
+          </div>
+          <p class="admin-hint-text" style="margin-top:0; margin-bottom:4px;">
+            Đề "skill" chỉ có 1 phần thi duy nhất — tạo đề sẽ tự tạo luôn phần thi này, không cần vào riêng màn "Đề thi" để thêm phần nữa.
+          </p>
+        </div>
+
+        <div class="admin-form-row" style="display:flex; gap:8px; margin-bottom:8px;">
+          <div class="admin-form-group" style="flex:1;">
+            <label for="question-bulk-exam-create-status">Trạng thái</label>
+            <select id="question-bulk-exam-create-status" class="admin-input">
+              <option value="draft">Draft</option>
+              <option value="published">Published</option>
+            </select>
+          </div>
+          <div class="admin-form-group" style="flex:1;">
+            <label for="question-bulk-exam-create-available-from">Ngày publish dự kiến (tùy chọn)</label>
+            <input type="date" id="question-bulk-exam-create-available-from" class="admin-input" />
+          </div>
+        </div>
+
         <div id="question-bulk-exam-create-error" class="admin-login-error" style="margin-bottom:8px;"></div>
         <div style="display:flex; gap:8px;">
           <button type="button" class="btn btn-outline" id="question-bulk-exam-create-cancel-btn">Hủy</button>
