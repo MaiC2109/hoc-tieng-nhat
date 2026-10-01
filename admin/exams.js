@@ -1953,7 +1953,8 @@ async function submitSubsectionForm(e) {
 // ── Form tạo / sửa thông tin đề thi ─────────────────────────────────
 const examFormState = {
   mode: 'create',   // 'create' | 'edit'
-  editingId: null
+  editingId: null,
+  existingSectionId: null // id exam_sections hiện có của đề (chỉ có giá trị khi sửa đề skill đã có sẵn section)
 };
 
 function resetExamForm() {
@@ -1964,6 +1965,93 @@ function resetExamForm() {
   document.getElementById('exam-retry-disabled').checked = false;
   const availableFromEl = document.getElementById('exam-available-from');
   if (availableFromEl) availableFromEl.value = '';
+
+  examFormState.existingSectionId = null;
+  const skillBlock = document.getElementById('exam-skill-block');
+  if (skillBlock) skillBlock.style.display = 'none';
+  const skillSelect = document.getElementById('exam-skill');
+  const minutesInput = document.getElementById('exam-skill-minutes');
+  if (skillSelect) skillSelect.value = '';
+  if (minutesInput) minutesInput.value = '';
+  const warningHint = document.getElementById('exam-skill-warning-hint');
+  if (warningHint) warningHint.style.display = 'none';
+}
+
+// Loại đề = skill -> hiện khối Kỹ năng + Thời gian làm bài (gộp luôn bước
+// tạo/sửa section vào đây, xem submitExamForm()); đổi về full -> ẩn đi +
+// xóa giá trị đã chọn, tránh gửi nhầm skill_id cũ khi submit. Đổi loại đề
+// của 1 đề ĐANG SỬA từ skill sang full không tự xóa section cũ (ngoài
+// phạm vi form này) — admin tự xử lý ở màn chi tiết đề thi nếu cần.
+async function onExamTypeChangeInForm() {
+  const typeSelect = document.getElementById('exam-type');
+  const skillBlock = document.getElementById('exam-skill-block');
+  if (!typeSelect || !skillBlock) return;
+
+  if (typeSelect.value === 'skill') {
+    skillBlock.style.display = 'block';
+    await populateExamFormSkillDropdown();
+  } else {
+    skillBlock.style.display = 'none';
+    const skillSelect = document.getElementById('exam-skill');
+    const minutesInput = document.getElementById('exam-skill-minutes');
+    if (skillSelect) skillSelect.value = '';
+    if (minutesInput) minutesInput.value = '';
+    const warningHint = document.getElementById('exam-skill-warning-hint');
+    if (warningHint) warningHint.style.display = 'none';
+  }
+}
+
+// Tái dùng fetchSkillsList() đã có sẵn (cùng nguồn dữ liệu với dropdown Kỹ
+// năng ở section-form/question-form) — không query riêng.
+async function populateExamFormSkillDropdown() {
+  const select = document.getElementById('exam-skill');
+  if (!select) return;
+  try {
+    const skills = await fetchSkillsList();
+    const keepValue = select.value;
+    select.innerHTML = '<option value="">— Chọn kỹ năng —</option>' +
+      skills.map(sk => `<option value="${sk.id}">${escHtml(sk.name)}</option>`).join('');
+    if (keepValue) select.value = keepValue;
+  } catch (err) {
+    console.error('Lỗi tải danh sách kỹ năng cho form đề thi:', err);
+  }
+}
+
+// Sửa đề skill đã có sẵn section -> điền sẵn Kỹ năng + Thời gian từ section
+// đó (tái dùng fetchExamSections()/fetchExamSubsections() đã có sẵn trong
+// questions.js, cùng 1 trang nên dùng chung được, không viết lại query).
+// Đề skill tạo từ TRƯỚC khi có tính năng này có thể chưa từng có section
+// nào -> để trống, submit sẽ tự tạo mới (coi như lần đầu thiết lập).
+async function prefillExamFormSectionForSkillExam(examId) {
+  try {
+    const sections = await fetchExamSections(examId);
+    const section = sections[0];
+    if (!section) return;
+
+    examFormState.existingSectionId = section.id;
+
+    const skillSelect = document.getElementById('exam-skill');
+    const minutesInput = document.getElementById('exam-skill-minutes');
+    if (skillSelect) skillSelect.value = String(section.skill_id);
+    if (minutesInput) minutesInput.value = Math.round(section.time_limit_seconds / 60);
+
+    // Cảnh báo mềm (không khóa dropdown) nếu phần thi đã có dạng bài bên
+    // trong — cùng nguyên tắc cảnh báo đã áp dụng ở section-form: đổi kỹ
+    // năng ở đây PATCH thẳng section, không tự đồng bộ skill_id của từng
+    // câu hỏi đã gán.
+    const subsections = await fetchExamSubsections(section.id);
+    const warningHint = document.getElementById('exam-skill-warning-hint');
+    if (warningHint) {
+      if (subsections.length > 0) {
+        warningHint.textContent = `⚠️ Phần thi này đã có ${subsections.length} dạng bài. Đổi kỹ năng ở đây KHÔNG tự cập nhật kỹ năng của câu hỏi đã gán — kiểm tra lại ở tab Câu hỏi nếu cần.`;
+        warningHint.style.display = 'block';
+      } else {
+        warningHint.style.display = 'none';
+      }
+    }
+  } catch (err) {
+    console.error('Lỗi tải phần thi hiện có cho đề skill:', err);
+  }
 }
 
 function populateExamFormFromRow(row) {
@@ -1978,7 +2066,9 @@ function populateExamFormFromRow(row) {
 }
 
 // row = null -> mode TẠO MỚI. Truyền row (từ examAdminState.rows) -> mode SỬA.
-function openExamForm(row = null) {
+// Đổi thành async vì mode sửa đề skill cần chờ prefillExamFormSectionForSkillExam()
+// tải xong section hiện có trước khi hiện form.
+async function openExamForm(row = null) {
   resetExamForm();
 
   const titleEl = document.getElementById('exam-form-title');
@@ -1988,6 +2078,11 @@ function openExamForm(row = null) {
     examFormState.editingId = row.id;
     if (titleEl) titleEl.textContent = 'Sửa đề thi';
     populateExamFormFromRow(row);
+
+    if (row.exam_type === 'skill') {
+      await onExamTypeChangeInForm(); // hiện khối + đổ dropdown kỹ năng
+      await prefillExamFormSectionForSkillExam(row.id);
+    }
   } else {
     examFormState.mode = 'create';
     examFormState.editingId = null;
@@ -2026,6 +2121,10 @@ async function submitExamForm(e) {
   // "hiện ngay" (không giới hạn ngày mở khóa) đúng theo yêu cầu.
   const availableFromRaw = document.getElementById('exam-available-from')?.value || '';
   const availableFrom = availableFromRaw || null;
+  // Chỉ đọc khi examType === 'skill' lúc validate/submit thật sự, nhưng
+  // luôn lấy giá trị ở đây cho gọn.
+  const skillId = document.getElementById('exam-skill')?.value;
+  const skillMinutes = Number(document.getElementById('exam-skill-minutes')?.value);
 
   if (!title) {
     errorEl.textContent = 'Vui lòng nhập tên đề thi.';
@@ -2038,6 +2137,19 @@ async function submitExamForm(e) {
   if (!Number.isFinite(passThreshold) || passThreshold < 0 || passThreshold > 100) {
     errorEl.textContent = 'Ngưỡng đạt phải là số nguyên từ 0 đến 100.';
     return;
+  }
+  // Đề "skill" -> bắt buộc Kỹ năng + Thời gian làm bài, vì sẽ dùng 2 giá
+  // trị này để tự tạo/cập nhật luôn phần thi (exam_sections) ngay sau khi
+  // lưu đề, không bắt nhập lại ở màn chi tiết đề thi.
+  if (examType === 'skill') {
+    if (!skillId) {
+      errorEl.textContent = 'Vui lòng chọn kỹ năng cho đề "skill".';
+      return;
+    }
+    if (!Number.isFinite(skillMinutes) || skillMinutes <= 0) {
+      errorEl.textContent = 'Thời gian làm bài phải là số phút lớn hơn 0.';
+      return;
+    }
   }
 
   draftBtn.disabled = true;
@@ -2078,6 +2190,44 @@ async function submitExamForm(e) {
       throw new Error(errBody?.message || `Lỗi lưu đề thi (HTTP ${res.status})`);
     }
 
+    const [savedExam] = await res.json();
+
+    // Đề "skill" -> tự tạo/cập nhật luôn phần thi duy nhất ngay bây giờ
+    // (gộp bước, đúng yêu cầu). Lỗi ở bước này KHÔNG chặn luồng — đề vẫn
+    // được lưu, admin tự vào "Thêm phần" ở màn chi tiết đề thi nếu cần,
+    // tránh vì 1 lỗi phụ mà mất luôn thao tác lưu đề chính vừa làm. Chỉ
+    // KHÔNG tự đóng form ngay (xem biến sectionSaveFailed dưới), để admin
+    // kịp đọc cảnh báo thay vì bị resetExamForm() xóa mất ngay lập tức.
+    let sectionSaveFailed = false;
+    if (examType === 'skill') {
+      try {
+        const skillName = (questionsAdminState.skills || []).find(sk => String(sk.id) === String(skillId))?.name || null;
+        const sectionPayload = {
+          exam_id: savedExam.id,
+          skill_id: Number(skillId),
+          title: skillName,
+          time_limit_seconds: Math.round(skillMinutes * 60)
+        };
+
+        const sectionRes = examFormState.existingSectionId
+          ? await fetch(`${ADMIN_CONFIG.supabaseUrl}/rest/v1/exam_sections?id=eq.${examFormState.existingSectionId}`, {
+              method: 'PATCH', headers, body: JSON.stringify(sectionPayload)
+            })
+          : await fetch(`${ADMIN_CONFIG.supabaseUrl}/rest/v1/exam_sections`, {
+              method: 'POST', headers, body: JSON.stringify({ ...sectionPayload, order_index: 0 })
+            });
+
+        if (!sectionRes.ok) {
+          const errBody = await sectionRes.json().catch(() => null);
+          throw new Error(errBody?.message || `Lỗi lưu phần thi (HTTP ${sectionRes.status})`);
+        }
+      } catch (sectionErr) {
+        console.error('Lỗi tự tạo/cập nhật phần thi cho đề skill:', sectionErr);
+        sectionSaveFailed = true;
+        errorEl.textContent = 'Đã lưu đề thi, nhưng có lỗi khi lưu phần thi — vui lòng kiểm tra lại ở mục "Thêm phần" trong màn chi tiết đề thi.';
+      }
+    }
+
     await loadExamAdminList();
 
     // Dropdown "Chọn đề thi" bên tab Câu hỏi (fetchExamsList() trong
@@ -2089,7 +2239,9 @@ async function submitExamForm(e) {
       examLinkState.examsLoaded = false;
     }
 
-    closeExamForm();
+    if (!sectionSaveFailed) {
+      closeExamForm();
+    }
   } catch (err) {
     console.error('Lỗi lưu đề thi:', err);
     errorEl.textContent = err?.message || 'Có lỗi khi lưu đề thi. Vui lòng thử lại.';
@@ -2405,6 +2557,7 @@ function initExamFormControls() {
   document.getElementById('exam-form-cancel-btn')?.addEventListener('click', closeExamForm);
   document.getElementById('exam-form-overlay')?.addEventListener('click', closeExamForm);
   document.getElementById('exam-form')?.addEventListener('submit', submitExamForm);
+  document.getElementById('exam-type')?.addEventListener('change', onExamTypeChangeInForm);
 
   document.getElementById('exam-detail-back-btn')?.addEventListener('click', () => {
     showExamListView();

@@ -150,6 +150,29 @@
         </select>
       </div>
 
+      <!-- Chỉ hiện khi Loại đề = skill — toggle qua onExamTypeChangeInForm()
+           trong exams.js. Đề "skill" chỉ có đúng 1 phần thi (ràng buộc
+           nghiệp vụ) nên gộp luôn việc tạo/cập nhật phần thi vào đây, thay
+           vì bắt vào riêng "Thêm phần" ở màn chi tiết đề thi. -->
+      <div id="exam-skill-block" style="display:none;">
+        <div class="admin-form-group">
+          <label for="exam-skill">Kỹ năng</label>
+          <select id="exam-skill" class="admin-select">
+            <option value="">— Chọn kỹ năng —</option>
+          </select>
+          <p class="admin-hint-text" id="exam-skill-warning-hint" style="display:none; color:var(--vermillion);"></p>
+        </div>
+
+        <div class="admin-form-group">
+          <label for="exam-skill-minutes">Thời gian làm bài (phút)</label>
+          <input type="number" id="exam-skill-minutes" class="admin-select" min="1" step="1" placeholder="Ví dụ: 15" />
+        </div>
+
+        <p class="admin-hint-text" style="margin-top:-2px;">
+          Đề "skill" chỉ có 1 phần thi duy nhất — phần thi này sẽ được tự tạo/cập nhật theo đúng kỹ năng và thời gian bạn chọn ở đây, không cần vào riêng "Thêm phần" ở màn chi tiết đề thi nữa.
+        </p>
+      </div>
+
       <div class="admin-form-group">
         <label for="exam-pass-threshold">Ngưỡng đạt (%)</label>
         <p class="admin-hint-text" style="margin-top:-2px;">Phần trăm điểm tối thiểu để được coi là đạt đề thi này.</p>
