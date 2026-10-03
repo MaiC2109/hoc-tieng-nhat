@@ -258,7 +258,12 @@ function toggleQuestionPassageField() {
 // lọc theo đề thi) — được tính trước ở loadQuestionAdminList() vì việc lọc
 // theo đề thi cần đi xuyên qua exam_sections/exam_subsections/exam_questions,
 // không nhét gọn vào 1 URL PostgREST đơn giản như filter kỹ năng được.
-function buildQuestionListUrl(matchedIds, excludeIds) {
+// LƯU Ý: excludeIds ("Chưa gắn vào đề nào") KHÔNG nhét vào URL (not.in.(...))
+// nữa — trung tâm đã tạo đủ nhiều câu hỏi/đề khiến danh sách ID cần loại
+// trừ quá dài, vượt giới hạn độ dài URL -> PostgREST/hạ tầng trả 400. Việc
+// loại trừ này chuyển sang lọc phía client trong loadQuestionAdminList(),
+// đúng pattern search-box đang lọc trên currentRows sẵn có.
+function buildQuestionListUrl(matchedIds) {
   const skillFilter = document.getElementById('filter-question-skill')?.value || '';
   const sortDir = document.getElementById('sort-question-created')?.value === 'asc' ? 'asc' : 'desc';
 
@@ -272,10 +277,6 @@ function buildQuestionListUrl(matchedIds, excludeIds) {
 
   if (skillFilter) url += `&skill_id=eq.${encodeURIComponent(skillFilter)}`;
   if (Array.isArray(matchedIds)) url += `&id=in.(${matchedIds.join(',')})`;
-  // excludeIds: dùng cho filter "Chưa gắn vào đề nào" — loại các câu ĐÃ có
-  // mặt trong exam_questions (bất kể đề nào). Rỗng nghĩa là chưa câu nào
-  // được gắn -> khỏi thêm điều kiện gì (giữ nguyên toàn bộ danh sách).
-  if (Array.isArray(excludeIds) && excludeIds.length > 0) url += `&id=not.in.(${excludeIds.join(',')})`;
   return url;
 }
 
@@ -357,10 +358,19 @@ async function loadQuestionAdminList() {
       }
     }
 
-    const res = await fetch(buildQuestionListUrl(matchedIds, excludeIds), { headers: await sbAuthedHeaders() });
+    const res = await fetch(buildQuestionListUrl(matchedIds), { headers: await sbAuthedHeaders() });
     if (!res.ok) throw new Error(`Lỗi tải danh sách câu hỏi: ${res.status}`);
 
-    questionsAdminState.currentRows = await res.json();
+    let rows = await res.json();
+
+    // Lọc "Chưa gắn vào đề nào" ở đây (phía client) thay vì nhét excludeIds
+    // vào URL — xem comment ở buildQuestionListUrl() lý do đổi.
+    if (Array.isArray(excludeIds) && excludeIds.length > 0) {
+      const excludeSet = new Set(excludeIds.map(String));
+      rows = rows.filter(r => !excludeSet.has(String(r.id)));
+    }
+
+    questionsAdminState.currentRows = rows;
     questionsAdminState.currentPage = 1; // reset về trang 1 mỗi khi tải lại (đổi filter/sort...)
     questionsAdminState.selectedIds.clear(); // dữ liệu mới -> bỏ chọn cũ cho an toàn
     renderQuestionAdminTable();
