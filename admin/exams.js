@@ -799,9 +799,13 @@ async function openExamPreview(exam) {
 }
 
 // ── Render nội dung modal: section -> subsection -> câu hỏi ─────────────
-// Tái dùng skillNameById()/escHtml() và class .admin-panel-card/.empty-state
-// sẵn có — không viết CSS mới cho khung ngoài, không có nút hành động (chỉ
-// xem, không sửa/xóa/di chuyển như renderExamSectionsList()).
+// ĐÃ SỬA theo phản hồi: trước đây tự bọc section trong .admin-panel-card +
+// tự viết <div> cho instruction — nhìn như 1 form quản trị, không giống
+// bài thi thật. Giờ dùng ĐÚNG NGUYÊN khối .exam-instruction-box/-label/-text
+// mà renderExamTaking() (màn làm bài thật) đang dùng — section title đổ
+// vào .exam-instruction-label (y hệt current.sectionTitle), instruction_text
+// của dạng bài đổ vào .exam-instruction-text — không viết UI tiêu đề mới.
+// Mỗi section cách nhau 1 đường kẻ mảnh, không còn khung "card" admin.
 function renderExamPreviewBody() {
   const body = document.getElementById('exam-preview-body');
   if (!body) return;
@@ -818,32 +822,28 @@ function renderExamPreviewBody() {
   // đang dùng ở màn Đáp án phía học viên.
   const passageTracker = { lastPassageId: null };
 
-  body.innerHTML = tree.map(sec => `
-    <div class="admin-panel-card" style="margin-bottom:10px; padding:12px 16px;">
-      <div style="font-weight:600;">${escHtml(sec.title || skillNameById(sec.skill_id))}</div>
-      <div style="font-size:12px; color:var(--ink-soft); margin-bottom:10px;">
-        ${escHtml(skillNameById(sec.skill_id))} · ${Math.round((sec.time_limit_seconds || 0) / 60)} phút
-      </div>
-      ${renderExamPreviewSubsections(sec.subsections, passageTracker)}
-    </div>
+  body.innerHTML = tree.map((sec, secIdx) => `
+    ${secIdx > 0 ? '<hr style="margin:28px 0; border:none; border-top:1px solid var(--border-md);" />' : ''}
+    ${renderExamPreviewSubsections(sec, passageTracker)}
   `).join('');
 
   markCorrectAnswersInPreviewBody();
 }
 
-function renderExamPreviewSubsections(subs, passageTracker) {
+function renderExamPreviewSubsections(sec, passageTracker) {
+  const subs = sec.subsections;
+  const sectionTitle = sec.title || skillNameById(sec.skill_id);
+
   if (!subs || !subs.length) {
-    return '<div class="empty-state" style="padding:10px 0;">Chưa có dạng bài nào trong phần này.</div>';
+    return `<div class="empty-state">Phần "${escHtml(sectionTitle)}" chưa có dạng bài nào.</div>`;
   }
 
-  return subs.map((sub, idx) => `
-    <div style="padding:8px 0; ${idx > 0 ? 'border-top:1px solid var(--border-md);' : ''}">
-      <div style="font-size:13px;">${escHtml(sub.instruction_text || '—')}</div>
-      <div style="font-size:12px; color:var(--ink-soft); margin-bottom:6px;">
-        ${sub.questions.length} câu hỏi${sub.audio_url ? ' · <i class="ti ti-volume" title="Đã có audio"></i> Có audio' : ''}
-      </div>
-      ${renderExamPreviewQuestions(sub.questions, passageTracker)}
+  return subs.map(sub => `
+    <div class="exam-instruction-box">
+      <div class="exam-instruction-label">${escHtml(sectionTitle)}</div>
+      <div class="exam-instruction-text">${sub.instruction_text || ''}</div>
     </div>
+    ${renderExamPreviewQuestions(sub.questions, passageTracker, sec)}
   `).join('');
 }
 
@@ -861,7 +861,7 @@ function renderExamPreviewSubsections(subs, passageTracker) {
 // Audio riêng của từng câu hỏi (qb.audio_url, khác với audio của passage):
 // dùng chung 1 hàm toggleReviewQuestionAudio() nhưng với id = current.id,
 // y hệt cách renderResultQuestionDetail() đang làm ở màn Đáp án.
-function renderExamPreviewQuestions(questions, passageTracker) {
+function renderExamPreviewQuestions(questions, passageTracker, sec) {
   if (!questions || !questions.length) return '';
 
   return questions.map((current, idx) => {
@@ -871,7 +871,7 @@ function renderExamPreviewQuestions(questions, passageTracker) {
     let passageHtml = '';
     const passageId = qb.passage_id || null;
     if (passageId && passageId !== passageTracker.lastPassageId) {
-      passageHtml = renderExamPreviewPassageBox(passageId);
+      passageHtml = renderExamPreviewPassageBox(passageId, sec);
     }
     passageTracker.lastPassageId = passageId;
 
@@ -889,8 +889,10 @@ function renderExamPreviewQuestions(questions, passageTracker) {
     }
 
     // Nút nghe audio riêng của câu hỏi — TÁI DÙNG toggleReviewQuestionAudio()/
-    // seekReviewAudio() (đã có icon play/pause đổi trạng thái + progress bar),
-    // không phải playExamAudio() (chỉ phát 1 chiều, không toggle) vì ngữ cảnh
+    // seekReviewAudio() (đã có icon play/pause đổi trạng thái + progress bar)
+    // + setReviewAudioSpeed() (nút đổi tốc độ 0.5x/0.75x/1x/1.5x, tính năng
+    // mới thêm sau trong exam.js — đồng bộ lại cho khớp renderResultQuestionDetail()).
+    // Không phải playExamAudio() (chỉ phát 1 chiều, không toggle) vì ngữ cảnh
     // "xem lại, không phải đang làm bài thật" khớp với màn Đáp án hơn màn làm bài.
     const questionAudioHtml = qb.audio_url ? `
       <div class="exam-audio-controls">
@@ -900,6 +902,12 @@ function renderExamPreviewQuestions(questions, passageTracker) {
         <input type="range" class="exam-audio-progress" id="review-audio-progress-${current.id}"
           min="0" max="100" step="0.1" value="0"
           oninput="previewSeekAudio('${current.id}', this.value)" />
+        <div class="exam-audio-speed-group" id="review-audio-speed-${current.id}">
+          <button type="button" class="exam-audio-speed-btn" onclick="setReviewAudioSpeed('${current.id}', 0.5, this)">0.5x</button>
+          <button type="button" class="exam-audio-speed-btn" onclick="setReviewAudioSpeed('${current.id}', 0.75, this)">0.75x</button>
+          <button type="button" class="exam-audio-speed-btn" onclick="setReviewAudioSpeed('${current.id}', 1, this)">1x</button>
+          <button type="button" class="exam-audio-speed-btn" onclick="setReviewAudioSpeed('${current.id}', 1.5, this)">1.5x</button>
+        </div>
       </div>
     ` : '';
 
@@ -919,15 +927,22 @@ function renderExamPreviewQuestions(questions, passageTracker) {
 // dùng đúng class .exam-passage-box/-title/-content của exam.js, dữ liệu
 // lấy từ examPreviewState.passagesMap (đã tải qua loadPassagesByIds() tái
 // dùng ở openExamPreview()).
-function renderExamPreviewPassageBox(passageId) {
+// Đồng bộ lại theo renderResultPassageBox() mới trong exam.js: thêm nhóm
+// nút tốc độ phát + ẩn tiêu đề passage cho cả 2 skill Đọc hiểu VÀ Ngữ pháp
+// (trước đây chỉ truyền passageId, không đủ để biết section thuộc skill
+// nào -> không áp được quy tắc ẩn title này).
+function renderExamPreviewPassageBox(passageId, sec) {
   const passage = examPreviewState.passagesMap[passageId];
   if (!passage) return '';
 
   const toggleId = `passage-${passageId}`;
+  const skillCode = sec ? skillCodeById(sec.skill_id) : null;
+  const isReadingOrGrammar = skillCode === 'reading' || skillCode === 'grammar';
+  const showPassageTitle = passage.title && !isReadingOrGrammar;
 
   return `
     <div class="exam-passage-box">
-      ${passage.title ? `<div class="exam-passage-title">${escHtml(passage.title)}</div>` : ''}
+      ${showPassageTitle ? `<div class="exam-passage-title">${escHtml(passage.title)}</div>` : ''}
       ${passage.audio_url ? `
         <div class="exam-audio-controls">
           <button type="button" class="btn btn-outline exam-audio-btn" onclick="toggleReviewQuestionAudio('${toggleId}', '${passage.audio_url}')">
@@ -936,6 +951,12 @@ function renderExamPreviewPassageBox(passageId) {
           <input type="range" class="exam-audio-progress" id="review-audio-progress-${toggleId}"
             min="0" max="100" step="0.1" value="0"
             oninput="previewSeekAudio('${toggleId}', this.value)" />
+          <div class="exam-audio-speed-group" id="review-audio-speed-${toggleId}">
+            <button type="button" class="exam-audio-speed-btn" onclick="setReviewAudioSpeed('${toggleId}', 0.5, this)">0.5x</button>
+            <button type="button" class="exam-audio-speed-btn" onclick="setReviewAudioSpeed('${toggleId}', 0.75, this)">0.75x</button>
+            <button type="button" class="exam-audio-speed-btn" onclick="setReviewAudioSpeed('${toggleId}', 1, this)">1x</button>
+            <button type="button" class="exam-audio-speed-btn" onclick="setReviewAudioSpeed('${toggleId}', 1.5, this)">1.5x</button>
+          </div>
         </div>
       ` : ''}
       ${passage.content ? `<div class="exam-passage-content">${passage.content}</div>` : ''}
@@ -1010,6 +1031,10 @@ function ensureCorrectAnswerStyleInjected() {
   const style = document.createElement('style');
   style.id = 'exam-preview-correct-answer-style';
   style.textContent = `
+    /* Giới hạn bề ngang + canh giữa giống đúng cột đọc của màn làm bài
+       thật (.review-page-wrap mặc định max-width 700px trong style.css) —
+       trước đó modal rộng hết panel nhìn dàn trải khác hẳn trang thật. */
+    #exam-preview-body { max-width: 700px; margin: 0 auto; }
     #exam-preview-body .exam-choice-btn.correct-answer {
       border-color: #0f6e56 !important;
       background: #e1f5ee !important;
@@ -1440,6 +1465,14 @@ async function loadSubsectionsForSections(headers) {
 function skillNameById(skillId) {
   const sk = (questionsAdminState.skills || []).find(s => s.id === skillId);
   return sk ? sk.name : `Kỹ năng #${skillId}`;
+}
+
+// Dùng cho quy tắc "ẩn tiêu đề passage ở skill Đọc hiểu/Ngữ pháp" — đồng bộ
+// đúng renderResultPassageBox() mới trong exam.js (kiểm tra qua skills.code,
+// không phải tên hiển thị).
+function skillCodeById(skillId) {
+  const sk = (questionsAdminState.skills || []).find(s => s.id === skillId);
+  return sk ? sk.code : null;
 }
 
 function renderExamSectionsList() {
