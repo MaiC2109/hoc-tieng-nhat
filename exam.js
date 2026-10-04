@@ -796,7 +796,11 @@ function flattenExamStructure(structure) {
           sectionId: section.id,
           sectionTitle: section.title,
           subsectionId: subsection.id,
-          instruction_text: subsection.instruction_text
+          instruction_text: subsection.instruction_text,
+          // Đặt tên khác qb.audio_url (audio riêng từng câu, nằm trong
+          // current.question_bank.audio_url) để tránh nhầm lẫn — đây là
+          // audio DÙNG CHUNG cho cả dạng bài (vd 1 file nghe cho cả problem 1).
+          subsectionAudioUrl: subsection.audio_url
         });
       });
     });
@@ -854,7 +858,7 @@ async function loadExamStructure(examId) {
     if (sectionIds.length > 0) {
       const { data: subsections, error: subsectionsError } = await supabaseClient
         .from('exam_subsections')
-        .select('id, exam_section_id, instruction_text, order_index')
+        .select('id, exam_section_id, instruction_text, audio_url, order_index')
         .in('exam_section_id', sectionIds)
         .order('order_index', { ascending: true });
 
@@ -984,6 +988,11 @@ function renderExamTaking() {
     <div class="exam-instruction-box">
       <div class="exam-instruction-label">${current.sectionTitle || ''}</div>
       <div class="exam-instruction-text">${current.instruction_text || ''}</div>
+      ${current.subsectionAudioUrl ? `
+        <button class="btn btn-outline exam-audio-btn" onclick="playExamAudio('${current.subsectionAudioUrl}')" style="margin-top:10px;">
+          <i class="ti ti-player-play"></i> Nghe audio
+        </button>
+      ` : ''}
     </div>
   `;
 
@@ -2481,6 +2490,7 @@ function buildQuestionsReview(flatQuestions, answersByBankId) {
       sectionTitle: q.sectionTitle,
       subsectionId: q.subsectionId,
       instruction_text: q.instruction_text,
+      subsectionAudioUrl: q.subsectionAudioUrl,
       // Đánh số TUẦN TỰ TOÀN ĐỀ (không reset theo từng section) — khớp
       // đúng với số hiện trên lưới tổng quan (renderResultQuestionsGrid
       // cũng dùng chính index toàn mảng này, i + 1).
@@ -2663,10 +2673,37 @@ function renderResultQuestionsReview(questionsReview) {
 // ------------------------------------------------------------
 function renderResultInstructionBox(q) {
   if (!q.instruction_text && !q.sectionTitle) return '';
+
+  // Audio dùng chung cho cả dạng bài (q.subsectionAudioUrl) — dùng
+  // toggleReviewQuestionAudio()/seekReviewAudio()/setReviewAudioSpeed() y
+  // hệt audio từng câu/passage ở màn này (có play-pause + progress bar +
+  // tốc độ), không dùng playExamAudio() 1 chiều như màn làm bài, vì màn
+  // Đáp án vốn đã dùng bộ điều khiển "nghe lại" này cho mọi audio khác.
+  // id riêng `subsection-${q.subsectionId}` để không trùng id toggle của
+  // audio từng câu (examQuestionId) hay của passage (`passage-${id}`).
+  const toggleId = `subsection-${q.subsectionId}`;
+  const audioHtml = q.subsectionAudioUrl ? `
+    <div class="exam-audio-controls">
+      <button type="button" class="btn btn-outline exam-audio-btn" onclick="toggleReviewQuestionAudio('${toggleId}', '${q.subsectionAudioUrl}')">
+        <i class="ti ti-player-play" id="review-audio-icon-${toggleId}"></i> Nghe audio
+      </button>
+      <input type="range" class="exam-audio-progress" id="review-audio-progress-${toggleId}"
+        min="0" max="100" step="0.1" value="0"
+        oninput="seekReviewAudio('${toggleId}', this.value)" />
+      <div class="exam-audio-speed-group" id="review-audio-speed-${toggleId}">
+        <button type="button" class="exam-audio-speed-btn" onclick="setReviewAudioSpeed('${toggleId}', 0.5, this)">0.5x</button>
+        <button type="button" class="exam-audio-speed-btn" onclick="setReviewAudioSpeed('${toggleId}', 0.75, this)">0.75x</button>
+        <button type="button" class="exam-audio-speed-btn" onclick="setReviewAudioSpeed('${toggleId}', 1, this)">1x</button>
+        <button type="button" class="exam-audio-speed-btn" onclick="setReviewAudioSpeed('${toggleId}', 1.5, this)">1.5x</button>
+      </div>
+    </div>
+  ` : '';
+
   return `
     <div class="exam-instruction-box exam-review-instruction-box">
       <div class="exam-instruction-label">${q.sectionTitle || ''}</div>
       <div class="exam-instruction-text">${q.instruction_text || ''}</div>
+      ${audioHtml}
     </div>
   `;
 }
