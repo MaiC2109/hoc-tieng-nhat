@@ -842,9 +842,37 @@ function renderExamPreviewSubsections(sec, passageTracker) {
     <div class="exam-instruction-box">
       <div class="exam-instruction-label">${escHtml(sectionTitle)}</div>
       <div class="exam-instruction-text">${sub.instruction_text || ''}</div>
+      ${renderExamPreviewSubsectionAudio(sub)}
     </div>
     ${renderExamPreviewQuestions(sub.questions, passageTracker, sec)}
   `).join('');
+}
+
+// Audio DÙNG CHUNG cho cả dạng bài (sub.audio_url, khác passage.audio_url
+// và qb.audio_url) — trước đây modal Xem trước query đã có sẵn audio_url
+// (openExamPreview()) nhưng chưa từng render ra. Dùng cùng bộ điều khiển
+// toggleReviewQuestionAudio()/seekReviewAudio()/setReviewAudioSpeed() như
+// passage/câu hỏi cho nhất quán trong modal này — id riêng
+// `subsection-${sub.id}` để không trùng audio câu hỏi/passage.
+function renderExamPreviewSubsectionAudio(sub) {
+  if (!sub.audio_url) return '';
+  const toggleId = `subsection-${sub.id}`;
+  return `
+    <div class="exam-audio-controls">
+      <button type="button" class="btn btn-outline exam-audio-btn" onclick="toggleReviewQuestionAudio('${toggleId}', '${sub.audio_url}')">
+        <i class="ti ti-player-play" id="review-audio-icon-${toggleId}"></i> Nghe audio
+      </button>
+      <input type="range" class="exam-audio-progress" id="review-audio-progress-${toggleId}"
+        min="0" max="100" step="0.1" value="0"
+        oninput="previewSeekAudio('${toggleId}', this.value)" />
+      <div class="exam-audio-speed-group" id="review-audio-speed-${toggleId}">
+        <button type="button" class="exam-audio-speed-btn" onclick="setReviewAudioSpeed('${toggleId}', 0.5, this)">0.5x</button>
+        <button type="button" class="exam-audio-speed-btn" onclick="setReviewAudioSpeed('${toggleId}', 0.75, this)">0.75x</button>
+        <button type="button" class="exam-audio-speed-btn" onclick="setReviewAudioSpeed('${toggleId}', 1, this)">1x</button>
+        <button type="button" class="exam-audio-speed-btn" onclick="setReviewAudioSpeed('${toggleId}', 1.5, this)">1.5x</button>
+      </div>
+    </div>
+  `;
 }
 
 // ── Tái dùng NGUYÊN hàm render câu hỏi của Tier 3 (exam.js, phía học
