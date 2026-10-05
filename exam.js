@@ -1157,10 +1157,28 @@ function renderQuestionNavGrid(sectionId, activeGlobalIndex) {
 function goToQuestionIndex(globalIndex) {
   const flatQuestions = state.examState.flatQuestions;
   if (globalIndex < 0 || globalIndex >= flatQuestions.length) return;
+
   // Dừng audio của câu đang xem trước khi nhảy sang câu khác — hàm này
   // dùng chung cho cả lưới số câu lẫn nút Câu trước/sau (goToPrevQuestion/
   // goToNextQuestion đều gọi qua đây), nên chỉ cần chèn 1 chỗ.
-  stopCurrentAudio();
+  //
+  // NGOẠI LỆ: audio DÙNG CHUNG cho cả dạng bài (subsectionAudioUrl) phải
+  // phát LIÊN TỤC xuyên suốt các câu trong CÙNG 1 dạng bài, không bị dừng/
+  // phát lại mỗi lần đổi câu — khác với audio riêng từng câu (qb.audio_url,
+  // vẫn dừng bình thường như cũ vì sang câu khác là nội dung audio khác).
+  const currentQ = flatQuestions[state.examState.currentQuestionIndex];
+  const nextQ = flatQuestions[globalIndex];
+  const isSameSharedSubsectionAudio =
+    currentQ && nextQ &&
+    currentQ.subsectionId === nextQ.subsectionId &&
+    currentQ.subsectionAudioUrl &&
+    state.currentAudio && state.currentAudio.src &&
+    state.currentAudio.src.indexOf(currentQ.subsectionAudioUrl) !== -1;
+
+  if (!isSameSharedSubsectionAudio) {
+    stopCurrentAudio();
+  }
+
   state.examState.currentQuestionIndex = globalIndex;
   renderExamTaking();
 }
