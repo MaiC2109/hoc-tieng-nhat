@@ -1052,9 +1052,15 @@ function renderExamTaking() {
   html += `<div class="exam-question-content">${qb.question_text || ''}</div>`;
 
   if (qb.audio_url) {
+    // Cùng nguyên tắc "chỉ nghe 1 lần" như audio dùng chung của dạng bài
+    // (playSubsectionAudioOnce) — theo dõi theo current.id (từng câu) thay
+    // vì subsectionId, vì đây là audio riêng của câu này, không dùng chung.
+    state.examState.playedQuestionAudioIds = state.examState.playedQuestionAudioIds || new Set();
+    const questionAudioPlayed = state.examState.playedQuestionAudioIds.has(current.id);
     html += `
-      <button class="btn btn-outline exam-audio-btn" onclick="playExamAudio('${qb.audio_url}')">
-        <i class="ti ti-player-play"></i> Nghe audio
+      <button class="btn btn-outline exam-audio-btn" ${questionAudioPlayed ? 'disabled' : ''}
+        onclick="playQuestionAudioOnce('${current.id}', '${qb.audio_url}')">
+        <i class="ti ti-player-play"></i> ${questionAudioPlayed ? 'Đã nghe audio' : 'Nghe audio'}
       </button>
     `;
   }
@@ -1445,6 +1451,18 @@ function playSubsectionAudioOnce(subsectionId, url) {
   state.examState.playedSubsectionAudioIds = state.examState.playedSubsectionAudioIds || new Set();
   if (state.examState.playedSubsectionAudioIds.has(subsectionId)) return; // phòng double-click trước khi kịp re-render
   state.examState.playedSubsectionAudioIds.add(subsectionId);
+  playExamAudio(url);
+  renderExamTaking();
+}
+
+// Audio riêng của 1 câu hỏi — cùng nguyên tắc chỉ phát 1 lần, nhưng đánh
+// dấu theo examQuestionId (current.id) thay vì subsectionId, vì mỗi câu có
+// nội dung audio khác nhau, không liên quan gì đến câu khác trong cùng
+// dạng bài.
+function playQuestionAudioOnce(examQuestionId, url) {
+  state.examState.playedQuestionAudioIds = state.examState.playedQuestionAudioIds || new Set();
+  if (state.examState.playedQuestionAudioIds.has(examQuestionId)) return; // phòng double-click trước khi kịp re-render
+  state.examState.playedQuestionAudioIds.add(examQuestionId);
   playExamAudio(url);
   renderExamTaking();
 }
