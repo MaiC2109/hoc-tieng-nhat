@@ -984,13 +984,25 @@ function renderExamTaking() {
 
   // Instruction của subsection hiện tại — tự đổi khi qua câu thuộc subsection khác
   // vì luôn đọc trực tiếp từ current.instruction_text mỗi lần render.
+  //
+  // Audio dùng chung của dạng bài: giống thi JLPT thật, chỉ phát 1 lần —
+  // sau khi bấm "Nghe audio" thì disable nút luôn (đổi text + icon), tránh
+  // học viên bấm lại giữa chừng làm audio restart từ đầu. Trạng thái
+  // "đã bấm nghe" lưu theo subsectionId trong state.examState (Set), để
+  // nút vẫn disable đúng khi re-render do chuyển câu trong cùng dạng bài
+  // (goToQuestionIndex() đã sửa để audio không bị dừng khi đó).
+  state.examState.playedSubsectionAudioIds = state.examState.playedSubsectionAudioIds || new Set();
+  const subsectionAudioPlayed = current.subsectionId &&
+    state.examState.playedSubsectionAudioIds.has(current.subsectionId);
+
   html += `
     <div class="exam-instruction-box">
       <div class="exam-instruction-label">${current.sectionTitle || ''}</div>
       <div class="exam-instruction-text">${current.instruction_text || ''}</div>
       ${current.subsectionAudioUrl ? `
-        <button class="btn btn-outline exam-audio-btn" onclick="playExamAudio('${current.subsectionAudioUrl}')" style="margin-top:10px;">
-          <i class="ti ti-player-play"></i> Nghe audio
+        <button class="btn btn-outline exam-audio-btn" ${subsectionAudioPlayed ? 'disabled' : ''}
+          onclick="playSubsectionAudioOnce('${current.subsectionId}', '${current.subsectionAudioUrl}')" style="margin-top:10px;">
+          <i class="ti ti-player-play"></i> ${subsectionAudioPlayed ? 'Đã nghe audio' : 'Nghe audio'}
         </button>
       ` : ''}
     </div>
@@ -1424,6 +1436,17 @@ function playExamAudio(url) {
   stopCurrentAudio();
   state.currentAudio = new Audio(url);
   state.currentAudio.play().catch(e => console.log(e));
+}
+
+// Audio dùng chung cho cả dạng bài — chỉ cho phát 1 lần (giống điều kiện
+// thi JLPT thật). Đánh dấu đã nghe theo subsectionId rồi render lại để
+// nút tự disable ngay, cả khi chuyển câu trong cùng dạng bài sau đó.
+function playSubsectionAudioOnce(subsectionId, url) {
+  state.examState.playedSubsectionAudioIds = state.examState.playedSubsectionAudioIds || new Set();
+  if (state.examState.playedSubsectionAudioIds.has(subsectionId)) return; // phòng double-click trước khi kịp re-render
+  state.examState.playedSubsectionAudioIds.add(subsectionId);
+  playExamAudio(url);
+  renderExamTaking();
 }
 
 // ------------------------------------------------------------
