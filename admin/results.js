@@ -387,7 +387,7 @@ async function loadExamStructureForAdmin(examId) {
     if (sectionIds.length > 0) {
       const { data: subsections, error: subsectionsError } = await supabaseClient
         .from('exam_subsections')
-        .select('id, exam_section_id, instruction_text, order_index')
+        .select('id, exam_section_id, instruction_text, audio_url, order_index')
         .in('exam_section_id', sectionIds)
         .order('order_index', { ascending: true });
 
@@ -456,7 +456,8 @@ function flattenExamStructureForAdmin(structure) {
           sectionId: section.id,
           sectionTitle: section.title,
           subsectionId: subsection.id,
-          instruction_text: subsection.instruction_text
+          instruction_text: subsection.instruction_text,
+          subsectionAudioUrl: subsection.audio_url
         });
       });
     });
@@ -476,6 +477,7 @@ function buildAdminQuestionsReview(flatQuestions, answersByBankId) {
       sectionTitle: q.sectionTitle,
       subsectionId: q.subsectionId,
       instruction_text: q.instruction_text,
+      subsectionAudioUrl: q.subsectionAudioUrl,
       globalNumber: i + 1,
       question_type: qb.question_type,
       question_text: qb.question_text,
@@ -808,6 +810,7 @@ function renderAdminReviewQuestionDetail(q, prevQuestion) {
     instructionHtml = `
       <div class="exam-instruction-box">
         <div class="exam-instruction-text">${q.instruction_text}</div>
+        ${renderAdminReviewAudioControls(`subsection-${q.subsectionId}`, q.subsectionAudioUrl)}
       </div>
     `;
   }
